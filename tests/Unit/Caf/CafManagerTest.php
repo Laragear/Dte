@@ -1,0 +1,141 @@
+<?php
+
+namespace Tests\Unit\Caf;
+
+use Illuminate\Support\Carbon;
+use Laragear\Dte\Caf\CafManager;
+use Laragear\Dte\Caf\Exceptions\DepletionException;
+use Laragear\Dte\Enums\DteType;
+use Laragear\Dte\Facades\Caf;
+use Laragear\Dte\Models\SiiCaf;
+use Laragear\Rut\Rut;
+use RuntimeException;
+use Tests\DatabaseTestCase;
+use Tests\Unit\Caf\Fixtures\CafFixture;
+
+class CafManagerTest extends DatabaseTestCase
+{
+    /**
+     * Allocate the next invoice folio.
+     */
+    protected function allocate(CafManager $manager, Rut $issuer): int
+    {
+        return $manager->allocate(
+            $issuer,
+            DteType::Invoice,
+            static fn(SiiCaf $caf, int $folio): int => $folio,
+        );
+    }
+
+    public function test_parses_and_persists_a_caf(): void
+    {
+        $fixture = CafFixture::create();
+
+        $caf = $this->app->make(CafManager::class)->store($fixture->xml(10, 20));
+
+        static::assertTrue($caf->exists);
+        static::assertSame($fixture->issuer, $caf->rut->formatRaw());
+        static::assertSame(DteType::Invoice, $caf->document_type);
+        static::assertSame(10, $caf->folio_from);
+        static::assertSame(20, $caf->folio_to);
+        static::assertSame(10, $caf->folio_current);
+        static::assertSame('2026-08-01', $caf->authorized_on->toDateString());
+    }
+
+    public function test_parses_and_persists_a_caf_from_file_path(): void
+    {
+        $fixture = CafFixture::create();
+
+        $path = tempnam(sys_get_temp_dir(), 'caf_');
+        file_put_contents($path, $fixture->xml(10, 20));
+
+        $caf = $this->app->make(CafManager::class)->storeFile($path);
+
+        static::assertTrue($caf->exists);
+        static::assertSame($fixture->issuer, $caf->rut->formatRaw());
+
+        unlink($path);
+    }
+
+    public function test_allocates_sequential_folios_atomically(): void
+    {
+        $caf = SiiCaf::factory()->create([
+            'folio_from' => 10,
+            'folio_to' => 11,
+            'folio_current' => 10,
+        ]);
+        $manager = $this->app->make(CafManager::class);
+        $issuer = $caf->rut;
+
+        static::assertSame(10, $this->allocate($manager, $issuer));
+        static::assertSame(11, $this->allocate($manager, $issuer));
+        static::assertSame(12, $caf->fresh()->folio_current);
+    }
+
+    public function test_returns_the_selected_caf_to_the_allocation_callback(): void
+    {
+        $caf = SiiCaf::factory()->create();
+
+        $selected = $this->app->make(CafManager::class)->allocate(
+            $caf->rut,
+            DteType::Invoice,
+            static fn(SiiCaf $selected, int $folio): array => [$selected->getKey(), $folio],
+        );
+
+        static::assertSame([$caf->getKey(), $caf->folio_from], $selected);
+    }
+
+    public function test_caf_facade_resolves_caf_manager(): void
+    {
+        $fixture = CafFixture::create();
+
+        $caf = Caf::store($fixture->xml(10, 20));
+
+        static::assertTrue($caf->exists);
+    }
+
+    public function test_rolls_back_the_folio_when_the_callback_fails(): void
+    {
+        $caf = SiiCaf::factory()->create();
+
+        try {
+            $this->app->make(CafManager::class)->allocate(
+                $caf->rut,
+                DteType::Invoice,
+                static fn(SiiCaf $selected, int $folio): never => throw new RuntimeException('Compilation failed.'),
+            );
+            static::fail('The allocation callback should have failed.');
+        } catch (RuntimeException $exception) {
+            static::assertSame('Compilation failed.', $exception->getMessage());
+        }
+
+        static::assertSame($caf->folio_current, $caf->fresh()->folio_current);
+    }
+
+    public function test_throws_when_file_does_not_exist(): void
+    {
+        $this->expectException(RuntimeException::class);
+
+        $this->app->make(CafManager::class)->storeFile('/path/that/does/not/exist.xml');
+    }
+
+    public function test_throws_when_all_matching_cafs_are_depleted(): void
+    {
+        $caf = SiiCaf::factory()->create(['folio_to' => 10, 'folio_current' => 11]);
+
+        $this->expectException(DepletionException::class);
+        $this->expectExceptionMessageIs('No valid CAF has available folios for this issuer and document type.');
+
+        $this->allocate($this->app->make(CafManager::class), $caf->rut);
+    }
+
+    public function test_does_not_allocate_from_expired_cafs(): void
+    {
+        $caf = SiiCaf::factory()->create(['expires_on' => Carbon::now()->subDays(5)]);
+
+        $this->expectException(DepletionException::class);
+        $this->expectExceptionMessageIs('No valid CAF has available folios for this issuer and document type.');
+
+        $this->allocate($this->app->make(CafManager::class), $caf->rut);
+    }
+}

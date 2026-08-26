@@ -1,0 +1,13 @@
+{
+    "EnvioRecibos_v10.xsd": "f90e0835d4298e9dc3f36bafe2b2974739938deb19fea1ac870996b7e10a6ab5",
+    "Recibos_v10.xsd": "b6ef97da83c9698e0fdb1e8e25ee93a64a6a08b4f5bada5a6cb91153bcdf7ff6",
+    "RespuestaEnvioDTE_v10.xsd": "fd77e582aa42fb3504beefb55246652e1670e54b91b45e9dcf5219991f3adc69",
+    "SiiTypes_v10.xsd": "1cbb67b739bdec24a140bd6e8cc002cbf76615748e33a401e4a60adc871c2b82",
+    "F60T33-ejemplo.xml": "b12963297e83296ffd5fad702165a5b4e4a184f7602851fdbb482b1c6cc42b0b",
+    "LceCal_v10.xsd": "8f07e1a33989d2ef2ea06a1960ce0a17af53ff3be6ac51e3077f3a761ff5f464",
+    "LceCoCertif_v10.xsd": "acca97b43b071fa05dec97f716aaf8e44232a9be2234759c721361c8495c309b",
+    "LceSiiTypes_v10.xsd": "ed2f04d85a78ab90a61a2d2a4b68ca6a37a2c9b6256feda0f0609b34d3f03259",
+    "LibroCV_v10.xsd": "97d9aac91e3c1708620638bea7afc955b3268be62c24c89594ee32bf4ff91da8",
+    "xmldsignature_v10.xsd": "03867423bcfecf166bf227909534f7fbbfc8ccd9b1a0f6503e705dce0ddf08b4",
+    "FakeCaf.xml": "8127fb832279703a4fc73c9b4d8c5d08b7132025dda23dc4a4dafed673e45889"
+}
