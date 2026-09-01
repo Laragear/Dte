@@ -222,7 +222,7 @@ class SiiDteEnvelope extends Model
      */
     public function isAcceptedWithRepairs(): bool
     {
-        return $this->status === EnvelopeStatus::Accepted && ! empty($this->repairs);
+        return $this->status === EnvelopeStatus::Accepted && !empty($this->repairs);
     }
 
     /**
@@ -230,6 +230,6 @@ class SiiDteEnvelope extends Model
      */
     public function isNotAcceptedWithRepairs(): bool
     {
-        return ! $this->isAcceptedWithRepairs();
+        return !$this->isAcceptedWithRepairs();
     }
 }

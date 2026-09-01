@@ -26,6 +26,7 @@ return new class extends Migration
             $table->unsignedInteger('amount_exempt')->default(0);
             $table->unsignedInteger('amount_taxes')->default(0);
             $table->json('taxes')->nullable();
+            $table->boolean('iva_common_use')->default(false);
             $table->unsignedInteger('amount_total')->default(0);
             $table->string('status')->default('pending')->index();
             $table->timestamp('acknowledged_at')->nullable();

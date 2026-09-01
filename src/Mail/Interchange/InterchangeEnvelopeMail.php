@@ -50,7 +50,7 @@ class InterchangeEnvelopeMail extends Mailable
     public function attachments(): array
     {
         return [
-            Attachment::fromData(fn () => $this->xml, 'envio.xml')->withMime('application/xml'),
+            Attachment::fromData(fn() => $this->xml, 'envio.xml')->withMime('application/xml'),
         ];
     }
 }

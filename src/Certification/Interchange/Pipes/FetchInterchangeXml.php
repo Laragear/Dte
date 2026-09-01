@@ -10,7 +10,7 @@ use Laragear\Dte\Certification\Interchange\InterchangeData;
 use Laragear\Dte\Data\InboundEmailData;
 use Laragear\Dte\Mailbox\MailboxManager;
 use RuntimeException;
-
+use Throwable;
 use function now;
 
 class FetchInterchangeXml
@@ -31,11 +31,9 @@ class FetchInterchangeXml
      */
     public function handle(InterchangeData $data, Closure $next): InterchangeData
     {
-        if ($data->source === 'file') {
-            $this->handleFileInterchangeXml($data);
-        } else {
-            $this->handleEmailInterchangeXml($data);
-        }
+        $data->source === 'file'
+            ? $this->handleFileInterchangeXml($data)
+            : $this->handleEmailInterchangeXml($data);
 
         return $next($data);
     }
@@ -50,11 +48,11 @@ class FetchInterchangeXml
         } else {
             $path = $data->filePath ?? $this->app->storagePath('app/sii_dte_intercambio.xml');
 
-            if (! $this->file->exists($path)) {
-                throw new RuntimeException('The provided interchange XML file does not exist.');
+            try {
+                $content = $this->file->get($path);
+            } catch (Throwable $e) {
+                throw new RuntimeException("The interchange XML file at [$path] does not exist.", previous: $e);
             }
-
-            $content = $this->file->get($path);
         }
 
         $data->emailData = InboundEmailData::make(

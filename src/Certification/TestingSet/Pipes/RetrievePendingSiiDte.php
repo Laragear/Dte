@@ -18,7 +18,7 @@ class RetrievePendingSiiDte
             'issuer_num' => $data->rut->num,
             'issuer_vd' => $data->rut->vd,
         ])
-            ->when(! empty($data->dteIds), function ($query) use ($data) {
+            ->when(!empty($data->dteIds), function ($query) use ($data) {
                 $query->whereIn('id', $data->dteIds);
             })
             ->get();

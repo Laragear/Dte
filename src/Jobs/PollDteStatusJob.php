@@ -37,7 +37,8 @@ class PollDteStatusJob implements ShouldQueue
         LoggerInterface $log,
         Dispatcher $event,
         SoapGateway $gateway,
-        BoletaRestGateway $boletaGateway
+        BoletaRestGateway $boletaGateway,
+        XmlDomFactory $xmlDomFactory,
     ): void {
         if ($this->dte->status->isTerminalState()) {
             return;
@@ -48,7 +49,7 @@ class PollDteStatusJob implements ShouldQueue
                 $status = $boletaGateway->documentStatus($this->dte);
                 $this->processBoletaDteStatus($status, $event, $log);
             } else {
-                $this->processDteStatus($this->queryDteStatus($gateway), $event, $log);
+                $this->processDteStatus($this->queryDteStatus($gateway), $event, $log, $xmlDomFactory);
             }
         } catch (Exception $e) {
             $log->error("Failed to poll DTE status for ID {$this->dte->getKey()}: {$e->getMessage()}");
@@ -88,9 +89,9 @@ class PollDteStatusJob implements ShouldQueue
     protected function processDteStatus(
         string $xml,
         Dispatcher $event,
-        LoggerInterface $log
+        LoggerInterface $log,
+        XmlDomFactory $factory,
     ): void {
-        $factory = app(XmlDomFactory::class);
         $simple = $factory->simpleXml($xml);
         $friendly = json_decode(json_encode($simple), true);
         $this->saveDteRepairs($friendly, $xml);

@@ -3,6 +3,7 @@
 namespace Laragear\Dte\Certification\TestingSet;
 
 use Illuminate\Database\Eloquent\Collection;
+use Laragear\Dte\Models\SiiDteEnvelope;
 use Laragear\Rut\Rut;
 
 class TestSetData
@@ -19,6 +20,7 @@ class TestSetData
         public int $resolutionNumber = 0,
         public ?Rut $senderRut = null,
         public ?string $iecvXml = null,
+        public ?SiiDteEnvelope $envelope = null,
     ) {
         //
     }

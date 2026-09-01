@@ -39,7 +39,7 @@ class InvoiceBuilder extends DocumentBuilder
      */
     protected function calculatedTotals(): array
     {
-        if (! $this->isTaxExempt()) {
+        if (!$this->isTaxExempt()) {
             return parent::calculatedTotals();
         }
 
@@ -55,7 +55,7 @@ class InvoiceBuilder extends DocumentBuilder
     {
         $this->validateB2bReceiver();
 
-        if (! $this->isTaxExempt() && $this->netAmount() === 0 && $this->exemptAmount() > 0) {
+        if (!$this->isTaxExempt() && $this->netAmount() === 0 && $this->exemptAmount() > 0) {
             throw new LogicException('An invoice containing only exempt items must use document type 34.');
         }
     }

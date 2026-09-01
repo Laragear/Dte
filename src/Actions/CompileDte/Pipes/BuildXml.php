@@ -7,15 +7,12 @@ use Laragear\Dte\Actions\CompileDte\Compilation;
 use Laragear\Dte\Support\XmlDomFactory;
 use Laragear\Rut\Rut;
 use XMLWriter;
-
 use function number_format;
 use function round;
 use function rtrim;
 
 class BuildXml
 {
-    public const string XML_NAMESPACE = 'http://www.sii.cl/SiiDte';
-
     /**
      * Create a Build XML pipe instance.
      */
@@ -36,7 +33,7 @@ class BuildXml
         $writer->openMemory();
         $writer->startDocument('1.0', 'ISO-8859-1');
 
-        $writer->startElementNS(null, 'DTE', static::XML_NAMESPACE);
+        $writer->startElementNS(null, 'DTE', XmlDomFactory::XML_NAMESPACE);
         $writer->writeAttribute('version', '1.0');
 
         $this->appendDocument($compilation, $writer);
@@ -68,12 +65,12 @@ class BuildXml
 
         $this->appendHeader($writer, $data, (int) $dte->folio);
         $this->appendItems($writer, $data['items']);
-        if (! empty($data['global_modifiers'])) {
+        if (!empty($data['global_modifiers'])) {
             $this->appendGlobalModifiers($writer, $data['global_modifiers']);
         }
         $this->appendReferences($writer, $data['references']);
 
-        if (! empty($data['transport'])) {
+        if (!empty($data['transport'])) {
             $this->appendTransport($writer, $data['transport']);
         }
 
@@ -95,7 +92,7 @@ class BuildXml
         $this->optionalElement($writer, 'PatenteVehiculo', $transport['trailer_plate'] ?? null);
         $this->optionalElement($writer, 'RUTTrans', $transport['carrier_rut'] ?? null);
 
-        if (! empty($transport['driver_rut'])) {
+        if (!empty($transport['driver_rut'])) {
             $writer->startElement('Chofer');
             $writer->writeElement('RUT', $transport['driver_rut']);
             $this->optionalElement($writer, 'Nombre', $transport['driver_name'] ?? null);
@@ -160,7 +157,7 @@ class BuildXml
 
         $writer->writeElement('FmaPago', (string) $paymentTerms['condition']);
 
-        if (! empty($paymentTerms['expiration_date'])) {
+        if (!empty($paymentTerms['expiration_date'])) {
             $writer->writeElement('FchVenc', $paymentTerms['expiration_date']);
         }
     }
@@ -318,7 +315,7 @@ class BuildXml
         $this->positiveElement($writer, 'DescuentoPct', (float) $item['discount_percentage']);
         $this->positiveElement($writer, 'IndExe', $item['exempt'] ? 1 : 0);
 
-        if (! empty($item['taxes'])) {
+        if (!empty($item['taxes'])) {
             foreach ($item['taxes'] as $taxCode => $amount) {
                 $writer->writeElement('CodImpAdic', (string) $taxCode);
             }
@@ -348,7 +345,7 @@ class BuildXml
             $writer->writeElement('NroLinDR', (string) ($index + 1));
             $writer->writeElement('TpoMov', $modifier['type']); // 'D' or 'R'
 
-            if (! empty($modifier['description'])) {
+            if (!empty($modifier['description'])) {
                 $writer->writeElement('GlosaDR', substr($modifier['description'], 0, 45));
             }
 

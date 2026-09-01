@@ -7,18 +7,19 @@ use Laragear\Dte\Certificate\CertificateResolver;
 use Laragear\Dte\Certificate\DigitalCertificate;
 use Laragear\Dte\Certification\IecvBuilder;
 use Laragear\Dte\Certification\IecvType;
-use Laragear\Dte\Certification\TestingSet\Pipes\OutputIecv;
-use Laragear\Dte\Certification\TestingSet\TestSet;
+use Laragear\Dte\Certification\TestingSet\Pipes\OutputIecvPurchases;
 use Laragear\Dte\Certification\TestingSet\TestSetData;
+use Laragear\Dte\Certification\TestingSet\TestSetPurchasesBook;
 use Laragear\Dte\Models\SiiDte;
 use Laragear\Dte\Xml\XmlSigner;
 use Laragear\MetaTesting\Pipeline\InteractsWithPipelines;
 use Laragear\Rut\Rut;
 use RuntimeException;
 use Tests\TestCase;
+
 use function now;
 
-class OutputIecvTest extends TestCase
+class OutputIecvPurchasesTest extends TestCase
 {
     use InteractsWithPipelines;
 
@@ -70,7 +71,7 @@ class OutputIecvTest extends TestCase
                 Rut $senderRut,
             ) use ($passable): true {
                 static::assertSame($passable->dtes, $dtes);
-                static::assertSame(IecvType::Ventas, $type);
+                static::assertSame(IecvType::Purchases, $type);
                 static::assertSame($passable->period, $period);
                 static::assertSame($passable->resolutionDate, $resolutionDate);
                 static::assertSame($passable->resolutionNumber, $resolutionNumber);
@@ -88,8 +89,8 @@ class OutputIecvTest extends TestCase
             });
 
         $this
-            ->pipeline(TestSet::class)
-            ->isolatePipe(OutputIecv::class)
+            ->pipeline(TestSetPurchasesBook::class)
+            ->isolatePipe(OutputIecvPurchases::class)
             ->send($passable)
             ->assertPassable(function (TestSetData $data) use ($xmlString) {
                 static::assertSame(str_replace('></EnvioLibro>', '/>', $xmlString)."\n", $data->iecvXml);
@@ -110,8 +111,8 @@ class OutputIecvTest extends TestCase
         $this->mock(IecvBuilder::class)->expects('build')->never();
         $this->mock(XmlSigner::class)->expects('sign')->never();
 
-        $pipeline = $this->pipeline(TestSet::class)
-            ->isolatePipe(OutputIecv::class);
+        $pipeline = $this->pipeline(TestSetPurchasesBook::class)
+            ->isolatePipe(OutputIecvPurchases::class);
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessageIs('No certificate was found for [76.123.456-0].');
@@ -146,8 +147,8 @@ class OutputIecvTest extends TestCase
 
         $this->mock(CertificateResolver::class)->expects('resolve')->andReturn(new DigitalCertificate('fake', 'fake'));
 
-        $pipe = $this->app->make(OutputIecv::class);
-        $pipe->handle($data, fn($d) => $d);
+        $pipe = $this->app->make(OutputIecvPurchases::class);
+        $pipe->handle($data, fn ($d) => $d);
     }
 
     public function test_throws_unable_to_find_envio_libro(): void
@@ -169,7 +170,7 @@ class OutputIecvTest extends TestCase
 
         $this->mock(CertificateResolver::class)->expects('resolve')->andReturn(new DigitalCertificate('fake', 'fake'));
 
-        $pipe = $this->app->make(OutputIecv::class);
-        $pipe->handle($data, fn($d) => $d);
+        $pipe = $this->app->make(OutputIecvPurchases::class);
+        $pipe->handle($data, fn ($d) => $d);
     }
 }

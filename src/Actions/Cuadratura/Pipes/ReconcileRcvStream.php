@@ -57,7 +57,7 @@ class ReconcileRcvStream
             ->where('folio', $record->folio)
             ->first();
 
-        if (! $model) {
+        if (!$model) {
             $this->instantiatePhantom($record, $context);
 
             return;
@@ -85,7 +85,7 @@ class ReconcileRcvStream
             ->where('folio', $record->folio)
             ->first();
 
-        if (! $model) {
+        if (!$model) {
             $this->event->dispatch(new DteUnregistered($record));
             $context->metrics['phantoms']++;
 
@@ -139,7 +139,7 @@ class ReconcileRcvStream
      */
     protected function updateOutboundSafely(SiiDte $model, RcvRecord $record): void
     {
-        if (! $model->status->isTerminalState()) {
+        if (!$model->status->isTerminalState()) {
             $model->status = DteStatus::Accepted;
         }
 

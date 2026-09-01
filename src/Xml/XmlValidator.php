@@ -11,7 +11,6 @@ use Laragear\Dte\Support\OpenSslProxy;
 use Laragear\Dte\Support\XmlDomFactory;
 use RuntimeException;
 use Throwable;
-
 use function base64_decode;
 use function base64_encode;
 use function sha1;
@@ -69,7 +68,7 @@ class XmlValidator
         try {
             $loaded = $document->loadXML($xml, LIBXML_NONET | LIBXML_PARSEHUGE);
 
-            if (! $loaded) {
+            if (!$loaded) {
                 throw new RuntimeException('Invalid DTE XML: the document is malformed or empty.');
             }
         } finally {

@@ -19,7 +19,6 @@ use Spatie\LaravelPdf\Facades\Pdf;
 use Spatie\LaravelPdf\FakePdfBuilder;
 use Spatie\LaravelPdf\PdfBuilder as SpatiePdfBuilder;
 use Symfony\Component\HttpFoundation\Response;
-
 use function is_a;
 use function trim;
 
@@ -172,7 +171,7 @@ class PdfBuilder implements Responsable
 
         $storage = $this->storage->disk($disk);
 
-        if ($this->force || ! $storage->exists($path)) {
+        if ($this->force || !$storage->exists($path)) {
             $storage->put($path, $this->binary());
         }
 
@@ -255,16 +254,16 @@ class PdfBuilder implements Responsable
         $this->libxml->clear_errors();
         $this->libxml->use_internal_errors($previous);
 
-        if (! $loaded) {
+        if (!$loaded) {
             throw new InvalidArgumentException('The XML payload is invalid.');
         }
 
         $xpath = $this->xml->xpath($document);
-        $xpath->registerNamespace('sii', 'http://www.sii.cl/SiiDte');
+        $xpath->registerNamespace('sii', XmlDomFactory::XML_NAMESPACE);
 
         $ted = $xpath->query('//sii:TED')->item(0);
 
-        if (! $ted instanceof DOMElement) {
+        if (!$ted instanceof DOMElement) {
             throw new InvalidArgumentException('The XML payload does not contain a TED element.');
         }
 

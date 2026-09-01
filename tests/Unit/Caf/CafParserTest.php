@@ -5,6 +5,7 @@ namespace Tests\Unit\Caf;
 use DateTimeImmutable;
 use Exception;
 use Illuminate\Foundation\Testing\Attributes\UnitTest;
+use Illuminate\Support\Carbon;
 use InvalidArgumentException;
 use Laragear\Dte\Caf\CafParser;
 use Laragear\Dte\Enums\DteType;
@@ -13,6 +14,7 @@ use Mockery;
 use Mockery\MockInterface;
 use Tests\TestCase;
 use Tests\Unit\Caf\Fixtures\CafFixture;
+use function base64_decode;
 use function rtrim;
 
 class CafParserTest extends TestCase
@@ -56,7 +58,7 @@ class CafParserTest extends TestCase
         static::assertSame(10, $data['folio_from']);
         static::assertSame(20, $data['folio_to']);
         static::assertSame(10, $data['folio_current']);
-        static::assertEquals(new DateTimeImmutable('2026-08-01'), $data['authorized_on']);
+        static::assertEquals(Carbon::createFromDate(2026, 8, 1, 'America/Santiago')->startOfDay(), $data['authorized_on']);
         static::assertSame($fixture->modulus, $data['public_key_modulus']);
         static::assertSame($fixture->exponent, $data['public_key_exponent']);
         static::assertSame(rtrim($fixture->privateKey), $data['private_key']);
@@ -208,10 +210,10 @@ class CafParserTest extends TestCase
 
     public function test_rejects_invalid_date_format(): void
     {
+        $this->openSsl->expects('privateKeyDetails')->never();
+
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessageIs('The CAF element [.//DA/FA] must use YYYY-MM-DD format.');
-
-        $this->openSsl->expects('privateKeyDetails')->never();
 
         $xml = str_replace('<FA>2026-08-01</FA>', '<FA>01-08-2026</FA>', CafFixture::create()->xml());
         $this->parser->parse($xml);
@@ -219,10 +221,10 @@ class CafParserTest extends TestCase
 
     public function test_rejects_invalid_date_values(): void
     {
+        $this->openSsl->expects('privateKeyDetails')->never();
+
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessageIs('The CAF element [.//DA/FA] must use YYYY-MM-DD format.');
-
-        $this->openSsl->expects('privateKeyDetails')->never();
 
         // 2026-02-30 is parsed by PHP as 2026-03-02, which does not match the original string.
         $xml = str_replace('<FA>2026-08-01</FA>', '<FA>2026-02-30</FA>', CafFixture::create()->xml());
@@ -231,9 +233,6 @@ class CafParserTest extends TestCase
 
     public function test_rejects_private_key_that_becomes_invalid_during_validation(): void
     {
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessageIs('The CAF RSA private key is invalid.');
-
         $fixture = CafFixture::create();
 
         $this->openSsl
@@ -248,6 +247,9 @@ class CafParserTest extends TestCase
                 ],
                 null,
             );
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageIs('The CAF RSA private key is invalid.');
 
         $this->parser->parse($fixture->xml());
     }

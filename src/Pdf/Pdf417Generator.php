@@ -6,7 +6,6 @@ use Le\PDF417\PDF417;
 use Le\PDF417\Renderer\ImageRenderer;
 use RuntimeException;
 use Throwable;
-
 use function base64_encode;
 
 class Pdf417Generator
@@ -28,8 +27,8 @@ class Pdf417Generator
     {
         try {
             return 'data:image/png;base64,'.base64_encode(
-                (string) $this->renderer->render($this->encoder->encode($ted))->encode('png', 100)
-            );
+                    (string) $this->renderer->render($this->encoder->encode($ted))->encode('png', 100)
+                );
         } catch (Throwable $e) {
             throw new RuntimeException('Unable to generate the PDF417 barcode.', 0, $e);
         }

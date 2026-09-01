@@ -15,11 +15,11 @@ final class RutAttribute
     public static function make(string $prefix): Attribute
     {
         return Attribute::make(
-            get: static fn (mixed $value, array $attributes): Rut => new Rut(
+            get: static fn(mixed $value, array $attributes): Rut => new Rut(
                 $attributes["{$prefix}_num"],
                 $attributes["{$prefix}_vd"],
             ),
-            set: static fn (Rut|int|string $value): array => self::columns($prefix, Rut::parse($value)),
+            set: static fn(Rut|int|string $value): array => self::columns($prefix, Rut::parse($value)),
         );
     }
 

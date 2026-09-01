@@ -41,7 +41,7 @@ class CanonicalizeEnvelope
 
         $document = $this->xml->document(encoding: 'ISO-8859-1');
 
-        if (! $document->loadXML($this->canonicalizer->canonicalize($xml), LIBXML_NONET)) {
+        if (!$document->loadXML($this->canonicalizer->canonicalize($xml), LIBXML_NONET)) {
             throw new RuntimeException('Unable to parse the canonical envelope XML.');
         }
 

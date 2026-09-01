@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Route;
+use Laragear\Dte\ValidatesSiiDocuments;
 use Tests\DatabaseTestCase;
 use Tests\Unit\Caf\Fixtures\CafFixture;
 
@@ -161,5 +162,19 @@ class SiiCafRuleTest extends DatabaseTestCase
         $response->assertJsonValidationErrors([
             'caf' => 'sii::validation.caf',
         ]);
+    }
+
+    public function test_missing_coverage(): void
+    {
+        $validator = $this->app['validator']->make(['caf' => '', 'issuer_rut' => '76.123.456-0'], []);
+        $file = UploadedFile::fake()->create('test.txt', 10, 'text/plain');
+        static::assertFalse(ValidatesSiiDocuments::validateSiiCaf('caf', $file, [], $validator));
+        static::assertFalse(ValidatesSiiDocuments::validateSiiCaf('caf', '', [], $validator));
+
+        $xml = CafFixture::create()->xml();
+        static::assertFalse(ValidatesSiiDocuments::validateSiiCaf('caf', $xml, ['issuer_rut'], $validator));
+
+        $validator = $this->app['validator']->make(['caf' => '', 'issuer_rut' => 'invalid-rut'], []);
+        static::assertFalse(ValidatesSiiDocuments::validateSiiCaf('caf', $xml, ['issuer_rut'], $validator));
     }
 }

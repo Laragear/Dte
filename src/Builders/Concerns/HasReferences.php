@@ -4,7 +4,6 @@ namespace Laragear\Dte\Builders\Concerns;
 
 use Laragear\Dte\Data\ReferenceData;
 use OverflowException;
-
 use function count;
 
 trait HasReferences

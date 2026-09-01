@@ -29,10 +29,10 @@ php artisan dte:make-fake-caf --rut="76.123.456-0" --type:39
 use Illuminate\Support\Facades\Schedule;
 
 Schedule::command('dte:check-cafs')->everyTwoHours();
-Schedule::command('dte:pack-ready')->everyTenMinutes();
-Schedule::command('dte:fetch-inbound')->hourly();
-Schedule::command('dte:process-envelope')->everyThirtyMinutes();
-Schedule::command('dte:poll-status')->hourly();
+Schedule::command('dte:process-envelope')->everyTenMinutes();
+Schedule::command('dte:fetch-mailbox')->hourly();
+Schedule::command('dte:poll-track-status')->hourly();
+Schedule::command('dte:reject-phantom-invoices')->twiceDaily();
 ```
 
 4. If you have access to the Laravel Scheduler and Queue, restart them, otherwise tell the user to restart these manually. 

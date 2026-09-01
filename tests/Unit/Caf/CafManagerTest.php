@@ -23,7 +23,7 @@ class CafManagerTest extends DatabaseTestCase
         return $manager->allocate(
             $issuer,
             DteType::Invoice,
-            static fn(SiiCaf $caf, int $folio): int => $folio,
+            static fn (SiiCaf $caf, int $folio): int => $folio,
         );
     }
 
@@ -79,7 +79,7 @@ class CafManagerTest extends DatabaseTestCase
         $selected = $this->app->make(CafManager::class)->allocate(
             $caf->rut,
             DteType::Invoice,
-            static fn(SiiCaf $selected, int $folio): array => [$selected->getKey(), $folio],
+            static fn (SiiCaf $selected, int $folio): array => [$selected->getKey(), $folio],
         );
 
         static::assertSame([$caf->getKey(), $caf->folio_from], $selected);
@@ -102,7 +102,7 @@ class CafManagerTest extends DatabaseTestCase
             $this->app->make(CafManager::class)->allocate(
                 $caf->rut,
                 DteType::Invoice,
-                static fn(SiiCaf $selected, int $folio): never => throw new RuntimeException('Compilation failed.'),
+                static fn (SiiCaf $selected, int $folio): never => throw new RuntimeException('Compilation failed.'),
             );
             static::fail('The allocation callback should have failed.');
         } catch (RuntimeException $exception) {
@@ -124,7 +124,7 @@ class CafManagerTest extends DatabaseTestCase
         $caf = SiiCaf::factory()->create(['folio_to' => 10, 'folio_current' => 11]);
 
         $this->expectException(DepletionException::class);
-        $this->expectExceptionMessageIs('No valid CAF has available folios for this issuer and document type.');
+        $this->expectExceptionMessageIs("No CAF folios available for the issuer [$caf->rut] and document type [33].");
 
         $this->allocate($this->app->make(CafManager::class), $caf->rut);
     }
@@ -134,8 +134,40 @@ class CafManagerTest extends DatabaseTestCase
         $caf = SiiCaf::factory()->create(['expires_on' => Carbon::now()->subDays(5)]);
 
         $this->expectException(DepletionException::class);
-        $this->expectExceptionMessageIs('No valid CAF has available folios for this issuer and document type.');
+        $this->expectExceptionMessageIs("No CAF folios available for the issuer [$caf->rut] and document type [33].");
 
         $this->allocate($this->app->make(CafManager::class), $caf->rut);
+    }
+
+    public function test_allocate_retries_when_all_remaining_folios_are_annulled(): void
+    {
+        $manager = clone $this->app->make(CafManager::class);
+
+        $caf1 = SiiCaf::factory()->create([
+            'document_type' => DteType::Invoice,
+            'folio_from' => 10,
+            'folio_to' => 10,
+            'folio_current' => 10,
+            'folio_annuled' => [10],
+            'expires_on' => now()->addDays(10),
+        ]);
+
+        $caf2 = SiiCaf::factory()->create([
+            'rut' => $caf1->rut,
+            'document_type' => DteType::Invoice,
+            'folio_from' => 11,
+            'folio_to' => 20,
+            'folio_current' => 11,
+            'folio_annuled' => [],
+            'expires_on' => now()->addDays(10),
+        ]);
+
+        $called = false;
+        $manager->allocate($caf1->rut, DteType::Invoice, function ($caf, $folio) use (&$called) {
+            static::assertSame(11, $folio);
+            $called = true;
+        });
+
+        static::assertTrue($called);
     }
 }

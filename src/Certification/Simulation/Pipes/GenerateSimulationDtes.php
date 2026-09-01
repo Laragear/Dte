@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\Factories\Sequence;
 use Laragear\Dte\Certification\Simulation\SimulationData;
 use Laragear\Dte\Enums\DteType;
 use Laragear\Dte\Models\SiiDte;
-
 use function count;
 
 class GenerateSimulationDtes
@@ -47,7 +46,7 @@ class GenerateSimulationDtes
             'issuer_rut' => $data->rut,
             'created_at' => $this->faker->dateTimeBetween('-2 months', '-1 day'),
         ])
-            ->sequence(fn (Sequence $sequence) => [
+            ->sequence(fn(Sequence $sequence) => [
                 'document_type' => $selectedTypes[$sequence->index % count($selectedTypes)],
             ])
             ->createMany($quantity);

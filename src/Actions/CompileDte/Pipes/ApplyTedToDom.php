@@ -20,7 +20,7 @@ class ApplyTedToDom
         $documentNode = $document->getElementsByTagName('Documento')->item(0);
         $timestamp = $document->getElementsByTagName('TmstFirma')->item(0);
 
-        if (! $documentNode instanceof DOMElement || ! $timestamp instanceof DOMElement) {
+        if (!$documentNode instanceof DOMElement || !$timestamp instanceof DOMElement) {
             throw new RuntimeException('The DTE XML document cannot receive its TED.');
         }
 

@@ -5,8 +5,8 @@ namespace Tests\Unit\Certification\TestSet\Pipes;
 use Closure;
 use Illuminate\Console\ManuallyFailedException;
 use Laragear\Dte\Certification\TestingSet\Pipes\RetrievePendingSiiDte;
-use Laragear\Dte\Certification\TestingSet\TestSet;
 use Laragear\Dte\Certification\TestingSet\TestSetData;
+use Laragear\Dte\Certification\TestingSet\TestSetSalesBook;
 use Laragear\Dte\Models\SiiDte;
 use Laragear\MetaTesting\Pipeline\InteractsWithPipelines;
 use Laragear\Rut\Rut;
@@ -26,8 +26,8 @@ class RetrievePendingSiiDteTest extends DatabaseTestCase
     public static function providesOneOrManyPendingSiiDte(): iterable
     {
         return [
-            'one' => [fn(Rut $rut) => SiiDte::factory(['issuer_rut' => $rut])->create()],
-            'many' => [fn(Rut $rut) => SiiDte::factory(2, ['issuer_rut' => $rut])->create()],
+            'one' => [fn (Rut $rut) => SiiDte::factory(['issuer_rut' => $rut])->create()],
+            'many' => [fn (Rut $rut) => SiiDte::factory(2, ['issuer_rut' => $rut])->create()],
         ];
     }
 
@@ -39,7 +39,7 @@ class RetrievePendingSiiDteTest extends DatabaseTestCase
         $createSiiDte($rut);
 
         $this
-            ->pipeline(TestSet::class)
+            ->pipeline(TestSetSalesBook::class)
             ->isolatePipe(RetrievePendingSiiDte::class)
             ->send(new TestSetData($rut))
             ->assertPassable(function (TestSetData $data) {
@@ -57,7 +57,7 @@ class RetrievePendingSiiDteTest extends DatabaseTestCase
 
     public function test_fails_when_no_sii_dte_are_found(): void
     {
-        $pipeline = $this->pipeline(TestSet::class)
+        $pipeline = $this->pipeline(TestSetSalesBook::class)
             ->isolatePipe(RetrievePendingSiiDte::class);
 
         $this->expectException(ManuallyFailedException::class);
@@ -70,12 +70,33 @@ class RetrievePendingSiiDteTest extends DatabaseTestCase
     {
         SiiDte::factory(['issuer_rut' => '76.123.456-1'])->create();
 
-        $pipeline = $this->pipeline(TestSet::class)
+        $pipeline = $this->pipeline(TestSetSalesBook::class)
             ->isolatePipe(RetrievePendingSiiDte::class);
 
         $this->expectException(ManuallyFailedException::class);
         $this->expectExceptionMessageIs('No DTEs found to generate the IECV. You need to create the DTEs first.');
 
         $pipeline->send(new TestSetData(new Rut(76_123_456, 0)));
+    }
+
+    public function test_retrieves_only_specified_dtes_when_ids_are_provided(): void
+    {
+        $dte1 = SiiDte::factory()->create(['issuer_num' => 76123456, 'issuer_vd' => '0']);
+        $dte2 = SiiDte::factory()->create(['issuer_num' => 76123456, 'issuer_vd' => '0']);
+        $dte3 = SiiDte::factory()->create(['issuer_num' => 76123456, 'issuer_vd' => '0']);
+
+        $rut = new Rut(76123456, '0');
+        $data = new TestSetData($rut);
+        $data->dteIds = [$dte1->id, $dte3->id];
+
+        $pipe = new RetrievePendingSiiDte;
+        $result = $pipe->handle($data, function ($data) {
+            return $data;
+        });
+
+        static::assertCount(2, $result->dtes);
+        static::assertTrue($result->dtes->contains('id', $dte1->id));
+        static::assertTrue($result->dtes->contains('id', $dte3->id));
+        static::assertFalse($result->dtes->contains('id', $dte2->id));
     }
 }

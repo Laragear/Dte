@@ -16,7 +16,7 @@ use Laragear\Dte\Support\XmlDomFactory;
 use Laragear\Dte\Xml\XmlSigner;
 use RuntimeException;
 
-class OutputIecv
+class OutputIecvPurchases
 {
     /**
      * Create a new Output Iecv instance.
@@ -55,7 +55,7 @@ class OutputIecv
     {
         $document = $this->xml->document(encoding: 'ISO-8859-1');
 
-        if (! @$document->loadXML($xml, LIBXML_NONET)) {
+        if (!@$document->loadXML($xml, LIBXML_NONET)) {
             throw new RuntimeException('Unable to parse the IECV XML.');
         }
 
@@ -70,7 +70,7 @@ class OutputIecv
         $nodes = $this->xml->xpath($document)->query('//EnvioLibro');
         $target = $nodes !== false ? $nodes->item(0) : null;
 
-        if (! $target instanceof DOMElement) {
+        if (!$target instanceof DOMElement) {
             throw new RuntimeException('Unable to find EnvioLibro in IECV XML.');
         }
 
@@ -84,7 +84,7 @@ class OutputIecv
     {
         return $this->builder->build(
             $data->dtes,
-            IecvType::Ventas,
+            IecvType::Purchases,
             $data->period,
             $data->resolutionDate,
             $data->resolutionNumber,

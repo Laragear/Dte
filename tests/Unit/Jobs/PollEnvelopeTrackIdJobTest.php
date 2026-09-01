@@ -45,7 +45,7 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
     {
         $event = Event::fake([EnvelopeAccepted::class, EnvelopeRejected::class, DteRejected::class]);
 
-        $envelope = SiiDteEnvelope::factory()->create([
+        $envelope = SiiDteEnvelope::factory()->hasPayload(['sii_response' => null])->create([
             'status' => EnvelopeStatus::Uploaded,
             'track_id' => '12345',
         ]);
@@ -77,7 +77,7 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
     {
         $event = Event::fake([EnvelopeAccepted::class, EnvelopeRejected::class, DteRejected::class]);
 
-        $envelope = SiiDteEnvelope::factory()->create([
+        $envelope = SiiDteEnvelope::factory()->hasPayload(['sii_response' => null])->create([
             'type' => 'boleta',
             'status' => EnvelopeStatus::Uploaded,
             'track_id' => '12345',
@@ -111,7 +111,7 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
     {
         $event = Event::fake([EnvelopeAccepted::class, EnvelopeRejected::class, DteRejected::class]);
 
-        $envelope = SiiDteEnvelope::factory()->create([
+        $envelope = SiiDteEnvelope::factory()->hasPayload(['sii_response' => null])->create([
             'status' => EnvelopeStatus::Uploaded,
             'track_id' => '12345',
             'type' => 'boleta',
@@ -144,7 +144,7 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
     {
         $event = Event::fake([EnvelopeAccepted::class, EnvelopeRejected::class, DteRejected::class]);
 
-        $envelope = SiiDteEnvelope::factory()->create([
+        $envelope = SiiDteEnvelope::factory()->hasPayload(['sii_response' => null])->create([
             'status' => EnvelopeStatus::Uploaded,
             'track_id' => '12345',
             'type' => 'boleta',
@@ -175,7 +175,7 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
 
     public function test_logs_warning_on_unknown_status_for_boleta(): void
     {
-        $envelope = SiiDteEnvelope::factory()->create([
+        $envelope = SiiDteEnvelope::factory()->hasPayload(['sii_response' => null])->create([
             'status' => EnvelopeStatus::Uploaded,
             'track_id' => 'UNKNOWN_TRACK',
             'type' => 'boleta',
@@ -216,7 +216,7 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
     {
         Event::fake([EnvelopeAccepted::class, EnvelopeRejected::class, DteRejected::class]);
 
-        $envelope = SiiDteEnvelope::factory()->create([
+        $envelope = SiiDteEnvelope::factory()->hasPayload(['sii_response' => null])->create([
             'status' => EnvelopeStatus::Uploaded,
             'track_id' => '55555',
         ]);
@@ -243,7 +243,7 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
     {
         Event::fake([EnvelopeAccepted::class, EnvelopeRejected::class, DteRejected::class]);
 
-        $envelope = SiiDteEnvelope::factory()->create([
+        $envelope = SiiDteEnvelope::factory()->hasPayload(['sii_response' => null])->create([
             'status' => EnvelopeStatus::Pending,
             'track_id' => '12345',
         ]);
@@ -263,7 +263,7 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
     {
         Event::fake([EnvelopeAccepted::class, EnvelopeRejected::class, DteRejected::class]);
 
-        $envelope = SiiDteEnvelope::factory()->create([
+        $envelope = SiiDteEnvelope::factory()->hasPayload(['sii_response' => null])->create([
             'status' => EnvelopeStatus::Uploaded,
             'track_id' => 'UNKNOWN_TRACK',
         ]);
@@ -291,7 +291,7 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
     {
         Event::fake([EnvelopeAccepted::class, EnvelopeRejected::class, DteRejected::class]);
 
-        $envelope = SiiDteEnvelope::factory()->create([
+        $envelope = SiiDteEnvelope::factory()->hasPayload(['sii_response' => null])->create([
             'status' => EnvelopeStatus::Uploaded,
             'track_id' => '98765',
         ]);
@@ -337,7 +337,7 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
     {
         Event::fake([EnvelopeAccepted::class, EnvelopeRejected::class, DteRejected::class]);
 
-        $envelope = SiiDteEnvelope::factory()->create([
+        $envelope = SiiDteEnvelope::factory()->hasPayload(['sii_response' => null])->create([
             'status' => EnvelopeStatus::Uploaded,
             'track_id' => '98765',
         ]);
@@ -367,7 +367,7 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
 
     public function test_logs_error_and_throws_exception_on_failure(): void
     {
-        $envelope = SiiDteEnvelope::factory()->create([
+        $envelope = SiiDteEnvelope::factory()->hasPayload(['sii_response' => null])->create([
             'status' => EnvelopeStatus::Uploaded,
             'track_id' => 'ERROR_TRACK',
         ]);
@@ -403,7 +403,7 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
         $this->app->make('config')->set('dte.environment', 'production');
         $this->app->make(EnvironmentResolver::class)->flush();
 
-        $envelope = SiiDteEnvelope::factory()->create([
+        $envelope = SiiDteEnvelope::factory()->hasPayload(['sii_response' => null])->create([
             'type' => 'boleta',
             'status' => EnvelopeStatus::Uploaded,
             'track_id' => '12345',
@@ -457,7 +457,7 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
         $this->app->make('config')->set('dte.environment', 'production');
         $this->app->make(EnvironmentResolver::class)->flush();
 
-        $envelope = SiiDteEnvelope::factory()->create([
+        $envelope = SiiDteEnvelope::factory()->hasPayload(['sii_response' => null])->create([
             'type' => 'boleta',
             'status' => EnvelopeStatus::Uploaded,
             'track_id' => '12345',
@@ -503,7 +503,7 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
 
     public function test_accepts_normal_envelope_and_accepts_inner_dtes_when_no_rejections(): void
     {
-        $envelope = SiiDteEnvelope::factory()->create([
+        $envelope = SiiDteEnvelope::factory()->hasPayload(['sii_response' => null])->create([
             'status' => EnvelopeStatus::Uploaded,
             'track_id' => '12345',
         ]);
@@ -538,7 +538,7 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
 
     public function test_accepts_normal_envelope_and_dispatches_poll_for_inner_dtes_when_rejections_present(): void
     {
-        $envelope = SiiDteEnvelope::factory()->create([
+        $envelope = SiiDteEnvelope::factory()->hasPayload(['sii_response' => null])->create([
             'status' => EnvelopeStatus::Uploaded,
             'track_id' => '12345',
         ]);

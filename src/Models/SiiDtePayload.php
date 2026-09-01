@@ -16,7 +16,7 @@ use Laragear\Dte\Models\Concerns\HasXmlPayload;
  * Stores builder input and signed XML outside the DTE ledger.
  * ---
  *
- * @see SiiDtePayloadFactory
+ * @see  SiiDtePayloadFactory
  * @link database/migrations/2026_01_01_000003_create_sii_dte_payloads_table.php
  * ---
  *

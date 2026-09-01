@@ -9,7 +9,6 @@ use Laragear\Dte\Enums\DteStatus;
 use Laragear\Dte\Enums\EnvelopeStatus;
 use Laragear\Dte\Enums\InboundDteStatus;
 use LogicException;
-
 use function value;
 
 /**
@@ -107,10 +106,10 @@ trait HasSiiStatus
         $status = $this->getAttribute('status');
 
         if (
-            ! $status instanceof DteStatus
-            && ! $status instanceof EnvelopeStatus
-            && ! $status instanceof InboundDteStatus
-            && ! $status instanceof AecStatus
+            !$status instanceof DteStatus
+            && !$status instanceof EnvelopeStatus
+            && !$status instanceof InboundDteStatus
+            && !$status instanceof AecStatus
         ) {
             throw new LogicException('The model status must be cast to a supported SII status enum.');
         }

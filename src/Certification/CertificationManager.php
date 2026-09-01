@@ -10,8 +10,10 @@ use Laragear\Dte\Certification\PrintSample\PrintSample;
 use Laragear\Dte\Certification\PrintSample\PrintSampleData;
 use Laragear\Dte\Certification\Simulation\Simulation;
 use Laragear\Dte\Certification\Simulation\SimulationData;
-use Laragear\Dte\Certification\TestingSet\TestSet;
 use Laragear\Dte\Certification\TestingSet\TestSetData;
+use Laragear\Dte\Certification\TestingSet\TestSetEnvelope;
+use Laragear\Dte\Certification\TestingSet\TestSetPurchasesBook;
+use Laragear\Dte\Certification\TestingSet\TestSetSalesBook;
 use Laragear\Dte\Models\SiiAecCession;
 use Laragear\Dte\Models\SiiCaf;
 use Laragear\Dte\Models\SiiDte;
@@ -35,13 +37,43 @@ class CertificationManager
     }
 
     /**
-     * Executes the Test Set (Generate and send DTEs from SII test cases).
+     * Executes the Test Set for Basic Set.
      */
-    public function testSet(Rut|string $rut, array $dteIds = []): TestSetData
+    public function basicTestSet(Rut|string $rut, array $dteIds = []): TestSetData
     {
         $data = new TestSetData(is_string($rut) ? Rut::parse($rut) : $rut, $dteIds);
 
-        return $this->app->make(TestSet::class)->send($data)->thenReturn();
+        return $this->app->make(TestSetEnvelope::class)->send($data)->thenReturn();
+    }
+
+    /**
+     * Executes the Test Set for Purchase Invoice Set.
+     */
+    public function purchaseInvoiceTestSet(Rut|string $rut, array $dteIds = []): TestSetData
+    {
+        $data = new TestSetData(is_string($rut) ? Rut::parse($rut) : $rut, $dteIds);
+
+        return $this->app->make(TestSetEnvelope::class)->send($data)->thenReturn();
+    }
+
+    /**
+     * Executes the Test Set for Sales Book.
+     */
+    public function salesBookTestSet(Rut|string $rut, array $dteIds = []): TestSetData
+    {
+        $data = new TestSetData(is_string($rut) ? Rut::parse($rut) : $rut, $dteIds);
+
+        return $this->app->make(TestSetSalesBook::class)->send($data)->thenReturn();
+    }
+
+    /**
+     * Executes the Test Set for Purchases Book.
+     */
+    public function purchasesBookTestSet(Rut|string $rut, array $dteIds = []): TestSetData
+    {
+        $data = new TestSetData(is_string($rut) ? Rut::parse($rut) : $rut, $dteIds);
+
+        return $this->app->make(TestSetPurchasesBook::class)->send($data)->thenReturn();
     }
 
     /**
@@ -65,13 +97,12 @@ class CertificationManager
         Rut|string|null $signerRut = null,
         ?string $location = null,
     ): InterchangeData {
-        $signerRut = is_string($signerRut) ? Rut::parse($signerRut) : $signerRut;
         $data = new InterchangeData(
-            is_string($rut) ? Rut::parse($rut) : $rut,
+            Rut::parse($rut),
             $source,
             $filePath,
             $xmlContent,
-            $signerRut,
+            $signerRut ? Rut::parse($signerRut) : $signerRut,
             $location,
         );
 

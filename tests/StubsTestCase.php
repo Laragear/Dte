@@ -16,7 +16,7 @@ class StubsTestCase extends PHPUnitTestCase
 {
     public function test_has_checksum_file(): void
     {
-        static::assertFileExists(TestCase::STUBS.'/checksums.json');
+        static::assertFileExists(TestCase::STUBS . '/checksums.json');
     }
 
     /**
@@ -34,13 +34,13 @@ class StubsTestCase extends PHPUnitTestCase
     #[DataProvider('providesFilesInStubsDirectory')]
     public function test_stub_checksum_files_exist(string $filename): void
     {
-        static::assertArrayHasKey($filename, json_decode(file_get_contents(TestCase::STUBS.'/checksums.json'), true));
+        static::assertArrayHasKey($filename, json_decode(TestCase::getStub('checksums.json'), true));
     }
 
     public static function providesStubFilesWithChecksum(): array
     {
         return Arr::mapWithKeys(
-            json_decode(file_get_contents(TestCase::STUBS.'/checksums.json'), true),
+            json_decode(TestCase::getStub('checksums.json'), true),
             static function (string $hash, string $file) {
                 return [
                     $file => [TestCase::STUBS.'/'.$file, $hash],

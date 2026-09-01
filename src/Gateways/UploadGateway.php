@@ -8,7 +8,6 @@ use Laragear\Dte\Contracts\TokenProviderInterface;
 use Laragear\Dte\Environment\EnvironmentResolver;
 use Laragear\Dte\Models\SiiDteEnvelope;
 use RuntimeException;
-
 use function sprintf;
 
 /**

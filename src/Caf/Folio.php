@@ -25,11 +25,11 @@ class Folio
     {
         foreach ($folios as $folio) {
             // Normalize to string ranges or integers
-            if (is_string($folio) && ! str_contains($folio, '-')) {
+            if (is_string($folio) && !str_contains($folio, '-')) {
                 $folio = (int) $folio;
             }
 
-            if (! in_array($folio, $this->annuled, true)) {
+            if (!in_array($folio, $this->annuled, true)) {
                 $this->annuled[] = $folio;
             }
         }
@@ -65,7 +65,7 @@ class Folio
     public function restore(int|string ...$folios): static
     {
         foreach ($folios as $folio) {
-            if (is_string($folio) && ! str_contains($folio, '-')) {
+            if (is_string($folio) && !str_contains($folio, '-')) {
                 $folio = (int) $folio;
             }
 
@@ -116,7 +116,7 @@ class Folio
      */
     public function isNotAnnuled(int $folio): bool
     {
-        return ! $this->isAnnuled($folio);
+        return !$this->isAnnuled($folio);
     }
 
     /**

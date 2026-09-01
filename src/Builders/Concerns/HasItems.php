@@ -6,7 +6,6 @@ use InvalidArgumentException;
 use Laragear\Dte\Contracts\Itemable;
 use Laragear\Dte\Data\Item;
 use OverflowException;
-
 use function count;
 use function is_string;
 use function round;

@@ -137,7 +137,7 @@ class ComplianceBuildersTest extends TestCase
     protected function xpath(DOMDocument $document): DOMXPath
     {
         $xpath = $this->app->make(XmlDomFactory::class)->xpath($document);
-        $xpath->registerNamespace('sii', XmlResponseBuilder::XML_NAMESPACE);
+        $xpath->registerNamespace('sii', XmlDomFactory::XML_NAMESPACE);
         $xpath->registerNamespace('ds', 'http://www.w3.org/2000/09/xmldsig#');
 
         return $xpath;
@@ -150,7 +150,7 @@ class ComplianceBuildersTest extends TestCase
 
     protected function responseSchema(): string
     {
-        $schema = $this->app->make(Filesystem::class)->get(static::STUBS.'/RespuestaEnvioDTE_v10.xsd');
+        $schema = static::getStub('RespuestaEnvioDTE_v10.xsd');
 
         // We require setting the absolute path of the schemas for the XSD so it can validate.
         return (string) str_replace(

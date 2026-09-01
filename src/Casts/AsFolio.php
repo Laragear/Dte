@@ -11,11 +11,8 @@ class AsFolio implements CastsAttributes
 {
     /**
      * Cast the given value.
-     *
-     * @param  Model  $model
-     * @param  mixed  $value
      */
-    public function get($model, string $key, $value, array $attributes): Folio
+    public function get(Model $model, string $key, mixed $value, array $attributes): Folio
     {
         return new Folio(
             (int) $attributes['folio_from'],
@@ -27,13 +24,10 @@ class AsFolio implements CastsAttributes
 
     /**
      * Prepare the given value for storage.
-     *
-     * @param  Model  $model
-     * @param  mixed  $value
      */
-    public function set($model, string $key, $value, array $attributes): array
+    public function set(Model $model, string $key, mixed $value, array $attributes): array
     {
-        if (! $value instanceof Folio) {
+        if (!$value instanceof Folio) {
             throw new InvalidArgumentException('The given value is not a Folio instance.');
         }
 

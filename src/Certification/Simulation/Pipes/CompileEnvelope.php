@@ -18,6 +18,7 @@ class CompileEnvelope
     public function __construct(
         protected Repository $config,
         protected CreateEnvelope $create,
+        protected ConfigurationManager $manager,
     ) {
         //
     }
@@ -27,8 +28,7 @@ class CompileEnvelope
      */
     public function handle(SimulationData $data, Closure $next): SimulationData
     {
-        $configManager = app(ConfigurationManager::class);
-        $dynamicIssuer = $configManager->getIssuer($data->rut);
+        $dynamicIssuer = $this->manager->getIssuer($data->rut);
 
         $envelope = SiiDteEnvelope::create([
             'issuer_rut' => $data->rut,
@@ -36,13 +36,13 @@ class CompileEnvelope
             'type' => 'normal',
             'document_type' => DteType::DEFAULT,
             'resolution_date' => $dynamicIssuer?->resolutionDate ?? $this->config->get(
-                'dte.issuer.resolution_date',
-                '2023-01-01',
-            ),
+                    'dte.issuer.resolution_date',
+                    '2023-01-01',
+                ),
             'resolution_number' => $dynamicIssuer?->resolutionNumber ?? $this->config->get(
-                'dte.issuer.resolution_number',
-                0,
-            ),
+                    'dte.issuer.resolution_number',
+                    0,
+                ),
         ]);
 
         // Associate documents

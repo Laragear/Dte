@@ -50,7 +50,7 @@ class IecvBuilderTest extends DatabaseTestCase
 
         $xml = $this->app->make(IecvBuilder::class)->build(
             dtes: $dtes,
-            type: IecvType::Ventas,
+            type: IecvType::Sales,
             period: '2023-10',
             resolutionDate: '2020-01-01',
             resolutionNumber: 1234,
@@ -61,33 +61,8 @@ class IecvBuilderTest extends DatabaseTestCase
         $dom->loadXML($xml);
 
         // Append dummy signature to pass schema validation
-        $signatureXml = <<<'XML'
-<Signature xmlns="http://www.w3.org/2000/09/xmldsig#">
-    <SignedInfo>
-        <CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
-        <SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/>
-        <Reference URI="#LibroVENTA_202310">
-            <Transforms>
-                <Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
-            </Transforms>
-            <DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/>
-            <DigestValue>ZHVtbXk=</DigestValue>
-        </Reference>
-    </SignedInfo>
-    <SignatureValue>ZHVtbXk=</SignatureValue>
-    <KeyInfo>
-        <KeyValue>
-            <RSAKeyValue>
-                <Modulus>ZHVtbXk=</Modulus>
-                <Exponent>ZHVtbXk=</Exponent>
-            </RSAKeyValue>
-        </KeyValue>
-        <X509Data>
-            <X509Certificate>ZHVtbXk=</X509Certificate>
-        </X509Data>
-    </KeyInfo>
-</Signature>
-XML;
+        $signatureXml = static::getStub('FakeIecvXmlSignature.xml');
+
         $sigDom = $this->app->make(XmlDomFactory::class)->document();
         $sigDom->loadXML($signatureXml);
 
@@ -122,7 +97,7 @@ XML;
 
         $xml = $this->app->make(IecvBuilder::class)->build(
             dtes: $dtes,
-            type: IecvType::Compras,
+            type: IecvType::Purchases,
             period: '2023-10',
             resolutionDate: '2020-01-01',
             resolutionNumber: 1234,

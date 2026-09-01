@@ -8,7 +8,6 @@ use Laragear\Dte\Support\XmlDomFactory;
 use LogicException;
 use SimpleXMLElement;
 use Throwable;
-
 use function app;
 use function is_string;
 
@@ -63,7 +62,7 @@ trait HasXmlPayload
     {
         $xml = $this->getAttribute('xml');
 
-        if (! is_string($xml)) {
+        if (!is_string($xml)) {
             throw new LogicException('The model does not contain an XML payload.');
         }
 

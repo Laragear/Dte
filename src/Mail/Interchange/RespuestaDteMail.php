@@ -50,7 +50,7 @@ class RespuestaDteMail extends Mailable
     public function attachments(): array
     {
         return [
-            Attachment::fromData(fn () => $this->receiptXml, 'acuse_recibo.xml')
+            Attachment::fromData(fn() => $this->receiptXml, 'acuse_recibo.xml')
                 ->withMime('application/xml'),
         ];
     }

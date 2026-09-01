@@ -136,11 +136,11 @@ enum SiiTaxes: int
      */
     public static function isRetention(self|int|string $code): bool
     {
-        if (! $code instanceof self) {
+        if (!$code instanceof self) {
             $code = self::tryFrom((int) $code);
         }
 
-        if (! $code) {
+        if (!$code) {
             return false;
         }
 

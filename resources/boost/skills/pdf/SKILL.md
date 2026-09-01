@@ -8,24 +8,9 @@ metadata:
 
 # Laragear Dte PDF
 
-PDF can be generated from the `SiiDte` model instance through the `pdf()->generate()` method. This saves the PDF into filesystem (local or cloud). It returns a `Pdf` object with the disk and path of the PDF.
+PDF can be generated from the `SiiDte` model instance through the `pdf()->generate()` method. It requires the DTE XML to be created using `sync: true`. Because this takes a heavy toll on memory and computation, prefer using a listener that sends the PDF to the business instead of creating it sync.
 
-```php
-use Laragear\Dte\Facades\Dte;
-
-$invoice = Dte::invoice()->create(sync: true);
-
-$pdfLocation = $invoice->pdf()->generate();
-
-$disk = $pdfLocation->disk;
-$path = $pdfLocation->path;
-
-return Storage::disk($disk, $path);
-```
-
-PDF from `SiiDte` models require a compilation step. Use common sense to pick which _when_ to generate the PDF; prefer using a listener instead of a sync compilation when possible.
-
-- **A) Listening to `CompiledDte` event**
+- **A) Listening to `CompiledDte` event (preferred)**
 
 Create a listener to generate and send the PDF async through a notification, by listening to the `Laragear\Dte\Events\CompiledDte` event. Create the notification if it does not exist.
 
@@ -55,6 +40,7 @@ When persisting the document with `create()`, issue `sync: true` to force the co
 
 ```php
 use Laragear\Dte\Facades\Dte;
+use Illuminate\Support\Facades\Storage;
 
 $invoice = Dte::invoice()
     ->receivedBy($business)
@@ -62,6 +48,12 @@ $invoice = Dte::invoice()
     ->create(sync: true);
 
 $pdfLocation = $invoice->pdf()->generate();
+
+$disk = $pdfLocation->disk;
+$path = $pdfLocation->path;
+
+// Return the PDF as a separate URL.
+return Storage::disk($disk)->url($path);
 ```
 
 ### Regeneration
@@ -74,7 +66,7 @@ $pdfLocation = $invoice->pdf()->force(fn () => true)->generate();
 
 ### In-browser view
 
-The `view()` method returns an HTML view of the PDF. Use this if the invoice was created using `sync: true` and PDF file is not available.
+The `view()` method returns an HTML view of the PDF. Use this if the invoice was created using `sync: true` to avoid creating the PDF file.
 
 ```php
 use Laragear\Dte\Models\SiiDte;

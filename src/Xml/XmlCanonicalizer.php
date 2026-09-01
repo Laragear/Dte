@@ -7,7 +7,6 @@ use DOMException;
 use DOMNode;
 use Laragear\Dte\Support\LibxmlProxy;
 use Laragear\Dte\Support\XmlDomFactory;
-
 use function is_string;
 
 class XmlCanonicalizer
@@ -47,7 +46,7 @@ class XmlCanonicalizer
         $previous = $this->libxml->use_internal_errors(true);
 
         try {
-            if (! $document->loadXML($xml, LIBXML_NONET)) {
+            if (!$document->loadXML($xml, LIBXML_NONET)) {
                 throw new DOMException('Unable to parse XML for canonicalization.');
             }
         } finally {

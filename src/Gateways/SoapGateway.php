@@ -14,7 +14,6 @@ use Laragear\Dte\Support\SoapProxy;
 use Laragear\Rut\Rut;
 use RuntimeException;
 use SoapHeader;
-
 use function assert;
 
 /**
@@ -111,8 +110,13 @@ class SoapGateway implements TokenProviderInterface
     /**
      * Execute a generic SOAP query against the specified service.
      */
-    public function query(Rut $issuer, string $service, string $action, array $arguments = [], ?string $baseUrl = null): mixed
-    {
+    public function query(
+        Rut $issuer,
+        string $service,
+        string $action,
+        array $arguments = [],
+        ?string $baseUrl = null
+    ): mixed {
         $token = $this->token($issuer, $baseUrl);
         $baseUrl ??= $this->environment->resolve()->soapBaseUrl();
         $wsdlUrl = $this->resolveWsdlUrl($baseUrl, $service);

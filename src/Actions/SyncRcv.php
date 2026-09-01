@@ -8,6 +8,8 @@ use Laragear\Dte\Actions\RcvParsing\Parse;
 use Laragear\Dte\Configuration\ConfigurationManager;
 use Laragear\Dte\Enums\RcvType;
 use Laragear\Rut\Rut;
+use RuntimeException;
+use Throwable;
 
 class SyncRcv
 {
@@ -29,16 +31,18 @@ class SyncRcv
      * @param  mixed  $source  File path, SplFileInfo, UploadedFile, string payload, or stream resource.
      * @return array<string, int>
      */
-    public function handle(mixed $source, RcvType|string $type): array
+    public function handle(mixed $source, RcvType|string $type, Rut|string|null $issuer = null): array
     {
         $type = is_string($type) ? RcvType::from($type) : $type;
 
-        $companyRut = Rut::parse(
-            $this->configManager->getIssuer()?->rut?->formatRaw() ?? $this->config->get('dte.issuer.rut'),
+        try {
+            $issuer ??= $this->configManager->getIssuer()->rut;
+        } catch (Throwable $e) {
+            throw new RuntimeException('There is no issuer to be resolved and sync RCV.', previous: $e);
+        }
+
+        return $this->cuadratura->forParsing(
+            $this->parser->forBatch($source, $type, Rut::parse($issuer))
         );
-
-        $context = $this->parser->forBatch($source, $type, $companyRut);
-
-        return $this->cuadratura->forParsing($context);
     }
 }

@@ -9,6 +9,8 @@ use XMLWriter;
 
 class XmlDomFactory
 {
+    public const string XML_NAMESPACE = 'http://www.sii.cl/SiiDte';
+
     /**
      * Create a new XML DOM Factory instance.
      */

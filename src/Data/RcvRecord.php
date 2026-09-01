@@ -20,5 +20,6 @@ class RcvRecord
         public readonly string $characterization,
         public readonly ?Carbon $issuedOn = null,
         public readonly ?Carbon $acknowledgedAt = null,
-    ) {}
+    ) {
+    }
 }

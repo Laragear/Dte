@@ -15,7 +15,7 @@ trait HasDefaultRut
     {
         $rut = $this->option('rut')
             ?: $this->issuerRut($manager)
-            ?: SiiRut::DEFAULT->value;
+                ?: SiiRut::DEFAULT->value;
 
         return Rut::parse($rut);
     }

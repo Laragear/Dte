@@ -9,5 +9,6 @@
     "LceSiiTypes_v10.xsd": "ed2f04d85a78ab90a61a2d2a4b68ca6a37a2c9b6256feda0f0609b34d3f03259",
     "LibroCV_v10.xsd": "97d9aac91e3c1708620638bea7afc955b3268be62c24c89594ee32bf4ff91da8",
     "xmldsignature_v10.xsd": "03867423bcfecf166bf227909534f7fbbfc8ccd9b1a0f6503e705dce0ddf08b4",
-    "FakeCaf.xml": "8127fb832279703a4fc73c9b4d8c5d08b7132025dda23dc4a4dafed673e45889"
+    "FakeCaf.xml": "8127fb832279703a4fc73c9b4d8c5d08b7132025dda23dc4a4dafed673e45889",
+    "FakeIecvXmlSignature.xml": "9f9437a7f76a9965ed14c7a84f254368280851efed60030e4b80496bcd0e8286"
 }

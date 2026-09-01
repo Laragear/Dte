@@ -24,7 +24,7 @@ class ValidateState
                 ->where('status', DteStatus::Pending)
                 ->update(['status' => DteStatus::Building]);
 
-            if (! $updated) {
+            if (!$updated) {
                 throw new LogicException('The DTE document is already being processed.');
             }
 

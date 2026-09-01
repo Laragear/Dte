@@ -25,7 +25,7 @@ class DebitNoteBuilder extends DocumentBuilder
     }
 
     /**
-     * Charge amounts on a previous document.
+     * Charge amounts to a previous document.
      */
     public function charge(
         DteType|ReferenceType|SiiDte|string|int $documentType,
@@ -33,15 +33,7 @@ class DebitNoteBuilder extends DocumentBuilder
         ?DateTimeImmutable $date = null,
         string $reason = 'Corrige montos'
     ): static {
-        if ($documentType instanceof SiiDte) {
-            $folio = (string) $documentType->folio;
-            $date = clone ($documentType->issued_on?->toDateTimeImmutable() ?? $this->date->now('America/Santiago')->toDateTimeImmutable());
-            $documentType = $documentType->document_type;
-        }
-
-        $this->references = [ReferenceData::make($documentType, $folio, $date, $reason, 3)];
-
-        return $this;
+        return $this->modify($documentType, $folio, $date, $reason);
     }
 
     /**

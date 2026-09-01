@@ -58,7 +58,6 @@ class FetchInterchangeXmlTest extends DatabaseTestCase
     public function test_fetches_from_file_path(): void
     {
         $this->mock(Filesystem::class, function (MockInterface $mock) {
-            $mock->expects('exists')->andReturnTrue();
             $mock->expects('get')->andReturn('<xml></xml>');
         });
 
@@ -95,7 +94,7 @@ class FetchInterchangeXmlTest extends DatabaseTestCase
         });
 
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessageIs('The provided interchange XML file does not exist.');
+        $this->expectExceptionMessageIs('The interchange XML file at [/dummy.xml] does not exist.');
 
         $this->pipeline(Interchange::class)
             ->isolatePipe(FetchInterchangeXml::class)

@@ -54,4 +54,23 @@ class DteServiceProviderTest extends TestCase
     {
         static::assertPublishes($this->app->databasePath('migrations'), 'migrations');
     }
+
+    public function test_should_not_register_fake_commands_when_not_in_console(): void
+    {
+        $sp = new DteServiceProvider($this->app);
+
+        $mockApp = \Mockery::mock($this->app)->makePartial();
+        $mockApp->shouldReceive('runningInConsole')->andReturn(false);
+
+        $reflection = new \ReflectionClass($sp);
+        $property = $reflection->getProperty('app');
+        $property->setAccessible(true);
+        $property->setValue($sp, $mockApp);
+
+        $method = $reflection->getMethod('shouldRegisterFakeCommands');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($sp, $this->app->make(EnvironmentResolver::class));
+        static::assertFalse($result);
+    }
 }

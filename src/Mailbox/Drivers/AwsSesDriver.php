@@ -7,7 +7,6 @@ use Illuminate\Contracts\Config\Repository as ConfigRepository;
 use Laragear\Dte\Contracts\MailboxDriverInterface;
 use Laragear\Dte\Data\InboundEmailData;
 use Laragear\Dte\Mailbox\XmlExtractor;
-
 use function preg_match;
 
 /**

@@ -81,7 +81,7 @@ class MakeFakeCertificateCommand extends Command
 
         $p12 = '';
 
-        if (! $openSsl->pkcs12Export($cert, $p12, $key, $password)) {
+        if (!$openSsl->pkcs12Export($cert, $p12, $key, $password)) {
             $this->error('Failed to export PKCS#12.');
 
             return self::FAILURE;

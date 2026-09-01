@@ -46,7 +46,7 @@ class ValidatesSiiDocuments
 
         // If the certificate is not a correctly PKCS#12 mime type, bail out.
         if ($value instanceof UploadedFile) {
-            if (! $validator->validateMimetypes($attribute, $value, static::MIME_TYPES)) {
+            if (!$validator->validateMimetypes($attribute, $value, static::MIME_TYPES)) {
                 return false;
             }
             $pkcs12 = $value->get();
@@ -54,7 +54,7 @@ class ValidatesSiiDocuments
             $pkcs12 = $value;
         }
 
-        if (! is_string($pkcs12) || $pkcs12 === '') {
+        if (!is_string($pkcs12) || $pkcs12 === '') {
             return false;
         }
 
@@ -66,7 +66,7 @@ class ValidatesSiiDocuments
             return false;
         }
 
-        if (! isset($pem['cert'])) {
+        if (!isset($pem['cert'])) {
             return false;
         }
 
@@ -90,7 +90,7 @@ class ValidatesSiiDocuments
         Validator $validator,
     ): bool {
         if ($value instanceof UploadedFile) {
-            if (! $validator->validateMimetypes($attribute, $value, ['text/xml', 'application/xml'])) {
+            if (!$validator->validateMimetypes($attribute, $value, ['text/xml', 'application/xml'])) {
                 return false;
             }
             $xml = $value->get();
@@ -98,7 +98,7 @@ class ValidatesSiiDocuments
             $xml = $value;
         }
 
-        if (! is_string($xml) || $xml === '') {
+        if (!is_string($xml) || $xml === '') {
             return false;
         }
 

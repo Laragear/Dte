@@ -2,13 +2,13 @@
 
 namespace Laragear\Dte\Certification;
 
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\DateFactory;
 use Laragear\Dte\Models\SiiDte;
 use Laragear\Dte\Support\XmlDomFactory;
 use Laragear\Rut\Rut;
 use XMLWriter;
-
 use function round;
 use function str_replace;
 
@@ -39,6 +39,7 @@ class IecvBuilder
         Rut $senderRut,
         array $properties = [],
     ): string {
+
         $writer = $this->xml->writer();
         $writer->openMemory();
         $this->startDocument($writer, $period, $type);
@@ -80,7 +81,7 @@ class IecvBuilder
     {
         $writer->startDocument('1.0', 'ISO-8859-1');
         $writer->startElement('LibroCompraVenta');
-        $writer->writeAttribute('xmlns', 'http://www.sii.cl/SiiDte');
+        $writer->writeAttribute('xmlns', XmlDomFactory::XML_NAMESPACE);
         $writer->writeAttribute('xmlns:xsi', 'http://www.w3.org/2001/XMLSchema-instance');
         $writer->writeAttribute('xsi:schemaLocation', 'http://www.sii.cl/SiiDte LibroCV_v10.xsd');
         $writer->writeAttribute('version', '1.0');
@@ -157,8 +158,9 @@ class IecvBuilder
      */
     protected function appendResumenIva(XMLWriter $writer, Collection $dtesOfType, array $options): void
     {
-        $commonIvaDtes = $dtesOfType->filter(fn ($dte) => ! empty($dte->iva_uso_comun));
-        $regularDtes = $dtesOfType->reject(fn ($dte) => ! empty($dte->iva_uso_comun));
+        $commonIvaDtes = $dtesOfType->filter->iva_common_use;
+        $regularDtes = $dtesOfType->reject->iva_common_use;
+
         $totalIvaAmount = $regularDtes->sum('amount_taxes');
 
         if ($totalIvaAmount > 0) {
@@ -196,8 +198,9 @@ class IecvBuilder
     protected function appendResumenOtrosImpuestos(XMLWriter $writer, Collection $dtesOfType): void
     {
         $otherTaxes = [];
+
         foreach ($dtesOfType as $dte) {
-            if (! empty($dte->taxes) && is_array($dte->taxes)) {
+            if (!empty($dte->taxes) && is_array($dte->taxes)) {
                 foreach ($dte->taxes as $code => $taxAmount) {
                     $otherTaxes[$code] = ($otherTaxes[$code] ?? 0) + $taxAmount;
                 }
@@ -239,7 +242,7 @@ class IecvBuilder
      */
     protected function appendDetalleRut(XMLWriter $writer, SiiDte $dte, IecvType $type): void
     {
-        $rut = $type === IecvType::Ventas
+        $rut = $type === IecvType::Sales
             ? $dte->receiver_rut->formatBasic()
             : $dte->issuer_rut->formatBasic();
 
@@ -259,7 +262,7 @@ class IecvBuilder
             $writer->writeElement('MntNeto', (string) $dte->amount_net);
         }
 
-        if ($dte->iva_uso_comun && $dte->amount_taxes > 0) {
+        if ($dte->iva_common_use && $dte->amount_taxes > 0) {
             $writer->writeElement('IVAUsoComun', (string) $dte->amount_taxes);
         } elseif ($dte->amount_taxes > 0) {
             $writer->writeElement('MntIVA', (string) $dte->amount_taxes);
@@ -273,13 +276,11 @@ class IecvBuilder
      */
     protected function appendDetalleImpuestos(XMLWriter $writer, SiiDte $dte): void
     {
-        if (! empty($dte->taxes) && is_array($dte->taxes)) {
-            foreach ($dte->taxes as $code => $taxAmount) {
-                $writer->startElement('OtrosImp');
-                $writer->writeElement('CodImp', (string) $code);
-                $writer->writeElement('MntImp', (string) $taxAmount);
-                $writer->endElement();
-            }
+        foreach (Arr::wrap($dte->taxes) as $code => $taxAmount) {
+            $writer->startElement('OtrosImp');
+            $writer->writeElement('CodImp', (string) $code);
+            $writer->writeElement('MntImp', (string) $taxAmount);
+            $writer->endElement();
         }
     }
 }

@@ -123,7 +123,7 @@ class MakeFakeCafCommandTest extends DatabaseTestCase
     {
         $this->travelTo(Carbon::parse('2025-01-01 00:00:00', 'America/Santiago'));
 
-        $fakeCaf = $this->app->make(Filesystem::class)->get(static::STUBS.'/FakeCaf.xml');
+        $fakeCaf = static::getStub('FakeCaf.xml');
 
         $openSsl = $this->mock(OpenSslProxy::class)->makePartial();
 

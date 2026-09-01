@@ -148,21 +148,21 @@ class AecCessionBuilder
      */
     protected function validate(): void
     {
-        if (! isset($this->dte)) {
+        if (!isset($this->dte)) {
             throw new LogicException('A document must be set to create a cession.');
         }
 
-        if (! isset($this->assigneeRut, $this->assigneeName, $this->assigneeAddress, $this->assigneeEmail)) {
+        if (!isset($this->assigneeRut, $this->assigneeName, $this->assigneeAddress, $this->assigneeEmail)) {
             throw new LogicException('The assignee details (to, address) must be set.');
         }
 
-        if (! isset($this->authorizedSigner, $this->authorizedName, $this->cedentEmail)) {
+        if (!isset($this->authorizedSigner, $this->authorizedName, $this->cedentEmail)) {
             throw new LogicException('The authorized signer details (authorizedBy) must be set.');
         }
 
         $supported = [DteType::Invoice, DteType::InvoiceExempt, DteType::InvoiceLiquidation, DteType::PurchaseInvoice];
 
-        if (! in_array($this->dte->document_type, $supported, true)) {
+        if (!in_array($this->dte->document_type, $supported, true)) {
             throw new InvalidArgumentException('The DTE type cannot be transferred through an AEC.');
         }
 

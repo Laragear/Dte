@@ -19,6 +19,7 @@ use Laragear\Dte\Data\CompanyData;
 use Laragear\Dte\Data\IssuerData;
 use Laragear\Dte\Data\Item;
 use Laragear\Dte\Data\PaymentTermData;
+use Laragear\Dte\Data\ReceiverData;
 use Laragear\Dte\Data\ReferenceData;
 use Laragear\Dte\Enums\DteStatus;
 use Laragear\Dte\Enums\DteType;
@@ -43,7 +44,7 @@ class DocumentBuilderTest extends DatabaseTestCase
     {
         parent::setUp();
 
-        ConfigurationManager::setCompany(fn() => CompanyData::make(
+        ConfigurationManager::setCompany(fn () => CompanyData::make(
             IssuerData::make(
                 '76.123.456-0',
                 'Test Company',
@@ -72,7 +73,7 @@ class DocumentBuilderTest extends DatabaseTestCase
     {
         yield 'bool' => [true];
         yield 'integer' => [1];
-        yield 'callback' => [static fn(SiiDte $dte, ReceiptBuilder $builder) => true];
+        yield 'callback' => [static fn (SiiDte $dte, ReceiptBuilder $builder) => true];
     }
 
     /**
@@ -129,8 +130,8 @@ class DocumentBuilderTest extends DatabaseTestCase
         static::assertPendingDocument($dte, $issuer->rut->formatRaw(), $receiver->rut->formatRaw());
         static::assertSame('Consulting service', $dte->payload->data['items'][0]['name']);
         static::assertSame('2026-08-13', $dte->payload->data['issued_on']);
-        $events->assertDispatched(DteCreating::class, fn(DteCreating $event): bool => $event->builder === $builder);
-        $events->assertDispatched(DteCreated::class, fn(DteCreated $event): bool => $event->dte->is($dte));
+        $events->assertDispatched(DteCreating::class, fn (DteCreating $event): bool => $event->builder === $builder);
+        $events->assertDispatched(DteCreated::class, fn (DteCreated $event): bool => $event->dte->is($dte));
 
         $queue->assertPushed(QueuedCommand::class, function (QueuedCommand $job) {
             $this->app->call($job->handle(...));
@@ -337,16 +338,15 @@ class DocumentBuilderTest extends DatabaseTestCase
 
     public function test_handles_exempt_documents_and_modifiers_and_references(): void
     {
-        $builder = new class extends DocumentBuilder {
+        $builder = new class extends DocumentBuilder
+        {
             public $mockGlobal = [];
 
             public $mockItems = [];
 
             public $typeMock = DteType::InvoiceExempt;
 
-            public function __construct()
-            {
-            }
+            public function __construct() {}
 
             protected function buildDocument(): array
             {
@@ -448,6 +448,7 @@ class DocumentBuilderTest extends DatabaseTestCase
         });
 
         $issuer = $builder->issuer();
+
         static::assertEquals('761234560', $issuer->rut->formatRaw());
         static::assertEquals('Dynamic Company', $issuer->legalName);
 
@@ -466,5 +467,59 @@ class DocumentBuilderTest extends DatabaseTestCase
         $this->expectExceptionMessageIs('No Issuer resolver has been registered.');
 
         $builder->issuer();
+    }
+
+    public function test_fails_b2b_receiver_validation_without_required_fields(): void
+    {
+        $builder = $this->app->make(InvoiceBuilder::class);
+        $builder->issuedBy(BuilderFixture::issuer());
+        $builder->receivedBy(ReceiverData::make(\Laragear\Rut\Facades\Generator::asCompanies()->makeOne(), 'Company')); // Missing address and commune
+        $builder->addItem(BuilderFixture::item());
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('B2B documents require a receiver with a business activity, address, and commune.');
+        $builder->create();
+    }
+
+    public function test_fails_when_more_than_4_acteco_tags_provided(): void
+    {
+        $builder = $this->app->make(InvoiceBuilder::class);
+        $builder->issuedBy(IssuerData::make(
+            \Laragear\Rut\Facades\Generator::asCompanies()->makeOne(),
+            'Example Company LLC',
+            'Software services',
+            [1, 2, 3, 4, 5], // 5 acteco
+            'Main Street 123',
+            'Santiago',
+            '2025-01-01',
+            80,
+            'Santiago',
+        ));
+        $builder->receivedBy(BuilderFixture::receiver());
+        $builder->addItem(BuilderFixture::item());
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('The maximum number of Acteco tags allowed is 4.');
+        $builder->create();
+    }
+
+    public function test_receiver_data_returns_null_if_no_receiver(): void
+    {
+        $builder = $this->app->make(InvoiceBuilder::class);
+        $closure = function () {
+            return $this->receiverData();
+        };
+        $bound = $closure->bindTo($builder, $builder);
+        static::assertNull($bound());
+    }
+
+    public function test_receipt_with_receiver_stores_receiver_data_in_payload(): void
+    {
+        $builder = $this->app->make(ReceiptBuilder::class);
+        $builder->issuedBy(BuilderFixture::issuer());
+        $builder->receivedBy(BuilderFixture::receiver());
+        $builder->addItem(BuilderFixture::item());
+        $dte = $builder->create();
+
+        static::assertNotNull($dte->payload->data['receiver']);
+        static::assertSame('Customer Company LLC', $dte->payload->data['receiver']['legal_name']);
     }
 }

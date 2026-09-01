@@ -188,7 +188,7 @@ class XmlSignerTest extends TestCase
     {
         $document = $this->app->make(XmlDomFactory::class)->document();
 
-        if (!$document->loadXML($xml, LIBXML_NONET)) {
+        if (! $document->loadXML($xml, LIBXML_NONET)) {
             throw new RuntimeException('Unable to load the XML test fixture.');
         }
 
@@ -213,5 +213,35 @@ class XmlSignerTest extends TestCase
     protected function attribute(DOMXPath $xpath, string $query, string $attribute): string
     {
         return $this->element($xpath, $query)->getAttribute($attribute);
+    }
+
+    public function test_throws_when_xml_has_no_root_element(): void
+    {
+        $this->withCertificate(function ($certificate) {
+            $signer = $this->app->make(XmlSigner::class);
+            $this->expectException(RuntimeException::class);
+            $this->expectExceptionMessage('Cannot sign: XML document has no root element.');
+            $signer->signString('<?xml version="1.0"?>', $certificate);
+        });
+    }
+
+    public function test_throws_when_xml_element_by_id_is_not_found(): void
+    {
+        $this->withCertificate(function ($certificate) {
+            $signer = $this->app->make(XmlSigner::class);
+            $this->expectException(RuntimeException::class);
+            $this->expectExceptionMessage("Cannot sign: XML document has no element with ID 'does-not-exist'.");
+            $signer->signString('<root ID="root"></root>', $certificate, ['does-not-exist']);
+        });
+    }
+
+    public function test_signs_string_without_target_ids(): void
+    {
+        $this->withCertificate(function ($certificate) {
+            $signer = $this->app->make(XmlSigner::class);
+            $xml = '<?xml version="1.0"?><root ID="root"></root>';
+            $signed = $signer->signString($xml, $certificate);
+            static::assertStringContainsString('<Signature xmlns="http://www.w3.org/2000/09/xmldsig#">', $signed);
+        });
     }
 }

@@ -12,7 +12,6 @@ use Microsoft\Graph\Generated\Users\Item\Messages\MessagesRequestBuilderGetQuery
 use Microsoft\Graph\Generated\Users\Item\Messages\MessagesRequestBuilderGetRequestConfiguration;
 use Microsoft\Graph\GraphServiceClient;
 use Microsoft\Kiota\Authentication\Oauth\ClientCredentialContext;
-
 use function base64_decode;
 
 /**
@@ -113,7 +112,7 @@ class Microsoft365Driver implements MailboxDriverInterface
     {
         $xmlAttachment = '';
         foreach ($message->getAttachments() ?? [] as $attachment) {
-            if (! $attachment instanceof FileAttachment) {
+            if (!$attachment instanceof FileAttachment) {
                 continue;
             }
 

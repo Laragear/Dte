@@ -63,8 +63,8 @@ class ConfigurationManager
     public static function setCompany(Closure $callback): void
     {
         app()->afterResolving(self::class, static function (self $manager) use ($callback) {
-            $manager->setIssuerResolver(static fn () => app()->call($callback)?->issuer);
-            $manager->setSenderResolver(static fn () => app()->call($callback)?->senderRut);
+            $manager->setIssuerResolver(static fn() => app()->call($callback)?->issuer);
+            $manager->setSenderResolver(static fn() => app()->call($callback)?->senderRut);
         });
     }
 
@@ -113,10 +113,8 @@ class ConfigurationManager
             throw new RuntimeException('No Issuer resolver has been registered.');
         }
 
-        return
-            $this->container->call($this->issuerResolver, ['rut' => $rut]) ?? throw new RuntimeException(
-                'The registered Issuer resolver returned null.',
-            );
+        return $this->container->call($this->issuerResolver, ['rut' => $rut])
+            ?? throw new RuntimeException('The registered Issuer resolver returned null.');
     }
 
     /**

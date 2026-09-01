@@ -8,7 +8,6 @@ use Laragear\Dte\Models\SiiInboundDocument;
 use Laragear\Dte\Support\SoapProxy;
 use RuntimeException;
 use SoapHeader;
-
 use function sprintf;
 
 /**

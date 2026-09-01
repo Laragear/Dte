@@ -13,14 +13,14 @@ use Laragear\Dte\Support\XmlDomFactory;
 use Laragear\Dte\Xml\XmlSigner;
 use Laragear\Rut\Rut;
 use XMLWriter;
-
 use function in_array;
 use function is_string;
 
 class AecBuilder
 {
-    public const string XML_NAMESPACE = 'http://www.sii.cl/SiiDte';
-
+    /**
+     * Create a new AEC Builder instance.
+     */
     public function __construct(
         protected XmlDomFactory $xml,
         protected XmlSigner $signer,
@@ -50,7 +50,7 @@ class AecBuilder
         $writer = $this->xml->writer();
         $writer->openMemory();
         $writer->startDocument('1.0', 'ISO-8859-1');
-        $writer->startElementNS(null, 'AEC', static::XML_NAMESPACE);
+        $writer->startElementNS(null, 'AEC', XmlDomFactory::XML_NAMESPACE);
         $writer->writeAttribute('version', '1.0');
 
         $aecID = 'AEC-'.$dte->document_type->value.'-'.$dte->folio;
@@ -195,7 +195,7 @@ class AecBuilder
     {
         $supported = [DteType::Invoice, DteType::InvoiceExempt, DteType::InvoiceLiquidation, DteType::PurchaseInvoice];
 
-        if (! in_array($dte->document_type, $supported, true)) {
+        if (!in_array($dte->document_type, $supported, true)) {
             throw new InvalidArgumentException('The DTE type cannot be transferred through an AEC.');
         }
 
@@ -208,15 +208,15 @@ class AecBuilder
     {
         return
             $dte->payload?->xml ?? throw new InvalidArgumentException(
-                'The AEC requires a compiled DTE with a folio and signed XML payload.',
-            );
+            'The AEC requires a compiled DTE with a folio and signed XML payload.',
+        );
     }
 
     protected function sourceElementStr(string $xml, string $name): string
     {
         $document = $this->xml->document();
 
-        if (! @$document->loadXML($xml, LIBXML_NONET)) {
+        if (!@$document->loadXML($xml, LIBXML_NONET)) {
             throw new InvalidArgumentException("The [$name] XML payload is invalid.");
         }
 
@@ -224,7 +224,7 @@ class AecBuilder
             ->query("//*[local-name()='$name']")
             ?->item(0);
 
-        if (! $element) {
+        if (!$element) {
             throw new InvalidArgumentException("The XML payload does not contain a [$name] element.");
         }
 

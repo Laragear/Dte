@@ -14,7 +14,10 @@ use Laragear\Rut\Rut;
 use Mockery;
 use Mockery\MockInterface;
 use Override;
+use RuntimeException;
 use Tests\DatabaseTestCase;
+use function file_put_contents;
+use function sys_get_temp_dir;
 
 class SyncRcvTest extends DatabaseTestCase
 {
@@ -47,6 +50,21 @@ class SyncRcvTest extends DatabaseTestCase
         @unlink(sys_get_temp_dir().'/dummy-compras.csv');
 
         parent::tearDown();
+    }
+
+    public function test_throws_when_no_issuer(): void
+    {
+        $csvPath = sys_get_temp_dir().'/dummy-compras.csv';
+        file_put_contents($csvPath, ''); // Create dummy file
+
+        $this->mock(ConfigurationManager::class)
+            ->expects('getIssuer')
+            ->andThrow(new RuntimeException('No Issuer resolver has been registered.'));
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessageIs('There is no issuer to be resolved and sync RCV.');
+
+        $this->app->make(SyncRcv::class)->handle($csvPath, 'compras');
     }
 
     public function test_executes_successfully_and_returns_sync_results(): void

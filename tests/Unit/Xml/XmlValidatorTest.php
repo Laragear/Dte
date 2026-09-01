@@ -299,4 +299,21 @@ class XmlValidatorTest extends TestCase
         $validator = $this->makeValidator();
         $validator->verifySignature($xml);
     }
+
+    public function test_throws_when_signature_is_invalid(): void
+    {
+        $xml = '<?xml version="1.0"?><DTE><Documento ID="Doc"></Documento><ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><ds:SignedInfo><ds:Reference URI="#Doc"><ds:DigestValue>AAA=</ds:DigestValue></ds:Reference></ds:SignedInfo><ds:SignatureValue>BBB==</ds:SignatureValue><ds:KeyInfo><ds:X509Data><ds:X509Certificate>cert</ds:X509Certificate></ds:X509Data></ds:KeyInfo></ds:Signature></DTE>';
+
+        $ssl = Mockery::mock(OpenSslProxy::class)->makePartial();
+        $ssl->shouldReceive('verify')->andReturn(0); // 0 means invalid signature
+
+        $mock = new class($this->app, $ssl, $this->app->make(XmlDomFactory::class), $this->app->make(LibxmlProxy::class)) extends XmlValidator
+        {
+            protected function verifyDigest(\DOMXPath $xpath, \DOMNode $signature): void {}
+        };
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Invalid DTE XML: XMLDSig signature verification failed.');
+        $mock->verifySignature($xml);
+    }
 }

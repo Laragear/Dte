@@ -25,7 +25,6 @@ use Laragear\Dte\Models\SiiDte;
 use Laragear\Dte\Support\SiiTaxes;
 use Laragear\Rut\Rut;
 use LogicException;
-
 use function array_map;
 use function array_merge;
 use function min;
@@ -122,10 +121,9 @@ abstract class DocumentBuilder
      */
     public function issuer(): IssuerData
     {
-        return
-            $this->issuer ?? app(ConfigurationManager::class)->getIssuer() ?? throw new LogicException(
-                'The DTE issuer has not been configured.',
-            );
+        return $this->issuer
+            ?? app(ConfigurationManager::class)->getIssuer()
+            ?? throw new LogicException('The DTE issuer has not been configured.');
     }
 
     /**
@@ -166,12 +164,14 @@ abstract class DocumentBuilder
                 // Here we will check if the user wants to compile the DTE immediately or send
                 // it to a queue. When doing receipts, the developer should push the command
                 // immediately so it becomes ready to print as a PDF file, otherwise wait.
-                value($sync, $dte, $this)
-                    ? $this->artisan->call('dte:compile', ['dte_id' => $dte])
-                    : $this->artisan
+                if (value($sync, $dte, $this)) {
+                    $this->artisan->call('dte:compile', ['dte_id' => $dte]);
+                } else {
+                    $this->artisan
                         ->queue('dte:compile', ['dte_id' => $dte->getKey()])
                         ->onConnection($this->config->get('dte.queue.dte.connection'))
                         ->onQueue($this->config->get('dte.queue.dte.name'));
+                }
 
                 return $dte;
             });
@@ -217,7 +217,7 @@ abstract class DocumentBuilder
     protected function validateB2bReceiver(): void
     {
         if (
-            ! $this->receiver
+            !$this->receiver
             || empty($this->receiver->businessActivity)
             || empty($this->receiver->address)
             || empty($this->receiver->commune)
@@ -454,9 +454,9 @@ abstract class DocumentBuilder
         $receiver = $this->receiver;
 
         return
-        $receiver === null
-            ? null
-            : [
+            $receiver === null
+                ? null
+                : [
                 'rut' => $receiver->rut->formatRaw(),
                 'legal_name' => $receiver->legalName,
                 'business_activity' => $receiver->businessActivity,

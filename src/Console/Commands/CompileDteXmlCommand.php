@@ -29,7 +29,7 @@ class CompileDteXmlCommand extends Command
     {
         $dte = $this->argument('dte_id');
 
-        if (! $dte instanceof SiiDte) {
+        if (!$dte instanceof SiiDte) {
             $dte = SiiDte::findOrFail($dte);
         }
 

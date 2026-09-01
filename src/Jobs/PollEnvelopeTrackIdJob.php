@@ -17,7 +17,7 @@ use Laragear\Dte\Events\EnvelopeRejected;
 use Laragear\Dte\Gateways\BoletaRestGateway;
 use Laragear\Dte\Gateways\SoapGateway;
 use Laragear\Dte\Models\SiiDteEnvelope;
-use Laragear\Dte\Support\XmlDomFactory;
+use Laragear\Dte\Support\XmlDomFactory as Xml;
 use Psr\Log\LoggerInterface;
 
 class PollEnvelopeTrackIdJob implements ShouldQueue
@@ -41,7 +41,8 @@ class PollEnvelopeTrackIdJob implements ShouldQueue
         Dispatcher $event,
         SoapGateway $gateway,
         BoletaRestGateway $boletaGateway,
-        ConfigRepository $config
+        ConfigRepository $config,
+        Xml $factory,
     ): void {
         if ($this->shouldNotPoll()) {
             return;
@@ -52,7 +53,7 @@ class PollEnvelopeTrackIdJob implements ShouldQueue
                 $status = $boletaGateway->trackStatus($this->envelope);
                 $this->processBoletaTrackIdStatus($status, $event, $config, $log);
             } else {
-                $this->processTrackIdStatus($this->queryTrackIdStatus($gateway), $event, $config, $log);
+                $this->processTrackIdStatus($this->queryTrackIdStatus($gateway), $event, $config, $log, $factory);
             }
         } catch (Exception $e) {
             $log->error("Failed to poll TrackID {$this->envelope->track_id}: {$e->getMessage()}");
@@ -166,10 +167,11 @@ class PollEnvelopeTrackIdJob implements ShouldQueue
         string $xml,
         Dispatcher $event,
         ConfigRepository $config,
-        LoggerInterface $log
+        LoggerInterface $log,
+        Xml $factory,
     ): void {
         if (Str::contains($xml, '<ESTADO>EPR</ESTADO>')) {
-            $this->handleAccepted($event, $config, $xml);
+            $this->handleAccepted($event, $config, $factory, $xml);
         } elseif ($this->isRejectedStatus($xml)) {
             $this->handleRejected($event, $config);
         } elseif ($this->isProcessingStatus($xml)) {
@@ -182,9 +184,9 @@ class PollEnvelopeTrackIdJob implements ShouldQueue
     /**
      * Handles the accepted envelope status and parses DTE rejections if any.
      */
-    protected function handleAccepted(Dispatcher $event, ConfigRepository $config, string $xml): void
+    protected function handleAccepted(Dispatcher $event, ConfigRepository $config, Xml $factory, string $xml): void
     {
-        $this->parseProcessedEnvelopeDtes($xml, $event);
+        $this->parseProcessedEnvelopeDtes($xml, $event, $factory);
 
         $this->envelope->status = EnvelopeStatus::Accepted;
         $this->envelope->accepted_at = now();
@@ -200,14 +202,13 @@ class PollEnvelopeTrackIdJob implements ShouldQueue
     /**
      * Parses the EPR XML response to check if any DTE was rejected or repaired.
      */
-    protected function parseProcessedEnvelopeDtes(string $xml, Dispatcher $event): void
+    protected function parseProcessedEnvelopeDtes(string $xml, Dispatcher $event, Xml $factory): void
     {
-        $factory = app(XmlDomFactory::class);
         $simple = $factory->simpleXml($xml);
 
         $body = $simple->children('SII', true)->RESP_BODY ?? null;
 
-        if (! $body) {
+        if (!$body) {
             return; // No details provided by SII
         }
 

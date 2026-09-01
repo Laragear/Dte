@@ -91,7 +91,7 @@ class InboundDteProcessor
      */
     protected function processEnvioDte(SimpleXMLElement $xml, SiiInterchangeLog $log): void
     {
-        if (! isset($xml->SetDTE->Caratula->RutReceptor)) {
+        if (!isset($xml->SetDTE->Caratula->RutReceptor)) {
             throw new RuntimeException('Missing RutReceptor in EnvioDTE.');
         }
 

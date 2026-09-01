@@ -53,7 +53,12 @@ class AcquireFolio
             $dte->issuer_rut,
             $dte->document_type,
             static function (SiiCaf $caf, int $folio) use ($dte): void {
-                $dte->forceFill(['sii_caf_id' => $caf->getKey(), 'folio' => $folio])->save();
+                $dte->forceFill([
+                    'sii_caf_id' => $caf->getKey(),
+                    'folio' => $folio
+                ]);
+
+                $dte->save();
 
                 $dte->setRelation('caf', $caf);
             },

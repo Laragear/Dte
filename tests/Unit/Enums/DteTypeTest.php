@@ -2,28 +2,36 @@
 
 namespace Tests\Unit\Enums;
 
+use Generator;
 use Laragear\Dte\Enums\DteType;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use function array_column;
 
 class DteTypeTest extends TestCase
 {
-    public function test_defines_supported_document_types(): void
+    public function test_test_invoice_is_default(): void
     {
-        static::assertSame(
-            [
-                'Invoice' => 33,
-                'ExemptInvoice' => 34,
-                'Receipt' => 39,
-                'ExemptReceipt' => 41,
-                'InvoiceLiquidation' => 43,
-                'PurchaseInvoice' => 46,
-                'DispatchGuide' => 52,
-                'DebitNote' => 56,
-                'CreditNote' => 61,
-            ],
-            array_column(DteType::cases(), 'value', 'name'),
-        );
         static::assertSame(DteType::Invoice, DteType::DEFAULT);
+    }
+
+    public static function providesDocumentTypes(): Generator
+    {
+        yield 'InvoicePhysical' => ['InvoicePhysical', 30];
+        yield 'InvoicePhysicalExempt' => ['InvoicePhysicalExempt', 32];
+        yield 'Invoice' => ['Invoice', 33];
+        yield 'InvoiceExempt' => ['InvoiceExempt', 34];
+        yield 'Receipt' => ['Receipt', 39];
+        yield 'ExemptReceipt' => ['ExemptReceipt', 41];
+        yield 'InvoiceLiquidation' => ['InvoiceLiquidation', 43];
+        yield 'PurchaseInvoice' => ['PurchaseInvoice', 46];
+        yield 'DispatchGuide' => ['DispatchGuide', 52];
+        yield 'DebitNote' => ['DebitNote', 56];
+        yield 'CreditNote' => ['CreditNote', 61];
+    }
+
+    #[DataProvider('providesDocumentTypes')]
+    public function test_defines_supported_document_types(string $type, int $code): void
+    {
+        static::assertSame(DteType::{$type}, DteType::from($code));
     }
 }

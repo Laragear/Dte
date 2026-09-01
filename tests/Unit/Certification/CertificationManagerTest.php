@@ -10,29 +10,38 @@ use Laragear\Dte\Certification\PrintSample\PrintSample;
 use Laragear\Dte\Certification\PrintSample\PrintSampleData;
 use Laragear\Dte\Certification\Simulation\Simulation;
 use Laragear\Dte\Certification\Simulation\SimulationData;
-use Laragear\Dte\Certification\TestingSet\TestSet;
 use Laragear\Dte\Certification\TestingSet\TestSetData;
+use Laragear\Dte\Certification\TestingSet\TestSetEnvelope;
+use Laragear\Dte\Certification\TestingSet\TestSetPurchasesBook;
+use Laragear\Dte\Certification\TestingSet\TestSetSalesBook;
 use Laragear\Rut\Rut;
 use Mockery;
 use Tests\DatabaseTestCase;
 
 class CertificationManagerTest extends DatabaseTestCase
 {
-    public function test_runs_test_set(): void
+    public function test_runs_test_sets(): void
     {
-        $mock = $this->mock(TestSet::class);
-        $mock
-            ->expects('send')
-            ->withArgs(function (TestSetData $data) {
-                return $data->rut->format() === '76.123.456-0' && $data->dteIds === [1, 2];
-            })
-            ->andReturnSelf();
-        $mock->expects('thenReturn')->andReturn(new TestSetData(Rut::parse('76.123.456-0')));
-
         $manager = $this->app->make(CertificationManager::class);
-        $result = $manager->testSet('76.123.456-0', [1, 2]);
 
-        static::assertInstanceOf(TestSetData::class, $result);
+        $mockEnvelope = $this->mock(TestSetEnvelope::class);
+        $mockEnvelope->expects('send')->twice()->andReturnSelf();
+        $mockEnvelope->expects('thenReturn')->twice()->andReturn(new TestSetData(Rut::parse('76.123.456-0')));
+
+        static::assertInstanceOf(TestSetData::class, $manager->basicTestSet('76.123.456-0', [1, 2]));
+        static::assertInstanceOf(TestSetData::class, $manager->purchaseInvoiceTestSet('76.123.456-0', [1, 2]));
+
+        $mockSales = $this->mock(TestSetSalesBook::class);
+        $mockSales->expects('send')->once()->andReturnSelf();
+        $mockSales->expects('thenReturn')->once()->andReturn(new TestSetData(Rut::parse('76.123.456-0')));
+
+        static::assertInstanceOf(TestSetData::class, $manager->salesBookTestSet('76.123.456-0', [1, 2]));
+
+        $mockPurchases = $this->mock(TestSetPurchasesBook::class);
+        $mockPurchases->expects('send')->once()->andReturnSelf();
+        $mockPurchases->expects('thenReturn')->once()->andReturn(new TestSetData(Rut::parse('76.123.456-0')));
+
+        static::assertInstanceOf(TestSetData::class, $manager->purchasesBookTestSet('76.123.456-0', [1, 2]));
     }
 
     public function test_runs_simulation(): void

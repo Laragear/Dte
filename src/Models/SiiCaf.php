@@ -22,7 +22,7 @@ use Laragear\Rut\Rut;
  * Stores an authorized SII folio range and its CAF XML.
  * ---
  *
- * @see SiiCafFactory
+ * @see  SiiCafFactory
  * @link database/migrations/2026_01_01_000001_create_sii_cafs_table.php
  * ---
  * @mixin Builder<static>

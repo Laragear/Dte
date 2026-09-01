@@ -24,7 +24,8 @@ class IecvAdvancedOptionsTest extends DatabaseTestCase
             'amount_taxes' => 5716, // 19%
             'amount_total' => 35798,
         ]);
-        $dteUsoComun->iva_uso_comun = true;
+
+        $dteUsoComun->iva_common_use = true;
 
         $dteRetention = SiiDte::factory()->create([
             'issuer_rut' => Rut::parse('11111111-1'),
@@ -42,7 +43,7 @@ class IecvAdvancedOptionsTest extends DatabaseTestCase
 
         $xmlString = $builder->build(
             dtes: collect([$dteUsoComun, $dteRetention]),
-            type: IecvType::Compras,
+            type: IecvType::Purchases,
             period: '2024-03',
             resolutionDate: '2024-01-01',
             resolutionNumber: 123,

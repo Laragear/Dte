@@ -53,4 +53,11 @@ class ConfigurationManagerTest extends TestCase
         $this->expectException(RuntimeException::class);
         $manager->getSender(Rut::parse('76.123.456-0'));
     }
+
+    public function test_has_sender_resolver(): void
+    {
+        ConfigurationManager::resolveSenderUsing(function () {});
+        $manager = $this->app->make(ConfigurationManager::class);
+        static::assertTrue($manager->hasSenderResolver());
+    }
 }

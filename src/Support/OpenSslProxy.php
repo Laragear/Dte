@@ -11,7 +11,6 @@ use OpenSSLCertificateSigningRequest;
 use RuntimeException;
 use SensitiveParameter;
 use Throwable;
-
 use function array_shift;
 use function array_values;
 use function is_array;
@@ -99,7 +98,7 @@ class OpenSslProxy
      */
     protected function normalizeCertificates(array $certificates): array
     {
-        if (! is_string($certificates['cert'] ?? null) || ! is_string($certificates['pkey'] ?? null)) {
+        if (!is_string($certificates['cert'] ?? null) || !is_string($certificates['pkey'] ?? null)) {
             throw new RuntimeException('The PKCS#12 certificate does not contain a certificate and private key.');
         }
 
@@ -121,7 +120,7 @@ class OpenSslProxy
     {
         $path = sys_get_temp_dir().DIRECTORY_SEPARATOR.'pkcs12_'.uniqid();
 
-        if (! $this->file->put($path, $contents)) {
+        if (!$this->file->put($path, $contents)) {
             throw new RuntimeException('Unable to create a temporary file for the PKCS#12 certificate.');
         }
 
@@ -142,7 +141,7 @@ class OpenSslProxy
             $this->file->delete($path);
         }
 
-        if (! $result?->successful()) {
+        if (!$result?->successful()) {
             if ($result->seeInErrorOutput('password')) {
                 throw new RuntimeException('Unable to read the PKCS#12 certificate using wrong password.');
             }
@@ -204,9 +203,9 @@ class OpenSslProxy
         }
 
         if (
-            ! is_array($metadata)
-            || ! is_int($metadata['validFrom_time_t'] ?? null)
-            || ! is_int($metadata['validTo_time_t'] ?? null)
+            !is_array($metadata)
+            || !is_int($metadata['validFrom_time_t'] ?? null)
+            || !is_int($metadata['validTo_time_t'] ?? null)
         ) {
             throw new RuntimeException('Unable to parse the X.509 certificate metadata.');
         }
@@ -242,7 +241,7 @@ class OpenSslProxy
             throw new RuntimeException('Failed to sign data with private key.', previous: $e);
         }
 
-        if (! $result || $signature === '') {
+        if (!$result || $signature === '') {
             throw new RuntimeException('Failed to sign data with private key.');
         }
 

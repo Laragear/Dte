@@ -61,7 +61,7 @@ class EmbedDteNodes
     protected function payloads(Assembly $assembly): LazyCollection
     {
         return $assembly->envelope->dtePayloads()
-            ->when($assembly->targetReceiverRut, fn ($q, $rut) => $q->where('sii_dtes.receiver_num', $rut->num))
+            ->when($assembly->targetReceiverRut, fn($q, $rut) => $q->where('sii_dtes.receiver_num', $rut->num))
             ->orderBy('sii_dtes.id')
             ->cursor();
     }
@@ -75,7 +75,7 @@ class EmbedDteNodes
 
         $root = $document->documentElement;
 
-        if (! $root instanceof DOMElement || $root->localName !== 'DTE') {
+        if (!$root instanceof DOMElement || $root->localName !== 'DTE') {
             throw new RuntimeException('An envelope payload does not contain a DTE root element.');
         }
 

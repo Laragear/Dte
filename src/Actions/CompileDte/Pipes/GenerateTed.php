@@ -10,7 +10,6 @@ use Laragear\Dte\Caf\CafParser;
 use Laragear\Dte\Support\XmlDomFactory;
 use Laragear\Dte\Xml\TimbreSigner;
 use RuntimeException;
-
 use function mb_substr;
 
 class GenerateTed
@@ -35,10 +34,10 @@ class GenerateTed
     {
         $document = $compilation->requireDocument();
 
-        $ted = $document->createElementNS(BuildXml::XML_NAMESPACE, 'TED');
+        $ted = $document->createElementNS(XmlDomFactory::XML_NAMESPACE, 'TED');
         $ted->setAttribute('version', '1.0');
 
-        $details = $document->createElementNS(BuildXml::XML_NAMESPACE, 'DD');
+        $details = $document->createElementNS(XmlDomFactory::XML_NAMESPACE, 'DD');
 
         $ted->appendChild($details);
 
@@ -106,7 +105,7 @@ class GenerateTed
     {
         $document = $this->xml->document(encoding: 'ISO-8859-1');
 
-        if (! @$document->loadXML($xml, LIBXML_NONET)) {
+        if (!@$document->loadXML($xml, LIBXML_NONET)) {
             throw new RuntimeException('Unable to parse the allocated CAF XML.');
         }
 
@@ -118,7 +117,7 @@ class GenerateTed
      */
     protected function element(DOMElement $parent, string $name, string|int|null $value): DOMElement
     {
-        $element = $parent->ownerDocument->createElementNS(BuildXml::XML_NAMESPACE, $name, (string) $value);
+        $element = $parent->ownerDocument->createElementNS(XmlDomFactory::XML_NAMESPACE, $name, (string) $value);
         $parent->appendChild($element);
 
         return $element;

@@ -13,6 +13,26 @@ trait HasCorrections
     use HasReferences;
 
     /**
+     * Add a discount or a charge to the document
+     */
+    protected function modify(
+        DteType|ReferenceType|SiiDte|string|int $documentType,
+        ?string $folio = null,
+        ?DateTimeImmutable $date = null,
+        string $reason = 'Corrige montos'
+    ): static {
+        if ($documentType instanceof SiiDte) {
+            $folio = (string) $documentType->folio;
+            $date = clone($documentType->issued_on?->toDateTimeImmutable() ?? $this->date->now('America/Santiago')->toDateTimeImmutable());
+            $documentType = $documentType->document_type;
+        }
+
+        $this->references = [ReferenceData::make($documentType, $folio, $date, $reason, 3)];
+
+        return $this;
+    }
+
+    /**
      * Annul (cancel) a previous document.
      */
     public function annul(
@@ -58,7 +78,7 @@ trait HasCorrections
         return [
             $dte->document_type,
             (string) $dte->folio,
-            clone ($dte->issued_on?->toDateTimeImmutable() ?? $this->date->now('America/Santiago')->toDateTimeImmutable()),
+            clone($dte->issued_on?->toDateTimeImmutable() ?? $this->date->now('America/Santiago')->toDateTimeImmutable()),
         ];
     }
 }

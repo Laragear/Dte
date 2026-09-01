@@ -49,6 +49,7 @@ use function app;
  * @property int $amount_total
  * @property DteStatus $status
  * @property array<string, int>|null $taxes
+ * @property bool $iva_common_use
  * @property Carbon|null $acknowledged_at
  * @property Carbon|null $accepted_at
  * @property Carbon|null $rejected_at
@@ -70,6 +71,7 @@ use function app;
     'amount_exempt',
     'amount_taxes',
     'taxes',
+    'iva_common_use',
     'amount_total',
     'status',
     'repairs',
@@ -94,6 +96,7 @@ class SiiDte extends Model
         'status' => DteStatus::class,
         'repairs' => 'array',
         'taxes' => 'array',
+        'iva_common_use' => 'boolean',
         'acknowledged_at' => 'datetime',
         'accepted_at' => 'datetime',
         'rejected_at' => 'datetime',

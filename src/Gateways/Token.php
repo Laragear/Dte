@@ -12,8 +12,8 @@ final readonly class Token
      * Create a new Token instance.
      */
     public function __construct(
-        public readonly string $value,
-        public readonly DateTimeImmutable $expiresAt,
+        public string $value,
+        public DateTimeImmutable $expiresAt,
     ) {
         //
     }
@@ -31,7 +31,7 @@ final readonly class Token
      */
     public function isNotExpired(): bool
     {
-        return ! $this->isExpired();
+        return !$this->isExpired();
     }
 
     /**
@@ -39,8 +39,9 @@ final readonly class Token
      */
     public static function fromString(string $token, int $ttlSeconds): static
     {
-        return new self($token,
-            app(DateFactory::class)->now('America/Santiago')->addSeconds($ttlSeconds)->toDateTimeImmutable());
+        return new self(
+            $token, app(DateFactory::class)->now('America/Santiago')->addSeconds($ttlSeconds)->toDateTimeImmutable()
+        );
     }
 
     /**

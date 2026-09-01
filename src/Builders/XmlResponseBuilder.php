@@ -14,8 +14,6 @@ use XMLWriter;
 
 class XmlResponseBuilder
 {
-    public const string XML_NAMESPACE = 'http://www.sii.cl/SiiDte';
-
     /**
      * Create a new XML Response Builder instance.
      */
@@ -47,7 +45,7 @@ class XmlResponseBuilder
         $writer = $this->xml->writer();
         $writer->openMemory();
         $writer->startDocument('1.0', 'ISO-8859-1');
-        $writer->startElementNS(null, 'RespuestaDTE', static::XML_NAMESPACE);
+        $writer->startElementNS(null, 'RespuestaDTE', XmlDomFactory::XML_NAMESPACE);
         $writer->writeAttribute('version', '1.0');
 
         $resultID = "Respuesta-$responseId";
@@ -70,6 +68,9 @@ class XmlResponseBuilder
         return $signedXml;
     }
 
+    /**
+     * Append the header (Caratula) section for the DTE response.
+     */
     protected function appendHeader(
         XMLWriter $writer,
         SiiInboundDocument $dte,
@@ -87,6 +88,9 @@ class XmlResponseBuilder
         $writer->endElement();
     }
 
+    /**
+     * Append the individual DTE result details and status to the XML writer.
+     */
     protected function appendDocumentResult(
         XMLWriter $writer,
         SiiInboundDocument $dte,
@@ -107,6 +111,9 @@ class XmlResponseBuilder
         $writer->endElement();
     }
 
+    /**
+     * Append the core document details to the XML writer.
+     */
     protected function appendDocument(XMLWriter $writer, SiiInboundDocument $dte): void
     {
         $writer->writeElement('TipoDTE', (string) $dte->document_type->value);
@@ -117,6 +124,9 @@ class XmlResponseBuilder
         $writer->writeElement('MntTotal', (string) $dte->amount_total);
     }
 
+    /**
+     * Format the given date into an XML timestamp string.
+     */
     protected function timestamp(DateTimeImmutable $date): string
     {
         return $date->format('Y-m-d\TH:i:s');

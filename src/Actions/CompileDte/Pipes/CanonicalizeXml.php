@@ -30,7 +30,7 @@ class CanonicalizeXml
         $canonical = $this->canonicalizer->canonicalize($compilation->requireDocument());
         $document = $this->xml->document(encoding: 'ISO-8859-1');
 
-        if (! @$document->loadXML($canonical, LIBXML_NONET)) {
+        if (!@$document->loadXML($canonical, LIBXML_NONET)) {
             throw new RuntimeException('Unable to parse the canonical DTE XML.');
         }
 

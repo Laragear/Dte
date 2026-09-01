@@ -15,7 +15,7 @@ use Laragear\Dte\Models\Concerns\HasXmlPayload;
 /**
  * Stores the signed XML for an outbound DTE envelope.
  * ---
- * @see SiiDteEnvelopePayloadFactory
+ * @see  SiiDteEnvelopePayloadFactory
  * @link database/migrations/2026_01_01_000005_create_sii_dte_envelope_payloads_table.php
  * ---
  * @method static SiiDteEnvelopePayloadFactory factory(callable|array|int|null $count = null, callable|array $state = [])

@@ -2,7 +2,6 @@
 
 namespace Tests;
 
-use Illuminate\Filesystem\Filesystem;
 use Laragear\Dte\DteServiceProvider;
 use Laragear\Dte\Facades\Certificate;
 use Laragear\Dte\Facades\Dte;
@@ -10,6 +9,8 @@ use Laragear\Rut\RutServiceProvider;
 use Orchestra\Testbench\TestCase as BaseTestCase;
 use Override;
 use Spatie\LaravelPdf\PdfServiceProvider;
+
+use function file_get_contents;
 
 class TestCase extends BaseTestCase
 {
@@ -34,8 +35,8 @@ class TestCase extends BaseTestCase
         ];
     }
 
-    protected function file(): Filesystem
+    public static function getStub(string $file): string
     {
-        return $this->resolve(Filesystem::class);
+        return file_get_contents(static::STUBS.'/'.$file);
     }
 }

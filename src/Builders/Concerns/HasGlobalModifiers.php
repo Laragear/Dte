@@ -12,7 +12,10 @@ trait HasGlobalModifiers
 
     /**
      * Add a global discount to the document.
-     * Target: 1 = Exempt, 2 = Net (Default), 3 = Non-taxable
+     *
+     * Target: 1 = Exempt
+     *         2 = Net (Default)
+     *         3 = Non-taxable
      */
     public function globalDiscount(
         float|int $value,
@@ -25,7 +28,10 @@ trait HasGlobalModifiers
 
     /**
      * Add a global surcharge to the document.
-     * Target: 1 = Exempt, 2 = Net (Default), 3 = Non-taxable
+     *
+     * Target: 1 = Exempt
+     *         2 = Net (Default)
+     *         3 = Non-taxable
      */
     public function globalSurcharge(
         float|int $value,

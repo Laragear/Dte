@@ -3,13 +3,14 @@
 namespace Laragear\Dte\Caf;
 
 use DateTimeImmutable;
+use Illuminate\Support\DateFactory;
 use InvalidArgumentException;
 use Laragear\Dte\Enums\DteType;
 use Laragear\Dte\Support\OpenSslProxy;
 use Laragear\Dte\Support\XmlDomFactory;
 use Laragear\Rut\Rut;
 use SimpleXMLElement;
-
+use Throwable;
 use function base64_decode;
 use function chunk_split;
 use function ctype_digit;
@@ -27,6 +28,7 @@ class CafParser
     public function __construct(
         protected XmlDomFactory $xml,
         protected OpenSslProxy $openSsl,
+        protected DateFactory $date,
     ) {
         //
     }
@@ -79,7 +81,7 @@ class CafParser
 
         $nodes = $root->xpath('//CAF');
 
-        if ($nodes === false || ! isset($nodes[0]) || ! $nodes[0] instanceof SimpleXMLElement) {
+        if ($nodes === false || !isset($nodes[0]) || !$nodes[0] instanceof SimpleXMLElement) {
             throw new InvalidArgumentException('The XML document does not contain a CAF node.');
         }
 
@@ -92,7 +94,7 @@ class CafParser
     protected function element(SimpleXMLElement $caf, string $path): string
     {
         $nodes = $caf->xpath($path);
-        $value = $nodes === false || ! isset($nodes[0]) ? '' : trim((string) $nodes[0]);
+        $value = $nodes === false || !isset($nodes[0]) ? '' : trim((string) $nodes[0]);
 
         if ($value === '') {
             throw new InvalidArgumentException("The CAF element [$path] is missing.");
@@ -108,7 +110,7 @@ class CafParser
     {
         $value = $this->element($caf, $path);
 
-        if (! ctype_digit($value)) {
+        if (!ctype_digit($value)) {
             throw new InvalidArgumentException("The CAF element [$path] must be a positive integer.");
         }
 
@@ -122,8 +124,8 @@ class CafParser
     {
         return
             DteType::tryFrom($this->integerElement($caf, './/DA/TD')) ?? throw new InvalidArgumentException(
-                'The CAF document type is not supported.',
-            );
+            'The CAF document type is not supported.',
+        );
     }
 
     /**
@@ -149,9 +151,14 @@ class CafParser
     protected function dateElement(SimpleXMLElement $caf, string $path): DateTimeImmutable
     {
         $value = $this->element($caf, $path);
-        $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
 
-        if ($date === false) {
+        try {
+            $date = $this->date->createFromFormat('!Y-m-d', $value, 'America/Santiago')?->toDateTimeImmutable();
+        } catch (Throwable $e) {
+            throw new InvalidArgumentException("The CAF element [$path] must use YYYY-MM-DD format.", previous: $e);
+        }
+
+        if (!$date) {
             throw new InvalidArgumentException("The CAF element [$path] must use YYYY-MM-DD format.");
         }
 
@@ -183,7 +190,7 @@ class CafParser
     {
         $key = $this->element($root, '//RSASK');
 
-        if (! str_contains($key, '-----BEGIN')) {
+        if (!str_contains($key, '-----BEGIN')) {
             $key =
                 "-----BEGIN RSA PRIVATE KEY-----\n"
                 .chunk_split((string) str_replace(["\r", "\n", ' '], '', $key), 64, "\n")
@@ -211,9 +218,9 @@ class CafParser
         $rsa = is_array($details) ? $details['rsa'] ?? null : null;
 
         if (
-            ! is_array($rsa)
-            || ! hash_equals($rsa['n'], (string) base64_decode($modulus, true))
-            || ! hash_equals($rsa['e'], (string) base64_decode($exponent, true))
+            !is_array($rsa)
+            || !hash_equals($rsa['n'], (string) base64_decode($modulus, true))
+            || !hash_equals($rsa['e'], (string) base64_decode($exponent, true))
         ) {
             throw new InvalidArgumentException('The CAF RSA private key does not match its public key.');
         }

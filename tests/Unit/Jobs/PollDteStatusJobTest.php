@@ -39,7 +39,7 @@ class PollDteStatusJobTest extends DatabaseTestCase
     {
         Event::fake([DteAccepted::class]);
 
-        $dte = SiiDte::factory()->create(['status' => DteStatus::Pending]);
+        $dte = SiiDte::factory()->hasPayload(['sii_response' => null])->create(['status' => DteStatus::Pending]);
 
         $this->mock(SoapGateway::class, static function (MockInterface $mock): void {
             $mock->expects('token')
@@ -62,7 +62,7 @@ class PollDteStatusJobTest extends DatabaseTestCase
     {
         Event::fake([DteRejected::class]);
 
-        $dte = SiiDte::factory()->create(['status' => DteStatus::Pending]);
+        $dte = SiiDte::factory()->hasPayload(['sii_response' => null])->create(['status' => DteStatus::Pending]);
 
         $this->mock(SoapGateway::class, static function (MockInterface $mock): void {
             $mock->expects('token')
@@ -82,7 +82,7 @@ class PollDteStatusJobTest extends DatabaseTestCase
 
     public function test_logs_warning_on_unknown_sii_response(): void
     {
-        $dte = SiiDte::factory()->create(['status' => DteStatus::Pending]);
+        $dte = SiiDte::factory()->hasPayload(['sii_response' => null])->create(['status' => DteStatus::Pending]);
 
         $this->mock(SoapGateway::class, static function (MockInterface $mock): void {
             $mock->expects('token')
@@ -105,7 +105,7 @@ class PollDteStatusJobTest extends DatabaseTestCase
 
     public function test_logs_warning_on_unknown_sii_boleta_response(): void
     {
-        $dte = SiiDte::factory()->create([
+        $dte = SiiDte::factory()->hasPayload(['sii_response' => null])->create([
             'status' => DteStatus::Pending, 'document_type' => DteType::Receipt, 'folio' => 123,
         ]);
 
@@ -140,7 +140,7 @@ class PollDteStatusJobTest extends DatabaseTestCase
     {
         Event::fake();
 
-        $dte = SiiDte::factory()->create(['status' => DteStatus::Rejected]);
+        $dte = SiiDte::factory()->hasPayload(['sii_response' => null])->create(['status' => DteStatus::Rejected]);
 
         $this->mock(SoapGateway::class, static function (MockInterface $mock): void {
             $mock->expects('token')->never();
@@ -165,7 +165,7 @@ class PollDteStatusJobTest extends DatabaseTestCase
         $this->app->make('config')->set('dte.environment', 'production');
         $this->app->make(EnvironmentResolver::class)->flush();
 
-        $dte = SiiDte::factory()->create([
+        $dte = SiiDte::factory()->hasPayload(['sii_response' => null])->create([
             'document_type' => DteType::Receipt,
             'status' => DteStatus::Pending,
         ]);
@@ -213,7 +213,7 @@ class PollDteStatusJobTest extends DatabaseTestCase
         $this->app->make('config')->set('dte.environment', 'production');
         $this->app->make(EnvironmentResolver::class)->flush();
 
-        $dte = SiiDte::factory()->create([
+        $dte = SiiDte::factory()->hasPayload(['sii_response' => null])->create([
             'document_type' => DteType::Receipt,
             'status' => DteStatus::Pending,
         ]);
@@ -257,7 +257,7 @@ class PollDteStatusJobTest extends DatabaseTestCase
 
     public function test_rethrows_exception_on_gateway_failure(): void
     {
-        $dte = SiiDte::factory()->create([
+        $dte = SiiDte::factory()->hasPayload(['sii_response' => null])->create([
             'document_type' => DteType::Invoice,
             'status' => DteStatus::Pending,
         ]);

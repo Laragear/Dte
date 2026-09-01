@@ -30,7 +30,7 @@ class SendCommercialReceiptListener implements ShouldQueue
     {
         $interchangeLog = $event->document->interchangeLog;
 
-        if (! $interchangeLog || empty($interchangeLog->sender)) {
+        if (!$interchangeLog || empty($interchangeLog->sender)) {
             return;
         }
 

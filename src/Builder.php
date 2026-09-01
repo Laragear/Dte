@@ -74,7 +74,7 @@ class Builder
     }
 
     /**
-     * Create a invoice liquidation fluent builder.
+     * Create an invoice liquidation fluent builder.
      */
     public function invoiceLiquidation(): InvoiceLiquidationBuilder
     {

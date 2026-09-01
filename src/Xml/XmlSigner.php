@@ -10,7 +10,6 @@ use Laragear\Dte\Support\LibxmlProxy;
 use Laragear\Dte\Support\OpenSslProxy;
 use Laragear\Dte\Support\XmlDomFactory;
 use RuntimeException;
-
 use function base64_encode;
 use function is_array;
 use function sha1;
@@ -136,7 +135,7 @@ XML;
         $details = $this->openSsl->privateKeyDetails($privateKey);
         $rsa = is_array($details) ? $details['rsa'] ?? null : null;
 
-        if (! is_array($rsa)) {
+        if (!is_array($rsa)) {
             throw new RuntimeException('Unable to extract the certificate RSA public key.');
         }
 

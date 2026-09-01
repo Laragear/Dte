@@ -29,18 +29,6 @@ class CertificateResolver implements CertificateResolverInterface
     }
 
     /**
-     * Register the application callback used to resolve certificates.
-     *
-     * @param  Closure(Rut $rut):(DigitalCertificate|Certifiable|null)  $callback
-     */
-    public static function resolveUsing(Closure $callback): void
-    {
-        app()->afterResolving(CertificateResolverInterface::class, static function (self $resolver) use ($callback) {
-            $resolver->setResolver($callback);
-        });
-    }
-
-    /**
      * Set the resolver callback on this instance.
      */
     public function setResolver(?Closure $callback): static
@@ -69,12 +57,24 @@ class CertificateResolver implements CertificateResolverInterface
             $certificate = $certificate->toDigitalCertificate();
         }
 
-        if (! $certificate instanceof DigitalCertificate) {
+        if (!$certificate instanceof DigitalCertificate) {
             throw new UnexpectedValueException(
                 'The certificate resolver callback must return a DigitalCertificate or Certifiable.',
             );
         }
 
         return $certificate;
+    }
+
+    /**
+     * Register the application callback used to resolve certificates.
+     *
+     * @param  Closure(Rut $rut):(DigitalCertificate|Certifiable|null)  $callback
+     */
+    public static function resolveUsing(Closure $callback): void
+    {
+        app()->afterResolving(CertificateResolverInterface::class, static function (self $resolver) use ($callback) {
+            $resolver->setResolver($callback);
+        });
     }
 }

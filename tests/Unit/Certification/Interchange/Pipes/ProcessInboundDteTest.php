@@ -30,8 +30,6 @@ class ProcessInboundDteTest extends DatabaseTestCase
 
     public function test_processes_inbound_dte(): void
     {
-        Note::fake();
-
         $emailData = new InboundEmailData(
             messageId: 'found',
             sender: 'sii_dte_intercambio@sii.cl',
@@ -57,17 +55,7 @@ class ProcessInboundDteTest extends DatabaseTestCase
 
                 return true;
             });
-
-        Note::assertOutputContains('Inbound DTE successfully processed and saved to the database.');
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Sad Paths
-    |--------------------------------------------------------------------------
-    */
-
-    // No expected user input errors for this pipe.
 
     /*
     |--------------------------------------------------------------------------

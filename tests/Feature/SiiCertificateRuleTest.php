@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Route;
 use Laragear\Dte\Support\OpenSslProxy;
+use Laragear\Dte\ValidatesSiiDocuments;
 use Mockery\MockInterface;
 use Tests\DatabaseTestCase;
 use Tests\Unit\Certificate\Fixtures\CertificateFixture;
@@ -146,5 +147,18 @@ class SiiCertificateRuleTest extends DatabaseTestCase
         $response->assertJsonValidationErrors([
             'cert' => 'sii::validation.certificate',
         ]);
+    }
+
+    public function test_missing_coverage(): void
+    {
+        $validator = $this->app['validator']->make(['cert' => '', 'password' => 'secret'], []);
+        $file = UploadedFile::fake()->create('test.txt', 10, 'text/plain');
+        static::assertFalse(ValidatesSiiDocuments::validateSiiCertificate('cert', $file, ['password'], $validator));
+        static::assertFalse(ValidatesSiiDocuments::validateSiiCertificate('cert', '', ['password'], $validator));
+
+        $proxy = \Mockery::mock(OpenSslProxy::class);
+        $proxy->expects('readPkcs12String')->andReturn(['pkey' => 'exists']);
+        $this->app->instance(OpenSslProxy::class, $proxy);
+        static::assertFalse(ValidatesSiiDocuments::validateSiiCertificate('cert', 'valid', ['password'], $validator));
     }
 }

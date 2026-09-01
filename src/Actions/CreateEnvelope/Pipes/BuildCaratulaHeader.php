@@ -13,13 +13,10 @@ use LogicException;
 use RuntimeException;
 use UnexpectedValueException;
 use XMLWriter;
-
 use function is_int;
 
 class BuildCaratulaHeader
 {
-    public const string XML_NAMESPACE = 'http://www.sii.cl/SiiDte';
-
     /**
      * Create a Build Caratula Header pipe instance.
      */
@@ -56,7 +53,7 @@ class BuildCaratulaHeader
     {
         $envelope = $assembly->envelope;
         $assembly->expectedDocuments = $envelope->dtes()
-            ->when($assembly->targetReceiverRut, fn ($q, $rut) => $q->where('receiver_num', $rut->num))
+            ->when($assembly->targetReceiverRut, fn($q, $rut) => $q->where('receiver_num', $rut->num))
             ->count();
 
         if ($assembly->expectedDocuments < 1) {
@@ -81,7 +78,7 @@ class BuildCaratulaHeader
 
         return $envelope
             ->dtes()
-            ->when($assembly->targetReceiverRut, fn ($q, $rut) => $q->where('receiver_num', $rut->num))
+            ->when($assembly->targetReceiverRut, fn($q, $rut) => $q->where('receiver_num', $rut->num))
             ->where(static function (Builder $query) use ($envelope): void {
                 $query
                     ->where('issuer_num', '!=', $envelope->issuer_rut->num)
@@ -99,7 +96,7 @@ class BuildCaratulaHeader
     {
         $maximum = $this->config->get('dte.envelopes.max_documents');
 
-        if (! is_int($maximum) || $maximum < 1) {
+        if (!is_int($maximum) || $maximum < 1) {
             throw new UnexpectedValueException('The envelope document limit must be a positive integer.');
         }
 
@@ -113,7 +110,7 @@ class BuildCaratulaHeader
     {
         $writer = $this->xml->writer();
 
-        if (! $writer->openUri($path)) {
+        if (!$writer->openUri($path)) {
             throw new RuntimeException('Unable to open the temporary envelope XML file.');
         }
 
@@ -129,7 +126,7 @@ class BuildCaratulaHeader
 
         $writer->startDocument('1.0', 'ISO-8859-1');
         $writer->startElement($tag);
-        $writer->writeAttribute('xmlns', static::XML_NAMESPACE);
+        $writer->writeAttribute('xmlns', XmlDomFactory::XML_NAMESPACE);
         $writer->writeAttribute('version', '1.0');
         $writer->startElement('SetDTE');
         $writer->writeAttribute('ID', 'SetDoc');
@@ -177,7 +174,7 @@ class BuildCaratulaHeader
     {
         $date = $assembly->envelope->resolution_date;
 
-        if (! $date) {
+        if (!$date) {
             throw new UnexpectedValueException('The issuer resolution date must use YYYY-MM-DD format.');
         }
 

@@ -211,4 +211,22 @@ class PdfBuilderTest extends DatabaseTestCase
 
         $this->app->make(PdfBuilder::class)->forDte($dte)->binary();
     }
+
+    public function test_binary_returns_content_from_real_spatie_builder(): void
+    {
+        $mock = Mockery::mock(SpatiePdfBuilder::class)->makePartial();
+        $mock->shouldReceive('generatePdfContent')->andReturn('real-pdf-content');
+
+        Pdf::swap($mock);
+
+        Pdf::shouldReceive('view')->andReturn($mock);
+        $mock->shouldReceive('format')->andReturn($mock);
+        $mock->shouldReceive('name')->andReturn($mock);
+        $mock->shouldReceive('withBrowsershot')->andReturn($mock);
+
+        $this->barcode->allows('generate')->andReturn('data:image/png;base64,barcode');
+
+        $content = $this->builder->binary();
+        static::assertSame('real-pdf-content', $content);
+    }
 }

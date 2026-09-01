@@ -54,7 +54,7 @@ class GenerateTedTest extends DatabaseTestCase
 
         $compilation = new Compilation($dte);
         $document = $this->app->make(XmlDomFactory::class)->document('1.0', 'ISO-8859-1');
-        $document->appendChild($document->createElementNS(BuildXml::XML_NAMESPACE, 'DTE'));
+        $document->appendChild($document->createElementNS(XmlDomFactory::XML_NAMESPACE, 'DTE'));
         $compilation->document = $document;
 
         return $compilation;

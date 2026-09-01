@@ -8,7 +8,6 @@ use Laragear\Dte\Enums\DteType;
 use Laragear\Dte\Enums\SiiRut;
 use Laragear\Rut\Rut;
 use LogicException;
-
 use function round;
 
 class ReceiptBuilder extends DocumentBuilder

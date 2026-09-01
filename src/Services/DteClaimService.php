@@ -39,7 +39,7 @@ class DteClaimService
     ): string {
         $this->transitionClaim(
             $document,
-            fn (SiiInboundDocument $d) => $this->gateway->accept($d),
+            fn(SiiInboundDocument $d) => $this->gateway->accept($d),
             InboundDteStatus::CommercialAccepted,
             'ACD'
         );
@@ -57,7 +57,7 @@ class DteClaimService
     {
         $this->transitionClaim(
             $document,
-            fn (SiiInboundDocument $d) => $this->gateway->reject($d, $reason),
+            fn(SiiInboundDocument $d) => $this->gateway->reject($d, $reason),
             InboundDteStatus::CommercialRejected,
             'RCD'
         );
@@ -70,7 +70,7 @@ class DteClaimService
     {
         $this->transitionClaim(
             $document,
-            fn (SiiInboundDocument $d) => $this->gateway->rejectGoods($d, $reason),
+            fn(SiiInboundDocument $d) => $this->gateway->rejectGoods($d, $reason),
             InboundDteStatus::CommercialRejected,
             'RFT'
         );

@@ -76,4 +76,12 @@ class SiiCafTest extends DatabaseTestCase
             SiiCaf::query()->collidesWith('11.111.111-1', DteType::DispatchGuide, 50, 60)->exists(),
         );
     }
+
+    public function test_throws_when_setting_invalid_folio_type(): void
+    {
+        $caf = SiiCaf::factory()->make();
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('The given value is not a Folio instance.');
+        $caf->folios = 'invalid';
+    }
 }

@@ -25,7 +25,7 @@ use Laragear\Rut\Rut;
 /**
  * Stores the queryable header and validation lifecycle of an inbound DTE.
  * ---
- * @see SiiInboundDocumentFactory
+ * @see  SiiInboundDocumentFactory
  * @link database/migrations/2026_01_01_000007_create_sii_inbound_documents_table.php
  * ---
  * @mixin Builder<static>

@@ -14,6 +14,7 @@ use Laragear\Dte\Enums\DteType;
 use Laragear\Rut\Rut;
 use Override;
 use Tests\DatabaseTestCase;
+use Tests\Unit\Builders\Fixtures\BuilderFixture;
 
 class DispatchGuideBuilderTest extends DatabaseTestCase
 {
@@ -24,7 +25,7 @@ class DispatchGuideBuilderTest extends DatabaseTestCase
     {
         parent::setUp();
 
-        ConfigurationManager::setCompany(fn() => CompanyData::make(
+        ConfigurationManager::setCompany(fn () => CompanyData::make(
             IssuerData::make(
                 '76.123.456-0',
                 'Test Company',
@@ -157,5 +158,19 @@ class DispatchGuideBuilderTest extends DatabaseTestCase
     {
         $builder = $this->app->make(DispatchGuideBuilder::class);
         static::assertEquals(DteType::DispatchGuide, $builder->documentType());
+    }
+
+    public function test_sets_transfer_motive_and_dispatch_type(): void
+    {
+        $builder = $this->app->make(DispatchGuideBuilder::class);
+        $builder->issuedBy(BuilderFixture::issuer());
+        $builder->receivedBy(BuilderFixture::receiver());
+        $builder->addItem(BuilderFixture::item());
+        $builder->transferMotive(1);
+        $builder->dispatchType(2);
+
+        $dte = $builder->create();
+        static::assertSame(1, $dte->payload->data['ind_traslado']);
+        static::assertSame(2, $dte->payload->data['tipo_despacho']);
     }
 }

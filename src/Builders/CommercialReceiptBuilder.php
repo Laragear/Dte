@@ -17,8 +17,9 @@ class CommercialReceiptBuilder
 {
     public const string DECLARATION = 'El acuse de recibo que se declara en este acto, de acuerdo a lo dispuesto en la letra b) del Art. 4, y la letra c) del Art. 5 de la Ley 19.983, acredita que la entrega de mercaderias o servicio(s) prestado(s) ha(n) sido recibido(s).';
 
-    public const string XML_NAMESPACE = 'http://www.sii.cl/SiiDte';
-
+    /**
+     * Create a new Commercial Receipt Builder instance.
+     */
     public function __construct(
         protected XmlDomFactory $xml,
         protected XmlSigner $signer,
@@ -43,7 +44,7 @@ class CommercialReceiptBuilder
         $writer = $this->xml->writer();
         $writer->openMemory();
         $writer->startDocument('1.0', 'ISO-8859-1');
-        $writer->startElementNS(null, 'EnvioRecibos', static::XML_NAMESPACE);
+        $writer->startElementNS(null, 'EnvioRecibos', XmlDomFactory::XML_NAMESPACE);
         $writer->writeAttribute('version', '1.0');
 
         $setID = 'SetRecibos-'.$dte->folio;
@@ -59,6 +60,9 @@ class CommercialReceiptBuilder
         return $this->signer->signString($xmlString, $certificate, [$receiptID, $setID]);
     }
 
+    /**
+     * Write the set of receipts structure for the commercial receipt.
+     */
     protected function writeSet(
         XMLWriter $writer,
         SiiInboundDocument $dte,
@@ -83,6 +87,9 @@ class CommercialReceiptBuilder
         $writer->endElement(); // SetRecibos
     }
 
+    /**
+     * Write the individual receipt element and its details.
+     */
     protected function writeReceipt(
         XMLWriter $writer,
         SiiInboundDocument $dte,
@@ -106,6 +113,9 @@ class CommercialReceiptBuilder
         $writer->endElement(); // Recibo
     }
 
+    /**
+     * Append the document details to the XML writer.
+     */
     protected function appendDocument(XMLWriter $writer, SiiInboundDocument $dte): void
     {
         $writer->writeElement('TipoDoc', (string) $dte->document_type->value);
@@ -116,14 +126,21 @@ class CommercialReceiptBuilder
         $writer->writeElement('MntTotal', (string) $dte->amount_total);
     }
 
+    /**
+     * Validate if the DTE type supports a commercial receipt.
+     */
     protected function validateType(DteType $type): void
     {
-        if (! in_array($type, $this->supportedTypes(), true)) {
+        if (!in_array($type, $this->supportedTypes(), true)) {
             throw new InvalidArgumentException('The DTE type does not support a Ley 19.983 commercial receipt.');
         }
     }
 
-    /** @return list<DteType> */
+    /**
+     * Return the list of supported DTE types for commercial receipts.
+     *
+     * @return list<DteType>
+     */
     protected function supportedTypes(): array
     {
         return [
@@ -135,6 +152,9 @@ class CommercialReceiptBuilder
         ];
     }
 
+    /**
+     * Format the given date into an XML timestamp string.
+     */
     protected function timestamp(DateTimeImmutable $date): string
     {
         return $date->format('Y-m-d\TH:i:s');

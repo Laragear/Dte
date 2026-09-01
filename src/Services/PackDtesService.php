@@ -15,7 +15,6 @@ use Laragear\Dte\Enums\EnvelopeStatus;
 use Laragear\Dte\Models\SiiDte;
 use Laragear\Dte\Models\SiiDteEnvelope;
 use Laragear\Rut\Rut;
-
 use function in_array;
 
 class PackDtesService
@@ -116,21 +115,21 @@ class PackDtesService
         $envelope = SiiDteEnvelope::create([
             'issuer_rut' => $first->issuer_rut,
             'sender_rut' => $this->configManager->getSender($first->issuer_rut) ?? Rut::parse($this->config->get(
-                'dte.sender.rut',
-            )),
+                    'dte.sender.rut',
+                )),
             'type' => $isReceipt ? 'boleta' : 'dte',
             'document_type' => $first->document_type,
             'resolution_date' => $issuerData['resolution_date'] ?? $dynamicIssuer?->resolutionDate ?? $this->config->get(
-                'dte.issuer.resolution_date',
-            ),
+                    'dte.issuer.resolution_date',
+                ),
             'resolution_number' => $issuerData['resolution_number'] ?? $dynamicIssuer?->resolutionNumber ?? $this->config->get(
-                'dte.issuer.resolution_number',
-            ),
+                    'dte.issuer.resolution_number',
+                ),
             'status' => EnvelopeStatus::Pending,
         ]);
 
         SiiDte::query()
-            ->whereIn('id', array_map(static fn (SiiDte $dte) => $dte->getKey(), $dtes))
+            ->whereIn('id', array_map(static fn(SiiDte $dte) => $dte->getKey(), $dtes))
             ->update(['sii_dte_envelope_id' => $envelope->getKey()]);
 
         return $envelope;

@@ -15,7 +15,7 @@ use Laragear\Dte\Models\Concerns\HasXmlPayload;
 /**
  * Stores the raw XML received for an inbound DTE.
  * ---
- * @see SiiInboundDocumentPayloadFactory
+ * @see  SiiInboundDocumentPayloadFactory
  * @link database/migrations/2026_01_01_000008_create_sii_inbound_document_payloads_table.php
  * ---
  * @method static SiiInboundDocumentPayloadFactory factory(callable|array|int|null $count = null, callable|array $state = [])

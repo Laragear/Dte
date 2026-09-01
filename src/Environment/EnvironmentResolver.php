@@ -6,7 +6,6 @@ use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Foundation\Application;
 use Laragear\Dte\Enums\DteEnvironment as DteEnv;
 use LogicException;
-
 use function is_string;
 
 final class EnvironmentResolver

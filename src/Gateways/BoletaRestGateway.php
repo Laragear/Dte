@@ -46,7 +46,7 @@ readonly class BoletaRestGateway
         $seedDocument->loadXML($seedResponse->body());
         $seed = $seedDocument->getElementsByTagName('SEMILLA')->item(0)?->nodeValue;
 
-        if (! $seed) {
+        if (!$seed) {
             throw new RuntimeException('Invalid seed response from SII.');
         }
 
@@ -62,7 +62,7 @@ readonly class BoletaRestGateway
         $tokenXml->appendChild($getToken);
 
         $certificate = $this->certificates->resolve($issuerRut);
-        if (! $certificate) {
+        if (!$certificate) {
             throw new RuntimeException('No digital certificate resolved for issuer '.$issuerRut->formatBasic());
         }
 
@@ -88,7 +88,7 @@ readonly class BoletaRestGateway
         $tokenDocument->loadXML($tokenResponse->body());
         $token = $tokenDocument->getElementsByTagName('TOKEN')->item(0)?->nodeValue;
 
-        if (! $token) {
+        if (!$token) {
             throw new RuntimeException('Invalid token response from SII.');
         }
 
@@ -134,7 +134,7 @@ readonly class BoletaRestGateway
 
         $trackId = $uploadResponse->json('trackid');
 
-        if (! $trackId) {
+        if (!$trackId) {
             throw new RuntimeException('SII Upload response did not contain a valid TrackID.');
         }
 

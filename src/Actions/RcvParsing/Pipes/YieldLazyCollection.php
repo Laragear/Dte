@@ -31,7 +31,7 @@ class YieldLazyCollection
      */
     public function handle(ParsingContext $context, Closure $next): mixed
     {
-        if (! $this->extractHeaders($context)) {
+        if (!$this->extractHeaders($context)) {
             $context->records = LazyCollection::empty();
 
             return $next($context);

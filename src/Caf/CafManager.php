@@ -16,7 +16,6 @@ use Laragear\Dte\Models\SiiCaf;
 use Laragear\Rut\Rut;
 use RuntimeException;
 use SplFileInfo;
-
 use function today;
 
 class CafManager
@@ -85,28 +84,30 @@ class CafManager
         return SiiCaf::query()
             ->getConnection()
             ->transaction(function () use ($issuer, $documentType, $callback): mixed {
-                $caf = $this->availableCaf($issuer, $documentType);
+                while (true) {
+                    $caf = $this->availableCaf($issuer, $documentType);
 
-                $folio = $caf->folios->next();
+                    $folio = $caf->folios->next();
 
-                if ($folio === null) {
                     $caf->save();
 
-                    return $this->allocate($issuer, $documentType, $callback);
+                    // If a valid folio was successfully pulled, execute the callback.
+                    // Otherwise, the loop continues to look for the next valid CAF.
+                    if ($folio !== null) {
+                        return $callback($caf, $folio);
+                    }
                 }
-
-                $caf->save();
-
-                return $callback($caf, $folio);
             });
     }
 
     /**
      * Find and lock the next CAF with an available folio.
+     *
+     * @transaction static::allocate()
      */
     protected function availableCaf(Rut $issuer, DteType $documentType): SiiCaf
     {
-        $caf = SiiCaf::query()
+        return SiiCaf::query()
             ->whereRut($issuer)
             ->whereDocumentType($documentType)
             ->whereColumn('folio_current', '<=', 'folio_to')
@@ -115,7 +116,7 @@ class CafManager
             })
             ->orderBy('folio_from')
             ->lockForUpdate()
-            ->first([
+            ->firstOr([
                 'id',
                 'rut_num',
                 'rut_vd',
@@ -125,16 +126,12 @@ class CafManager
                 'folio_current',
                 'folio_annuled',
                 'authorized_on',
-            ]);
+            ], function () use ($issuer, $documentType): never {
+                $this->event->dispatch(new CafDepleted($issuer, $documentType));
 
-        if ($caf === null) {
-            $this->event->dispatch(new CafDepleted($issuer, $documentType));
-
-            throw new DepletionException(
-                'No valid CAF has available folios for this issuer and document type.',
-            );
-        }
-
-        return $caf;
+                throw new DepletionException(
+                    "No CAF folios available for the issuer [$issuer] and document type [$documentType->value].",
+                );
+            });
     }
 }

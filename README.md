@@ -709,7 +709,11 @@ use Laragear\Dte\Enums\RcvType;
 
 public function sync(Request $request, SyncRcv $syncRcv)
 {
-    $stats = $syncRcv->handle($request->file('rcv_document'), RcvType::Purchases);
+    $stats = $syncRcv->handle(
+        source: $request->file('rcv_document'),
+        type: RcvType::Purchases,
+        issuer: '76.123.456-0'
+    );
     
     return response()->json($stats);
 }
@@ -1379,7 +1383,6 @@ To operate with the SII, the _Certification Process_ is mandatory. SII will _tes
 Switch environments via the `DteEnvironment` enum (`local`, `testing`, `certification`, `production`) in your config or `.env`. Then, you can build a GUI in your application that delegates the handshake process with SII's Maullín endpoint to the `CertificationManager`.
 
 ```dotenv
-// .env
 DTE_ENV=certification
 ```
 
