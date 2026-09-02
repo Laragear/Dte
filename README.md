@@ -1,6 +1,6 @@
 # DTE
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/laragear/dte.svg)](https://packagist.org/packages/laragear/dte)
-[![Latest stable test run](https://github.com/Laragear/Dte/workflows/Tests/badge.svg)](https://github.com/Laragear/Dte/actions)
+[![Latest stable test run](https://github.com/Laragear/Dte/actions/workflows/php.yml/badge.svg)](https://github.com/Laragear/Dte/actions)
 [![Codecov Coverage](https://codecov.io/gh/Laragear/Dte/graph/badge.svg?token=BJMBVZNPM8)](https://codecov.io/gh/Laragear/Dte)
 [![Maintainability](https://qlty.sh/badges/eb9ec1dc-4587-46cc-9261-6dea405e0b76/maintainability.svg)](https://qlty.sh/gh/Laragear/projects/Dte)
 [![Sonarcloud Status](https://sonarcloud.io/api/project_badges/measure?project=Laragear_Dte&metric=alert_status)](https://sonarcloud.io/dashboard?id=Laragear_Dte)
@@ -39,18 +39,16 @@ Your support allows me to keep this package free, up-to-date, and maintainable. 
 
 In 2026, you (still) cannot just connect your application to the SII Servers to push invoices in JSON. SII works using pre-iPhone technologies: XML, SOAP, folio-authorization, digital-signing, and so forth.
 
-To avoid your application being vendor-locked-in with external services, this library **handles everything from the document constructions onwards**, leaving you with only five tasks ahead:
+To avoid your application being vendor-locked-in with external services, this library **handles everything from the document constructions onwards**, leaving you with only three tasks:
 
 1. Uploading a Folio to authorize your documents
 2. Create the documents you need (the fun part)
-3. Read your documents
-4. Answer incoming ones from other businesses
-5. Scheduling some tasks to keep a continuous operation
+3. Check the state of your documents.
 
 You will require some **manual labor** due to SII self-imposed limits when you move to [production](#certification--production):
 
 - Download CAF and [load it into the library](#uploading-caf).
-- Download RCV and [load it into the library](#manual-conciliation).
+- Download RCV and [load it into the library](#sii-rcv-registro-de-compras-y-ventas).
 
 ## Installation
 
@@ -76,26 +74,26 @@ php artisan migrate
 
 ## What does this library do to comply (legally) with SII?
 
-If you are new to Chilean tax accounting (SII), the gist is straightforward: documents (DTE) are sent to SII servers in bulk to SOAP/REST endpoints, in XML. To sign, you will need a Digital Certificate (`.p12|pfx`) [you can buy separately](https://www.sii.cl/servicios_online/1039-certificado_digital-1182.html).
+If you are new to Chilean tax accounting (SII), the gist is straightforward: documents (DTE) are sent to SII servers in bulk to SOAP/REST endpoints, in XML, and signed with a Digital Certificate (`.p12|pfx`) [you can buy separately](https://www.sii.cl/servicios_online/1039-certificado_digital-1182.html).
 
-The implementation is not _straightforward_. The SII requires your app to comply with seven points:
+The implementation is not _straightforward_. The SII requires any app to comply with seven points:
 
 1. Receive a CAF XML that authorizes a DTE number range (folio).
-2. DTE must use a folio from that CAF XML.
-3. Send DTE as "envelopes" and track their processing constantly.
-4. Receive and answer DTE you will receive at your `dte@my-app.cl`.
+2. DTE created must be signed with both CAF and Digital Certificate.
+3. Send DTE as "envelopes" and track their processing constantly, signed with the Digital Certificate.
+4. Receive and answer DTEs received at your `dte@my-app.cl`.
 5. Create a legally correct PDF for your DTEs.
 6. Send DTE XML to the target business `dte@business.cl`.
 7. Store all documents for 6 years.
 
 To deal with this, this library implements the following:
 
-1. Automatically loads CAF into the library for the document type.
-2. Automatically allocates CAF folios for created DTE.
+1. Automatically loads CAF XML into the library.
+2. Automatically allocates folios, signing the DTE XML with the CAF and Digital Certificate.
 3. Automatically fills and sends envelopes, polling their status at SII for updates.
 4. Automatically reads your `dte@my-app.cl` via IMAP, driver or your own custom driver.
 5. Automatically renders PDF for any DTE using a standard design.
-6. Once envelopes are approved, sends each DTE to the target business using Laravel Mail driver.
+6. Once envelopes are approved, sends each DTE to the target business using Laravel's Mail driver.
 7. Allows your app to hook up into the `DteAccepted` and `EnvelopeAccepted` to save XML payloads on your storage.
 
 Odds are you already know some document types before implementing this library, but if you feel lost, check the [glossary section](#glossary) and come back. 
@@ -308,7 +306,7 @@ return $receipt->pdf()->generate();
 
 > [!IMPORTANT]
 >
-> When doing building the XL in sync, your app will take time to properly sign the XML, which also involves folio reservation. This shouldn't take more than a _few_ seconds. The DTE will still be queued to be sent later through an envelope.
+> When doing building the XML in sync, your app will take time to properly sign the XML, which also involves folio reservation. This shouldn't take more than a _few_ seconds. The DTE will still be queued to be sent later through an envelope.
 
 #### Adding Items
 

@@ -5,7 +5,6 @@ namespace Tests\Unit\Builders;
 use DateTimeImmutable;
 use DOMDocument;
 use DOMXPath;
-use Illuminate\Filesystem\Filesystem;
 use InvalidArgumentException;
 use Laragear\Dte\Builders\CommercialReceiptBuilder;
 use Laragear\Dte\Builders\XmlResponseBuilder;

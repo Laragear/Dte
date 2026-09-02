@@ -8,16 +8,16 @@ use Illuminate\Support\Facades\Http;
 use Laragear\Dte\Certification\TestingSet\Pipes\SendTestingEnvelope;
 use Laragear\Dte\Certification\TestingSet\TestSetData;
 use Laragear\Dte\Certification\TestingSet\TestSetEnvelope;
-use Laragear\Dte\Contracts\TokenProviderInterface;
 use Laragear\Dte\Enums\DteEnvironment;
 use Laragear\Dte\Enums\EnvelopeStatus;
 use Laragear\Dte\Events\EnvelopeSending;
 use Laragear\Dte\Events\EnvelopeSent;
 use Laragear\Dte\Gateways\Token;
 use Laragear\Dte\Models\SiiDteEnvelope;
+use Laragear\Dte\Support\TokenAuthenticator;
 use Laragear\MetaTesting\Pipeline\InteractsWithPipelines;
 use Laragear\Rut\Rut;
-use Mockery;
+use Mockery\MockInterface;
 use Tests\DatabaseTestCase;
 
 class SendTestingEnvelopeTest extends DatabaseTestCase
@@ -46,10 +46,10 @@ class SendTestingEnvelopeTest extends DatabaseTestCase
             ),
         ]);
 
-        $tokenMock = Mockery::mock(TokenProviderInterface::class);
-        $tokenMock->shouldReceive('token')->andReturn(new Token('fake',
-            new DateTimeImmutable('+1 hour')));
-        $this->app->instance(TokenProviderInterface::class, $tokenMock);
+        $this->mock(TokenAuthenticator::class, static function (MockInterface $mock): void {
+            $mock->expects('token')->andReturn(new Token('fake', new DateTimeImmutable('+1 hour')));
+            $mock->expects('retryWithFreshToken')->andReturnUsing(fn($request, $issuer) => $request());
+        });
 
         $this->app['config']->set('dte.environment', DteEnvironment::Local->value);
 

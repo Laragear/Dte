@@ -4,9 +4,9 @@ namespace Tests\Unit\Jobs;
 
 use DOMElement;
 use Exception;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Laragear\Dte\Certificate\DigitalCertificate;
 use Laragear\Dte\Contracts\CertificateResolverInterface;
@@ -18,6 +18,7 @@ use Laragear\Dte\Events\DteAccepted;
 use Laragear\Dte\Events\DteRejected;
 use Laragear\Dte\Events\EnvelopeAccepted;
 use Laragear\Dte\Events\EnvelopeRejected;
+use Laragear\Dte\Gateways\Exceptions\TokenInvalidException;
 use Laragear\Dte\Gateways\SoapGateway;
 use Laragear\Dte\Gateways\Token;
 use Laragear\Dte\Jobs\PollDteStatusJob;
@@ -25,8 +26,11 @@ use Laragear\Dte\Jobs\PollEnvelopeTrackIdJob;
 use Laragear\Dte\Jobs\SendInterchangeEnvelopeJob;
 use Laragear\Dte\Models\SiiDte;
 use Laragear\Dte\Models\SiiDteEnvelope;
+use Laragear\Dte\Models\SiiDteEnvelopePayload;
+use Laragear\Dte\Support\TokenAuthenticator;
 use Laragear\Dte\Xml\XmlSigner;
 use Mockery\MockInterface;
+use Psr\Log\LoggerInterface;
 use Tests\DatabaseTestCase;
 use Tests\Unit\Certificate\Fixtures\CertificateFixture;
 
@@ -35,6 +39,7 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
         $this->app['env'] = 'production';
         $this->app->make('config')->set('app.env', 'production');
         $this->app->make('config')->set('dte.environment', 'production');
@@ -50,12 +55,18 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
             'track_id' => '12345',
         ]);
 
-        $this->mock(SoapGateway::class, static function (MockInterface $mock) use ($envelope): void {
+        $this->mock(TokenAuthenticator::class, static function (MockInterface $mock) use ($envelope): void {
             $mock->expects('token')
-                ->withArgs(fn ($rut) => $rut->num === $envelope->issuer_rut->num)
+                ->withArgs(fn($rut) => $rut->num === $envelope->issuer_rut->num)
+                ->zeroOrMoreTimes()
                 ->andReturn(new Token('FAKE_TOKEN', now()->addHour()->toDateTimeImmutable()));
+            $mock->expects('retryWithFreshToken')->zeroOrMoreTimes()
+                ->andReturnUsing(fn($request, $issuer) => $request());
+        });
+
+        $this->mock(SoapGateway::class, static function (MockInterface $mock): void {
             $mock->expects('query')
-                ->withArgs(fn ($rut, $service, $action, $args) => $args['TrackId'] === '12345')
+                ->withArgs(fn($token, $service, $action, $args) => $args['TrackId'] === '12345')
                 ->andReturn('<ESTADO>EPR</ESTADO>');
         });
 
@@ -155,6 +166,43 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
                 200, ['Content-Type' => 'application/xml']),
             '*/boleta.electronica.token' => Http::response('<RESP_BODY><TOKEN>FAKE_TOKEN</TOKEN></RESP_BODY>',
                 200, ['Content-Type' => 'application/xml']),
+            '*/boleta.electronica.envio/*' => Http::response(['estado' => 'PRD'], 200),
+        ]);
+
+        $this->mock(CertificateResolverInterface::class, function ($mock) {
+            $fixture = CertificateFixture::create();
+            $cert = new DigitalCertificate(file_get_contents($fixture->path),
+                $fixture->password);
+            $mock->expects('resolve')->andReturn($cert);
+        });
+
+        $queue = Queue::fake([PollEnvelopeTrackIdJob::class]);
+
+        $job = new PollEnvelopeTrackIdJob($envelope);
+        $this->app->call($job->handle(...));
+
+        static::assertEquals(EnvelopeStatus::Uploaded, $envelope->fresh()->status);
+        $event->assertNotDispatched(EnvelopeAccepted::class);
+        $event->assertNotDispatched(EnvelopeRejected::class);
+
+        $queue->assertPushed(PollEnvelopeTrackIdJob::class);
+    }
+
+    public function test_boleta_rec_status_is_treated_as_rejected(): void
+    {
+        $event = Event::fake([EnvelopeAccepted::class, EnvelopeRejected::class, DteRejected::class]);
+
+        $envelope = SiiDteEnvelope::factory()->hasPayload(['sii_response' => null])->create([
+            'status' => EnvelopeStatus::Uploaded,
+            'track_id' => '12345',
+            'type' => 'boleta',
+        ]);
+
+        Http::fake([
+            '*/boleta.electronica.semilla' => Http::response('<RESP_BODY><SEMILLA>123</SEMILLA></RESP_BODY>',
+                200, ['Content-Type' => 'application/xml']),
+            '*/boleta.electronica.token' => Http::response('<RESP_BODY><TOKEN>FAKE_TOKEN</TOKEN></RESP_BODY>',
+                200, ['Content-Type' => 'application/xml']),
             '*/boleta.electronica.envio/*' => Http::response(['estado' => 'REC'], 200),
         ]);
 
@@ -168,9 +216,96 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
         $job = new PollEnvelopeTrackIdJob($envelope);
         $this->app->call($job->handle(...));
 
+        static::assertEquals(EnvelopeStatus::Rejected, $envelope->fresh()->status);
+        static::assertNotNull($envelope->fresh()->rejected_at);
+        $event->assertDispatched(EnvelopeRejected::class);
+    }
+
+    public function test_soap_rec_status_is_treated_as_rejected(): void
+    {
+        $event = Event::fake([EnvelopeAccepted::class, EnvelopeRejected::class, DteRejected::class]);
+
+        $envelope = SiiDteEnvelope::factory()->hasPayload(['sii_response' => null])->create([
+            'status' => EnvelopeStatus::Uploaded,
+            'track_id' => '12345',
+        ]);
+
+        $this->mock(TokenAuthenticator::class, static function (MockInterface $mock) use ($envelope): void {
+            $mock->expects('token')
+                ->withArgs(fn($rut) => $rut->num === $envelope->issuer_rut->num)
+                ->zeroOrMoreTimes()
+                ->andReturn(new Token('FAKE_TOKEN', now()->addHour()->toDateTimeImmutable()));
+            $mock->expects('retryWithFreshToken')->zeroOrMoreTimes()
+                ->andReturnUsing(fn($request, $issuer) => $request());
+        });
+
+        $this->mock(SoapGateway::class, static function (MockInterface $mock): void {
+            $mock->expects('query')
+                ->withArgs(fn($token, $service, $action, $args) => $args['TrackId'] === '12345')
+                ->andReturn('<ESTADO>REC</ESTADO>');
+        });
+
+        $job = new PollEnvelopeTrackIdJob($envelope);
+        $this->app->call($job->handle(...));
+
+        static::assertEquals(EnvelopeStatus::Rejected, $envelope->fresh()->status);
+        static::assertNotNull($envelope->fresh()->rejected_at);
+
+        $event->assertDispatched(EnvelopeRejected::class);
+    }
+
+    public function test_token_invalid_status_001_gives_up_after_three_attempts(): void
+    {
+        $this->assertTokenInvalidStatusTriggersFailcheck('001');
+    }
+
+    public function test_token_invalid_status_002_gives_up_after_three_attempts(): void
+    {
+        $this->assertTokenInvalidStatusTriggersFailcheck('002');
+    }
+
+    public function test_token_invalid_status_003_gives_up_after_three_attempts(): void
+    {
+        $this->assertTokenInvalidStatusTriggersFailcheck('003');
+    }
+
+    protected function assertTokenInvalidStatusTriggersFailcheck(string $code): void
+    {
+        $event = Event::fake([EnvelopeAccepted::class, EnvelopeRejected::class, DteRejected::class]);
+
+        $envelope = SiiDteEnvelope::factory()->hasPayload(['sii_response' => null])->create([
+            'status' => EnvelopeStatus::Uploaded,
+            'track_id' => '12345',
+        ]);
+
+        // The REAL TokenAuthenticator runs the refresh-and-retry loop: the
+        // mocked transport always returns the invalid-token status, and every
+        // re-authentication goes through the mocked auth flow (one per attempt
+        // plus one per refresh).
+        $this->mock(SoapGateway::class, static function (MockInterface $mock) use ($code): void {
+            $mock->expects('authenticate')->times(3)->andReturn('REFRESHED_TOKEN');
+            $mock->expects('query')->times(3)->andReturn('<ESTADO>'.$code.'</ESTADO>');
+        });
+
+        $this->mock(LoggerInterface::class)->expects('error')->zeroOrMoreTimes();
+
+        Queue::fake([PollEnvelopeTrackIdJob::class]);
+
+        $job = new PollEnvelopeTrackIdJob($envelope);
+
+        try {
+            $this->app->call($job->handle(...));
+            static::fail('Expected TokenInvalidException after 3 attempts.');
+        } catch (TokenInvalidException) {
+            // Expected: SII kept rejecting the token after the refreshes.
+        }
+
+        // The envelope must remain Uploaded (no terminal state) and the job must
+        // NOT self re-dispatch: the queue backoff handles the next attempt.
         static::assertEquals(EnvelopeStatus::Uploaded, $envelope->fresh()->status);
         $event->assertNotDispatched(EnvelopeAccepted::class);
         $event->assertNotDispatched(EnvelopeRejected::class);
+        Queue::assertNotPushed(PollEnvelopeTrackIdJob::class);
     }
 
     public function test_logs_warning_on_unknown_status_for_boleta(): void
@@ -196,15 +331,11 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
             $mock->expects('resolve')->andReturn($cert);
         });
 
-        Log::shouldReceive('error')->andReturnUsing(function ($msg) {
-            dump($msg);
+        $this->mock(LoggerInterface::class)->expects('warning')->withArgs(function ($msg) use ($envelope) {
+            return str_contains(
+                $msg, "Unknown SII boleta track ID status received for track ID {$envelope->track_id}:"
+            );
         });
-        Log::shouldReceive('warning')
-            ->once()
-            ->withArgs(function ($msg) use ($envelope) {
-                return str_contains($msg,
-                    "Unknown SII boleta track ID status received for track ID {$envelope->track_id}:");
-            });
 
         $job = new PollEnvelopeTrackIdJob($envelope);
         $this->app->call($job->handle(...));
@@ -221,14 +352,22 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
             'track_id' => '55555',
         ]);
 
-        $this->mock(SoapGateway::class, static function (MockInterface $mock) use ($envelope): void {
+        $this->mock(TokenAuthenticator::class, static function (MockInterface $mock) use ($envelope): void {
             $mock->expects('token')
-                ->withArgs(fn ($rut) => $rut->num === $envelope->issuer_rut->num)
+                ->withArgs(fn($rut) => $rut->num === $envelope->issuer_rut->num)
+                ->zeroOrMoreTimes()
                 ->andReturn(new Token('FAKE_TOKEN', now()->addHour()->toDateTimeImmutable()));
+            $mock->expects('retryWithFreshToken')->zeroOrMoreTimes()
+                ->andReturnUsing(fn($request, $issuer) => $request());
+        });
+
+        $this->mock(SoapGateway::class, static function (MockInterface $mock): void {
             $mock->expects('query')
-                ->withArgs(fn ($rut, $service, $action, $args) => $args['TrackId'] === '55555')
+                ->withArgs(fn($token, $service, $action, $args) => $args['TrackId'] === '55555')
                 ->andReturn('<ESTADO>PRD</ESTADO>');
         });
+
+        $queue = Queue::fake([PollEnvelopeTrackIdJob::class]);
 
         $job = new PollEnvelopeTrackIdJob($envelope);
         $this->app->call($job->handle(...));
@@ -237,26 +376,33 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
         static::assertNull($envelope->fresh()->accepted_at);
 
         Event::assertNothingDispatched();
+
+        $queue->assertPushed(PollEnvelopeTrackIdJob::class);
     }
 
     public function test_does_nothing_if_status_is_not_uploaded(): void
     {
-        Event::fake([EnvelopeAccepted::class, EnvelopeRejected::class, DteRejected::class]);
+        $event = Event::fake([EnvelopeAccepted::class, EnvelopeRejected::class, DteRejected::class]);
 
         $envelope = SiiDteEnvelope::factory()->hasPayload(['sii_response' => null])->create([
             'status' => EnvelopeStatus::Pending,
             'track_id' => '12345',
         ]);
 
-        $this->mock(SoapGateway::class)->shouldNotReceive('token');
-        $this->mock(SoapGateway::class)->shouldNotReceive('query');
+        $this->mock(TokenAuthenticator::class, static function (MockInterface $mock): void {
+            $mock->expects('token')->never();
+        });
+
+        $this->mock(SoapGateway::class, static function (MockInterface $mock): void {
+            $mock->expects('query')->never();
+        });
 
         $job = new PollEnvelopeTrackIdJob($envelope);
         $this->app->call($job->handle(...));
 
         static::assertEquals(EnvelopeStatus::Pending, $envelope->fresh()->status);
 
-        Event::assertNothingDispatched();
+        $event->assertNothingDispatched();
     }
 
     public function test_logs_warning_on_unknown_status(): void
@@ -268,17 +414,23 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
             'track_id' => 'UNKNOWN_TRACK',
         ]);
 
-        $this->mock(SoapGateway::class, static function (MockInterface $mock) use ($envelope): void {
+        $this->mock(TokenAuthenticator::class, static function (MockInterface $mock) use ($envelope): void {
             $mock->expects('token')
-                ->withArgs(fn ($rut) => $rut->num === $envelope->issuer_rut->num)
+                ->withArgs(fn($rut) => $rut->num === $envelope->issuer_rut->num)
+                ->zeroOrMoreTimes()
                 ->andReturn(new Token('FAKE_TOKEN', now()->addHour()->toDateTimeImmutable()));
+            $mock->expects('retryWithFreshToken')->zeroOrMoreTimes()
+                ->andReturnUsing(fn($request, $issuer) => $request());
+        });
+
+        $this->mock(SoapGateway::class, static function (MockInterface $mock): void {
             $mock->expects('query')
-                ->withArgs(fn ($rut, $service, $action, $args) => $args['TrackId'] === 'UNKNOWN_TRACK')
+                ->withArgs(fn($token, $service, $action, $args) => $args['TrackId'] === 'UNKNOWN_TRACK')
                 ->andReturn('<ESTADO>UNKNOWN</ESTADO>');
         });
 
-        Log::shouldReceive('warning')
-            ->once()
+        $this->mock(LoggerInterface::class)
+            ->expects('warning')
             ->with("Unknown SII track ID status received for track ID {$envelope->track_id}: <ESTADO>UNKNOWN</ESTADO>");
 
         $job = new PollEnvelopeTrackIdJob($envelope);
@@ -289,7 +441,7 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
 
     public function test_rejects_envelope_when_rejected_status_and_dispatches_events(): void
     {
-        Event::fake([EnvelopeAccepted::class, EnvelopeRejected::class, DteRejected::class]);
+        $event = Event::fake([EnvelopeAccepted::class, EnvelopeRejected::class, DteRejected::class]);
 
         $envelope = SiiDteEnvelope::factory()->hasPayload(['sii_response' => null])->create([
             'status' => EnvelopeStatus::Uploaded,
@@ -303,12 +455,18 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
             'sii_dte_envelope_id' => $envelope->id, 'status' => DteStatus::Signed,
         ]);
 
-        $this->mock(SoapGateway::class, static function (MockInterface $mock) use ($envelope): void {
+        $this->mock(TokenAuthenticator::class, static function (MockInterface $mock) use ($envelope): void {
             $mock->expects('token')
-                ->withArgs(fn ($rut) => $rut->num === $envelope->issuer_rut->num)
+                ->withArgs(fn($rut) => $rut->num === $envelope->issuer_rut->num)
+                ->zeroOrMoreTimes()
                 ->andReturn(new Token('FAKE_TOKEN', now()->addHour()->toDateTimeImmutable()));
+            $mock->expects('retryWithFreshToken')->zeroOrMoreTimes()
+                ->andReturnUsing(fn($request, $issuer) => $request());
+        });
+
+        $this->mock(SoapGateway::class, static function (MockInterface $mock): void {
             $mock->expects('query')
-                ->withArgs(fn ($rut, $service, $action, $args) => $args['TrackId'] === '98765')
+                ->withArgs(fn($token, $service, $action, $args) => $args['TrackId'] === '98765')
                 ->andReturn('<ESTADO>RCH</ESTADO>');
         });
 
@@ -326,16 +484,16 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
         static::assertNull($dte2->fresh()->sii_dte_envelope_id);
         static::assertEquals(1, $dte2->fresh()->pack_retries);
 
-        Event::assertDispatched(EnvelopeRejected::class, function ($event) use ($envelope) {
+        $event->assertDispatched(EnvelopeRejected::class, function ($event) use ($envelope) {
             return $event->envelope->id === $envelope->id;
         });
 
-        Event::assertNotDispatched(DteRejected::class);
+        $event->assertNotDispatched(DteRejected::class);
     }
 
     public function test_rejects_envelope_and_permanently_rejects_dtes_if_max_retries_reached(): void
     {
-        Event::fake([EnvelopeAccepted::class, EnvelopeRejected::class, DteRejected::class]);
+        $event = Event::fake([EnvelopeAccepted::class, EnvelopeRejected::class, DteRejected::class]);
 
         $envelope = SiiDteEnvelope::factory()->hasPayload(['sii_response' => null])->create([
             'status' => EnvelopeStatus::Uploaded,
@@ -346,12 +504,18 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
             'sii_dte_envelope_id' => $envelope->id, 'status' => DteStatus::Signed, 'pack_retries' => 3,
         ]);
 
-        $this->mock(SoapGateway::class, static function (MockInterface $mock) use ($envelope): void {
+        $this->mock(TokenAuthenticator::class, static function (MockInterface $mock) use ($envelope): void {
             $mock->expects('token')
-                ->withArgs(fn ($rut) => $rut->num === $envelope->issuer_rut->num)
+                ->withArgs(fn($rut) => $rut->num === $envelope->issuer_rut->num)
+                ->zeroOrMoreTimes()
                 ->andReturn(new Token('FAKE_TOKEN', now()->addHour()->toDateTimeImmutable()));
+            $mock->expects('retryWithFreshToken')->zeroOrMoreTimes()
+                ->andReturnUsing(fn($request, $issuer) => $request());
+        });
+
+        $this->mock(SoapGateway::class, static function (MockInterface $mock): void {
             $mock->expects('query')
-                ->withArgs(fn ($rut, $service, $action, $args) => $args['TrackId'] === '98765')
+                ->withArgs(fn($token, $service, $action, $args) => $args['TrackId'] === '98765')
                 ->andReturn('<ESTADO>RCH</ESTADO>');
         });
 
@@ -362,7 +526,7 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
         static::assertNotNull($dte1->fresh()->rejected_at);
         static::assertEquals(3, $dte1->fresh()->pack_retries);
 
-        Event::assertDispatched(DteRejected::class);
+        $event->assertDispatched(DteRejected::class);
     }
 
     public function test_logs_error_and_throws_exception_on_failure(): void
@@ -372,14 +536,16 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
             'track_id' => 'ERROR_TRACK',
         ]);
 
-        $this->mock(SoapGateway::class, static function (MockInterface $mock) use ($envelope): void {
+        $this->mock(TokenAuthenticator::class, static function (MockInterface $mock) use ($envelope): void {
             $mock->expects('token')
-                ->withArgs(fn ($rut) => $rut->num === $envelope->issuer_rut->num)
+                ->withArgs(fn($rut) => $rut->num === $envelope->issuer_rut->num)
                 ->andThrow(new Exception('Token error'));
+            $mock->expects('retryWithFreshToken')->zeroOrMoreTimes()
+                ->andReturnUsing(fn($request, $issuer) => $request());
         });
 
-        Log::shouldReceive('error')
-            ->once()
+        $this->mock(LoggerInterface::class)
+            ->expects('error')
             ->with("Failed to poll TrackID {$envelope->track_id}: Token error");
 
         $job = new PollEnvelopeTrackIdJob($envelope);
@@ -408,6 +574,7 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
             'status' => EnvelopeStatus::Uploaded,
             'track_id' => '12345',
         ]);
+
         $dte = SiiDte::factory()->create([
             'sii_dte_envelope_id' => $envelope->id, 'document_type' => DteType::Receipt,
             'status' => DteStatus::Pending,
@@ -437,17 +604,20 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
                 return $target;
             });
 
-        Event::fake([
+        $event = Event::fake([
             EnvelopeAccepted::class, DteAccepted::class,
         ]);
+
         Queue::fake([SendInterchangeEnvelopeJob::class]);
 
         $job = new PollEnvelopeTrackIdJob($envelope);
         $this->app->call($job->handle(...));
 
         $dte->refresh();
+
         static::assertEquals(DteStatus::Accepted, $dte->status);
-        Event::assertDispatched(DteAccepted::class);
+
+        $event->assertDispatched(DteAccepted::class);
     }
 
     public function test_accepts_boleta_envelope_and_dispatches_poll_for_inner_dtes_when_rejections_present(): void
@@ -462,7 +632,8 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
             'status' => EnvelopeStatus::Uploaded,
             'track_id' => '12345',
         ]);
-        $dte = SiiDte::factory()->create([
+
+        SiiDte::factory()->create([
             'sii_dte_envelope_id' => $envelope->id, 'document_type' => DteType::Receipt,
             'status' => DteStatus::Pending,
         ]);
@@ -491,14 +662,14 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
                 return $target;
             });
 
-        Queue::fake([
+        $queue = Queue::fake([
             PollDteStatusJob::class, SendInterchangeEnvelopeJob::class,
         ]);
 
         $job = new PollEnvelopeTrackIdJob($envelope);
         $this->app->call($job->handle(...));
 
-        Queue::assertPushed(PollDteStatusJob::class);
+        $queue->assertPushed(PollDteStatusJob::class);
     }
 
     public function test_accepts_normal_envelope_and_accepts_inner_dtes_when_no_rejections(): void
@@ -507,23 +678,30 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
             'status' => EnvelopeStatus::Uploaded,
             'track_id' => '12345',
         ]);
+
         $dte = SiiDte::factory()->create([
             'sii_dte_envelope_id' => $envelope->id, 'document_type' => DteType::Invoice,
             'status' => DteStatus::Pending,
         ]);
 
+        $this->mock(TokenAuthenticator::class, static function (MockInterface $mock) use ($envelope): void {
+            $mock->expects('token')
+                ->withArgs(fn($rut) => $rut->num === $envelope->issuer_rut->num)
+                ->zeroOrMoreTimes()
+                ->andReturn(new Token('FAKE_TOKEN',
+                    now()->addHour()->toDateTimeImmutable()));
+            $mock->expects('retryWithFreshToken')->zeroOrMoreTimes()
+                ->andReturnUsing(fn($request, $issuer) => $request());
+        });
+
         $this->mock(SoapGateway::class,
-            static function (MockInterface $mock) use ($envelope): void {
-                $mock->expects('token')
-                    ->withArgs(fn ($rut) => $rut->num === $envelope->issuer_rut->num)
-                    ->andReturn(new Token('FAKE_TOKEN',
-                        now()->addHour()->toDateTimeImmutable()));
+            static function (MockInterface $mock): void {
                 $mock->expects('query')
-                    ->withArgs(fn ($rut, $service, $action, $args) => $args['TrackId'] === '12345')
+                    ->withArgs(fn($token, $service, $action, $args) => $args['TrackId'] === '12345')
                     ->andReturn('<SII:RESPUESTA xmlns:SII="http://www.sii.cl/XMLSchema"><SII:RESP_BODY><ESTADO>EPR</ESTADO><RECHAZADOS>0</RECHAZADOS><REPAROS>0</REPAROS></SII:RESP_BODY></SII:RESPUESTA>');
             });
 
-        Event::fake([
+        $event = Event::fake([
             EnvelopeAccepted::class, DteAccepted::class,
         ]);
         Queue::fake([SendInterchangeEnvelopeJob::class]);
@@ -532,8 +710,10 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
         $this->app->call($job->handle(...));
 
         $dte->refresh();
+
         static::assertEquals(DteStatus::Accepted, $dte->status);
-        Event::assertDispatched(DteAccepted::class);
+
+        $event->assertDispatched(DteAccepted::class);
     }
 
     public function test_accepts_normal_envelope_and_dispatches_poll_for_inner_dtes_when_rejections_present(): void
@@ -542,31 +722,276 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
             'status' => EnvelopeStatus::Uploaded,
             'track_id' => '12345',
         ]);
-        $dte = SiiDte::factory()->create([
+
+        SiiDte::factory()->create([
             'sii_dte_envelope_id' => $envelope->id, 'document_type' => DteType::Invoice,
             'status' => DteStatus::Pending,
         ]);
 
-        Queue::fake([PollDteStatusJob::class]);
+        $this->mock(TokenAuthenticator::class, static function (MockInterface $mock) use ($envelope): void {
+            $mock->expects('token')
+                ->withArgs(fn($rut) => $rut->num === $envelope->issuer_rut->num)
+                ->zeroOrMoreTimes()
+                ->andReturn(new Token('FAKE_TOKEN',
+                    now()->addHour()->toDateTimeImmutable()));
+            $mock->expects('retryWithFreshToken')->zeroOrMoreTimes()
+                ->andReturnUsing(fn($request, $issuer) => $request());
+        });
 
         $this->mock(SoapGateway::class,
-            static function (MockInterface $mock) use ($envelope): void {
-                $mock->expects('token')
-                    ->withArgs(fn ($rut) => $rut->num === $envelope->issuer_rut->num)
-                    ->andReturn(new Token('FAKE_TOKEN',
-                        now()->addHour()->toDateTimeImmutable()));
+            static function (MockInterface $mock): void {
                 $mock->expects('query')
-                    ->withArgs(fn ($rut, $service, $action, $args) => $args['TrackId'] === '12345')
+                    ->withArgs(fn($token, $service, $action, $args) => $args['TrackId'] === '12345')
                     ->andReturn('<SII:RESPUESTA xmlns:SII="http://www.sii.cl/XMLSchema"><SII:RESP_BODY><ESTADO>EPR</ESTADO><RECHAZADOS>1</RECHAZADOS><REPAROS>0</REPAROS></SII:RESP_BODY></SII:RESPUESTA>');
             });
 
-        Queue::fake([
+        $queue = Queue::fake([
             PollDteStatusJob::class, SendInterchangeEnvelopeJob::class,
         ]);
 
         $job = new PollEnvelopeTrackIdJob($envelope);
         $this->app->call($job->handle(...));
 
-        Queue::assertPushed(PollDteStatusJob::class);
+        $queue->assertPushed(PollDteStatusJob::class);
+    }
+
+    public function test_all_dtes_accepted_uses_single_batch_update(): void
+    {
+        $this->app->make('config')->set('dte.dim.auto_send_interchange', false);
+
+        Event::fake([EnvelopeAccepted::class, DteAccepted::class]);
+
+        $envelope = SiiDteEnvelope::factory()->hasPayload(['sii_response' => null])->create([
+            'status' => EnvelopeStatus::Uploaded,
+            'track_id' => '12345',
+        ]);
+
+        foreach (range(1, 3) as $i) {
+            SiiDte::factory()->create([
+                'sii_dte_envelope_id' => $envelope->id,
+                'document_type' => DteType::Invoice,
+                'status' => DteStatus::Pending,
+            ]);
+        }
+
+        $this->mock(TokenAuthenticator::class,
+            static function (MockInterface $mock) use ($envelope): void {
+                $mock->expects('token')
+                    ->withArgs(fn($rut) => $rut->num === $envelope->issuer_rut->num)
+                    ->zeroOrMoreTimes()
+                    ->andReturn(new Token('FAKE_TOKEN', now()->addHour()->toDateTimeImmutable()));
+                $mock->expects('retryWithFreshToken')->zeroOrMoreTimes()
+                    ->andReturnUsing(fn($request, $issuer) => $request());
+            });
+
+        $this->mock(SoapGateway::class,
+            static function (MockInterface $mock): void {
+                $mock->expects('query')
+                    ->withArgs(fn($token, $service, $action, $args) => $args['TrackId'] === '12345')
+                    ->andReturn('<SII:RESPUESTA xmlns:SII="http://www.sii.cl/XMLSchema"><SII:RESP_BODY><ESTADO>EPR</ESTADO><RECHAZADOS>0</RECHAZADOS><REPAROS>0</REPAROS></SII:RESP_BODY></SII:RESPUESTA>');
+            });
+
+        $updatesOnSiiDtes = 0;
+
+        DB::listen(static function ($query) use (&$updatesOnSiiDtes): void {
+            $sql = strtolower($query->sql);
+
+            if (str_contains($sql, 'update') && str_contains($sql, 'sii_dtes')) {
+                $updatesOnSiiDtes++;
+            }
+        });
+
+        $job = new PollEnvelopeTrackIdJob($envelope);
+        $this->app->call($job->handle(...));
+
+        static::assertSame(1, $updatesOnSiiDtes, 'Expected a single batch UPDATE over the envelope DTEs.');
+    }
+
+    public function test_all_dtes_accepted_dispatches_event_for_each_dte_with_attributes(): void
+    {
+        $this->app->make('config')->set('dte.dim.auto_send_interchange', false);
+
+        Event::fake([EnvelopeAccepted::class, DteAccepted::class]);
+
+        $envelope = SiiDteEnvelope::factory()->hasPayload(['sii_response' => null])->create([
+            'status' => EnvelopeStatus::Uploaded,
+            'track_id' => '12345',
+        ]);
+
+        $dtes = [];
+
+        foreach (range(1, 3) as $i) {
+            $dtes[] = SiiDte::factory()->create([
+                'sii_dte_envelope_id' => $envelope->id,
+                'document_type' => DteType::Invoice,
+                'status' => DteStatus::Pending,
+            ]);
+        }
+
+        $this->mock(TokenAuthenticator::class,
+            static function (MockInterface $mock) use ($envelope): void {
+                $mock->expects('token')
+                    ->withArgs(fn($rut) => $rut->num === $envelope->issuer_rut->num)
+                    ->zeroOrMoreTimes()
+                    ->andReturn(new Token('FAKE_TOKEN', now()->addHour()->toDateTimeImmutable()));
+                $mock->expects('retryWithFreshToken')->zeroOrMoreTimes()
+                    ->andReturnUsing(fn($request, $issuer) => $request());
+            });
+
+        $this->mock(SoapGateway::class,
+            static function (MockInterface $mock): void {
+                $mock->expects('query')
+                    ->withArgs(fn($token, $service, $action, $args) => $args['TrackId'] === '12345')
+                    ->andReturn('<SII:RESPUESTA xmlns:SII="http://www.sii.cl/XMLSchema"><SII:RESP_BODY><ESTADO>EPR</ESTADO><RECHAZADOS>0</RECHAZADOS><REPAROS>0</REPAROS></SII:RESP_BODY></SII:RESPUESTA>');
+            });
+
+        $job = new PollEnvelopeTrackIdJob($envelope);
+        $this->app->call($job->handle(...));
+
+        // Verify a DteAccepted event was dispatched for every DTE and that the
+        // event carries the model with correct in-memory attributes after forceFill.
+        foreach ($dtes as $dte) {
+            Event::assertDispatched(
+                DteAccepted::class,
+                static function (DteAccepted $event) use ($dte): bool {
+                    if ($event->dte->getKey() !== $dte->getKey()) {
+                        return false;
+                    }
+
+                    // The event model should reflect the fresh DB state via forceFill.
+                    static::assertEquals(DteStatus::Accepted, $event->dte->status);
+                    static::assertNotNull($event->dte->accepted_at);
+                    static::assertNotNull($event->dte->updated_at);
+
+                    return true;
+                },
+            );
+        }
+
+        // Verify DB state.
+        foreach ($dtes as $dte) {
+            $fresh = $dte->fresh();
+
+            static::assertEquals(DteStatus::Accepted, $fresh->status);
+            static::assertNotNull($fresh->accepted_at);
+            static::assertNotNull($fresh->updated_at);
+        }
+    }
+
+    public function test_processing_redispatch_respects_small_envelope_floor_plus_offset(): void
+    {
+        $this->app->make('config')->set('dte.polling.delay_under_30kb', 30);
+
+        $envelope = SiiDteEnvelope::factory()->create([
+            'status' => EnvelopeStatus::Uploaded,
+            'track_id' => '55555',
+        ]);
+
+        $payload = SiiDteEnvelopePayload::factory()->create([
+            'sii_dte_envelope_id' => $envelope->id,
+            'xml' => str_repeat('a', 100), // well under 30 KB
+        ]);
+        $envelope->setRelation('payload', $payload);
+
+        $this->mock(TokenAuthenticator::class, static function (MockInterface $mock) use ($envelope): void {
+            $mock->expects('token')
+                ->withArgs(fn($rut) => $rut->num === $envelope->issuer_rut->num)
+                ->zeroOrMoreTimes()
+                ->andReturn(new Token('FAKE_TOKEN', now()->addHour()->toDateTimeImmutable()));
+            $mock->expects('retryWithFreshToken')->zeroOrMoreTimes()
+                ->andReturnUsing(fn($request, $issuer) => $request());
+        });
+
+        $this->mock(SoapGateway::class, static function (MockInterface $mock): void {
+            $mock->expects('query')
+                ->withArgs(fn($token, $service, $action, $args) => $args['TrackId'] === '55555')
+                ->andReturn('<ESTADO>PRD</ESTADO>');
+        });
+
+        $queue = Queue::fake([PollEnvelopeTrackIdJob::class]);
+
+        $job = new PollEnvelopeTrackIdJob($envelope);
+        $this->app->call($job->handle(...));
+
+        $queue->assertPushed(PollEnvelopeTrackIdJob::class, static function (PollEnvelopeTrackIdJob $redispatch): bool {
+            return $redispatch->delay !== null
+                && $redispatch->delay->getTimestamp() >= now()->addSeconds(120)->getTimestamp() + 25;
+        });
+    }
+
+    public function test_processing_redispatch_respects_large_envelope_floor_plus_offset(): void
+    {
+        $this->app->make('config')->set('dte.polling.delay_over_30kb', 90);
+
+        $envelope = SiiDteEnvelope::factory()->create([
+            'status' => EnvelopeStatus::Uploaded,
+            'track_id' => '55555',
+        ]);
+
+        $payload = SiiDteEnvelopePayload::factory()->create([
+            'sii_dte_envelope_id' => $envelope->id,
+            'xml' => str_repeat('b', 31 * 1024), // at/over 30 KB
+        ]);
+        $envelope->setRelation('payload', $payload);
+
+        $this->mock(TokenAuthenticator::class, static function (MockInterface $mock) use ($envelope): void {
+            $mock->expects('token')
+                ->withArgs(fn($rut) => $rut->num === $envelope->issuer_rut->num)
+                ->zeroOrMoreTimes()
+                ->andReturn(new Token('FAKE_TOKEN', now()->addHour()->toDateTimeImmutable()));
+            $mock->expects('retryWithFreshToken')->zeroOrMoreTimes()
+                ->andReturnUsing(fn($request, $issuer) => $request());
+        });
+
+        $this->mock(SoapGateway::class, static function (MockInterface $mock): void {
+            $mock->expects('query')
+                ->withArgs(fn($token, $service, $action, $args) => $args['TrackId'] === '55555')
+                ->andReturn('<ESTADO>PRD</ESTADO>');
+        });
+
+        $queue = Queue::fake([PollEnvelopeTrackIdJob::class]);
+
+        $job = new PollEnvelopeTrackIdJob($envelope);
+        $this->app->call($job->handle(...));
+
+        $queue->assertPushed(PollEnvelopeTrackIdJob::class, static function (PollEnvelopeTrackIdJob $redispatch): bool {
+            return $redispatch->delay !== null
+                && $redispatch->delay->getTimestamp() >= now()->addSeconds(360)->getTimestamp() + 85;
+        });
+    }
+
+    public function test_default_delay_uses_conservative_large_floor_when_payload_unknown(): void
+    {
+        $this->app->make('config')->set('dte.polling.delay_over_30kb', 0);
+
+        $envelope = SiiDteEnvelope::factory()->create([
+            'status' => EnvelopeStatus::Uploaded,
+            'track_id' => '55555',
+        ]);
+
+        $this->mock(TokenAuthenticator::class, static function (MockInterface $mock) use ($envelope): void {
+            $mock->expects('token')
+                ->withArgs(fn($rut) => $rut->num === $envelope->issuer_rut->num)
+                ->zeroOrMoreTimes()
+                ->andReturn(new Token('FAKE_TOKEN', now()->addHour()->toDateTimeImmutable()));
+            $mock->expects('retryWithFreshToken')->zeroOrMoreTimes()
+                ->andReturnUsing(fn($request, $issuer) => $request());
+        });
+
+        $this->mock(SoapGateway::class, static function (MockInterface $mock): void {
+            $mock->expects('query')
+                ->withArgs(fn($token, $service, $action, $args) => $args['TrackId'] === '55555')
+                ->andReturn('<ESTADO>PRD</ESTADO>');
+        });
+
+        $queue = Queue::fake([PollEnvelopeTrackIdJob::class]);
+
+        $job = new PollEnvelopeTrackIdJob($envelope);
+        $this->app->call($job->handle(...));
+
+        $queue->assertPushed(PollEnvelopeTrackIdJob::class, static function (PollEnvelopeTrackIdJob $redispatch): bool {
+            return $redispatch->delay !== null
+                && $redispatch->delay->getTimestamp() >= now()->addSeconds(360)->getTimestamp() - 5;
+        });
     }
 }

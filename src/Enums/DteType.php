@@ -38,4 +38,20 @@ enum DteType: int
 
     /** Electronic credit note. */
     case CreditNote = 61;
+
+    /**
+     * Check if the DTE Type is essentially a receipt.
+     */
+    public function isReceipt(): bool
+    {
+        return $this === self::Receipt || $this === self::ExemptReceipt;
+    }
+
+    /**
+     * Check if the DTE Type is not a receipt.
+     */
+    public function isNotReceipt(): bool
+    {
+        return !$this->isReceipt();
+    }
 }

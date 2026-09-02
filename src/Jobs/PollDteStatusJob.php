@@ -3,24 +3,37 @@
 namespace Laragear\Dte\Jobs;
 
 use Exception;
+use Illuminate\Contracts\Config\Repository as ConfigRepository;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Queue\Attributes\Backoff;
+use Illuminate\Queue\Attributes\Timeout;
+use Illuminate\Queue\Attributes\Tries;
 use Illuminate\Support\DateFactory;
 use Illuminate\Support\Str;
 use Laragear\Dte\Enums\DteStatus;
-use Laragear\Dte\Enums\DteType as Type;
 use Laragear\Dte\Events\DteAccepted;
 use Laragear\Dte\Events\DteRejected;
 use Laragear\Dte\Gateways\BoletaRestGateway;
+use Laragear\Dte\Gateways\Exceptions\TokenInvalidException;
 use Laragear\Dte\Gateways\SoapGateway;
 use Laragear\Dte\Models\SiiDte;
+use Laragear\Dte\Support\TokenAuthenticator;
 use Laragear\Dte\Support\XmlDomFactory;
 use Psr\Log\LoggerInterface;
 
+#[Backoff([30, 60, 120, 300, 600])]
+#[Tries(5)]
+#[Timeout(120)]
 class PollDteStatusJob implements ShouldQueue
 {
     use Queueable;
+
+    /**
+     * The token authenticator, assigned at handle time (not serialized).
+     */
+    protected TokenAuthenticator $authenticator;
 
     /**
      * Create a new job instance.
@@ -39,17 +52,19 @@ class PollDteStatusJob implements ShouldQueue
         Dispatcher $event,
         SoapGateway $gateway,
         BoletaRestGateway $boletaGateway,
+        TokenAuthenticator $authenticator,
         XmlDomFactory $xmlDomFactory,
         DateFactory $date,
     ): void {
+        $this->authenticator = $authenticator;
+
         if ($this->dte->status->isTerminalState()) {
             return;
         }
 
         try {
-            if ($this->dte->document_type === Type::Receipt || $this->dte->document_type === Type::ExemptReceipt) {
-                $status = $boletaGateway->documentStatus($this->dte);
-                $this->processBoletaDteStatus($status, $event, $log, $date);
+            if ($this->dte->document_type->isReceipt()) {
+                $this->processBoletaDteStatus($boletaGateway->documentStatus($this->dte), $event, $log, $date);
             } else {
                 $this->processDteStatus($this->queryDteStatus($gateway), $event, $log, $xmlDomFactory, $date);
             }
@@ -62,27 +77,56 @@ class PollDteStatusJob implements ShouldQueue
 
     /**
      * Queries the SII for the current status of the DTE.
+     *
+     * Uses the authenticator's retryWithFreshToken() loop: on
+     * TokenInvalidException (SII returned 001/002/003), the authenticator
+     * refreshes the token and retries — up to 3 total attempts.
      */
     protected function queryDteStatus(SoapGateway $gateway): string
     {
         $issuer = $this->dte->issuer_rut;
-        $token = $gateway->token($issuer);
 
-        $response = $gateway->query($issuer, 'QueryEstDte', 'getEstDte', [
-            'RutConsultante' => $issuer->num,
-            'DvConsultante' => $issuer->vd,
-            'RutCompania' => $issuer->num,
-            'DvCompania' => $issuer->vd,
-            'RutReceptor' => $this->dte->receiver_rut->num,
-            'DvReceptor' => $this->dte->receiver_rut->vd,
-            'TipoDte' => $this->dte->document_type->value,
-            'FolioDte' => $this->dte->folio,
-            'FechaEmisionDte' => $this->dte->issued_on->format('dmY'),
-            'MontoDte' => $this->dte->amount_total,
-            'Token' => $token->value,
+        return $this->authenticator->retryWithFreshToken(function () use ($gateway, $issuer): string {
+            $token = $this->authenticator->token($issuer);
+
+            $response = $gateway->query($token, 'QueryEstDte', 'getEstDte', [
+                'RutConsultante' => $issuer->num,
+                'DvConsultante' => $issuer->vd,
+                'RutCompania' => $issuer->num,
+                'DvCompania' => $issuer->vd,
+                'RutReceptor' => $this->dte->receiver_rut->num,
+                'DvReceptor' => $this->dte->receiver_rut->vd,
+                'TipoDte' => $this->dte->document_type->value,
+                'FolioDte' => $this->dte->folio,
+                'FechaEmisionDte' => $this->dte->issued_on->format('dmY'),
+                'MontoDte' => $this->dte->amount_total,
+                'Token' => $token->value,
+            ]);
+
+            $xml = is_object($response) ? $response->getEstDteResult ?? '' : (string) $response;
+
+            // SII returns 001/002/003 for an invalid token — signal the trait to refresh.
+            if ($this->isTokenInvalidStatus($xml)) {
+                throw new TokenInvalidException('SII SOAP token was invalidated (001/002/003).');
+            }
+
+            return $xml;
+        }, $issuer);
+    }
+
+    /**
+     * Checks if the XML response indicates an invalid/expired SOAP token.
+     *
+     * SII returns 001 (inactive), 002 (invalid) or 003 (invalid) for a token
+     * that must be refreshed by re-authenticating.
+     */
+    protected function isTokenInvalidStatus(string $xml): bool
+    {
+        return Str::contains($xml, [
+            '<ESTADO>001</ESTADO>',
+            '<ESTADO>002</ESTADO>',
+            '<ESTADO>003</ESTADO>',
         ]);
-
-        return is_object($response) ? $response->getEstDteResult ?? '' : (string) $response;
     }
 
     /**
@@ -182,5 +226,13 @@ class PollDteStatusJob implements ShouldQueue
         if ($this->dte->relationLoaded('payload') || $this->dte->payload) {
             $this->dte->payload->update(['sii_response' => $raw]);
         }
+    }
+
+    /**
+     * Computes the minimum delay before the next DTE status poll.
+     */
+    protected function effectiveDelay(ConfigRepository $config): int
+    {
+        return 120 + max(0, (int) $config->get('dte.polling.delay_under_30kb', 0));
     }
 }

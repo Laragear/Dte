@@ -7,6 +7,11 @@ use InvalidArgumentException;
 class Folio
 {
     /**
+     * The maximum number of folios a single range may expand into via `normalize()`, to avoid OOM.
+     */
+    public const int MAX_EXPANDABLE_FOLIOS = 10000;
+
+    /**
      * Create a new Folio instance.
      */
     public function __construct(
@@ -15,13 +20,16 @@ class Folio
         public int $current,
         public array $annuled = [],
     ) {
-        //
+        $this->annuled = $this->mergeAll($this->annuled);
     }
 
     /**
      * Normalizes folio arguments (integers and `[from, to]` ranges) into a flat list of concrete folio numbers.
      *
-     * @param array<int|string|array{int, int}> $folios
+     * Ranges spanning more than `MAX_EXPANDABLE_FOLIOS` folios are refused, to avoid
+     * unbounded in-memory expansion.
+     *
+     * @param  array<int|array{int, int}>  $folios
      *
      * @return array<int>
      */
@@ -32,6 +40,12 @@ class Folio
         foreach ($folios as $folio) {
             if (is_array($folio)) {
                 [$from, $to] = self::range($folio);
+
+                if ($to - $from + 1 > static::MAX_EXPANDABLE_FOLIOS) {
+                    throw new InvalidArgumentException(
+                        "Folio range [$from, $to] is too large for flat expansion.",
+                    );
+                }
 
                 for ($folio = $from; $folio <= $to; $folio++) {
                     $normalized[] = $folio;
@@ -64,22 +78,158 @@ class Folio
     }
 
     /**
+     * Merges a mixed list of integers and `[from, to]` ranges into a sorted, merged, non-overlapping tuple list.
+     *
+     * @param  array<int|array{int, int}>  $folios
+     *
+     * @return array<int, array{int, int}>
+     */
+    private function mergeAll(array $folios): array
+    {
+        $merged = [];
+
+        foreach ($folios as $folio) {
+            if (is_array($folio)) {
+                [$from, $to] = self::range($folio);
+            } else {
+                $from = $to = (int) $folio;
+            }
+
+            $merged = $this->insertRange($merged, $from, $to);
+        }
+
+        return $merged;
+    }
+
+    /**
+     * Inserts a `[from, to]` range into a sorted tuple list, merging overlapping or adjacent ranges.
+     *
+     * @param  array<int, array{int, int}>  $ranges
+     *
+     * @return array<int, array{int, int}>
+     */
+    private function insertRange(array $ranges, int $from, int $to): array
+    {
+        if ($ranges === []) {
+            return [[$from, $to]];
+        }
+
+        $result = [];
+        // The currently carried (merged) range that has not yet been flushed to $result.
+        $carryFrom = null;
+        $carryTo = null;
+
+        foreach ($ranges as [$a, $b]) {
+            if ($carryFrom !== null && $from > $carryTo + 1) {
+                $result[] = [$carryFrom, $carryTo];
+                $carryFrom = null;
+                $carryTo = null;
+            }
+
+            if ($carryFrom === null && $from > $b + 1) {
+                $result[] = [$a, $b];
+                continue;
+            }
+
+            if ($carryFrom === null && $to < $a - 1) {
+                $result[] = [$from, $to];
+                $result[] = [$a, $b];
+                continue;
+            }
+
+            $from = min($from, $a);
+            $to = max($to, $b);
+            $carryFrom = $from;
+            $carryTo = $to;
+        }
+
+        $result[] = [$carryFrom ?? $from, $carryTo ?? $to];
+
+        return $result;
+    }
+
+    /**
+     * Merges a `[from, to]` range into the current annulment list, keeping it sorted and non-overlapping.
+     */
+    private function mergeRange(int $from, int $to): void
+    {
+        $this->annuled = $this->insertRange($this->annuled, $from, $to);
+    }
+
+    /**
+     * Removes a `[from, to]` range from the current annulment list, splitting partial overlaps.
+     */
+    private function subtractRange(int $from, int $to): void
+    {
+        $result = [];
+
+        foreach ($this->annuled as [$a, $b]) {
+            if ($b < $from || $a > $to) {
+                $result[] = [$a, $b];
+                continue;
+            }
+
+            if ($a < $from && $b > $to) {
+                $result[] = [$a, $from - 1];
+                $result[] = [$to + 1, $b];
+                continue;
+            }
+
+            if ($a < $from && $b >= $from && $b <= $to) {
+                $result[] = [$a, $from - 1];
+                continue;
+            }
+
+            if ($b > $to && $a >= $from && $a <= $to) {
+                $result[] = [$to + 1, $b];
+                continue;
+            }
+        }
+
+        $this->annuled = array_values($result);
+    }
+
+    /**
+     * Finds the annuled range containing the given folio via binary search.
+     *
+     * @return array{int, int}|null
+     */
+    private function rangeContaining(int $folio): ?array
+    {
+        $low = 0;
+        $high = count($this->annuled) - 1;
+
+        while ($low <= $high) {
+            $mid = intdiv($low + $high, 2);
+            [$from, $to] = $this->annuled[$mid];
+
+            if ($folio < $from) {
+                $high = $mid - 1;
+            } elseif ($folio > $to) {
+                $low = $mid + 1;
+            } else {
+                return $this->annuled[$mid];
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Annuls specific folios or ranges (e.g., 4, 5, [7, 88]).
      *
      * @return $this
      */
-    public function annul(int|string|array ...$folios): static
+    public function annul(int|array ...$folios): static
     {
         foreach ($folios as $folio) {
             if (is_array($folio)) {
-                $folio = self::range($folio);
-            } elseif (is_string($folio)) {
-                $folio = (int) $folio;
+                [$from, $to] = self::range($folio);
+            } else {
+                $from = $to = (int) $folio;
             }
 
-            if (!in_array($folio, $this->annuled, true)) {
-                $this->annuled[] = $folio;
-            }
+            $this->mergeRange($from, $to);
         }
 
         return $this;
@@ -110,23 +260,17 @@ class Folio
      *
      * @return $this
      */
-    public function restore(int|string|array ...$folios): static
+    public function restore(int|array ...$folios): static
     {
         foreach ($folios as $folio) {
             if (is_array($folio)) {
-                $folio = self::range($folio);
-            } elseif (is_string($folio)) {
-                $folio = (int) $folio;
+                [$from, $to] = self::range($folio);
+            } else {
+                $from = $to = (int) $folio;
             }
 
-            $key = array_search($folio, $this->annuled, true);
-
-            if ($key !== false) {
-                unset($this->annuled[$key]);
-            }
+            $this->subtractRange($from, $to);
         }
-
-        $this->annuled = array_values($this->annuled);
 
         return $this;
     }
@@ -146,22 +290,7 @@ class Folio
      */
     public function isAnnuled(int $folio): bool
     {
-        foreach ($this->annuled as $item) {
-            if (is_int($item) && $item === $folio) {
-                return true;
-            }
-            if (is_array($item)) {
-                [$from, $to] = $item;
-                if ($from > $to) {
-                    [$from, $to] = [$to, $from];
-                }
-                if ($folio >= $from && $folio <= $to) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
+        return $this->rangeContaining($folio) !== null;
     }
 
     /**
@@ -211,15 +340,11 @@ class Folio
     {
         $folio = $this->current;
 
-        while ($this->isAnnuled($folio) && $folio <= $this->to) {
-            $folio++;
+        while ($folio <= $this->to && ($range = $this->rangeContaining($folio)) !== null) {
+            $folio = $range[1] + 1;
         }
 
-        if ($folio > $this->to) {
-            return null;
-        }
-
-        return $folio;
+        return $folio <= $this->to ? $folio : null;
     }
 
     /**
@@ -229,15 +354,11 @@ class Folio
     {
         $folio = $this->to;
 
-        while ($this->isAnnuled($folio) && $folio >= $this->current) {
-            $folio--;
+        while ($folio >= $this->current && ($range = $this->rangeContaining($folio)) !== null) {
+            $folio = $range[0] - 1;
         }
 
-        if ($folio < $this->current) {
-            return null;
-        }
-
-        return $folio;
+        return $folio >= $this->current ? $folio : null;
     }
 
     /**
@@ -245,40 +366,48 @@ class Folio
      */
     public function remaining(): int
     {
-        $count = 0;
+        $total = $this->to - $this->current + 1;
 
-        for ($i = $this->current; $i <= $this->to; $i++) {
-            if ($this->isNotAnnuled($i)) {
-                $count++;
+        $annuled = 0;
+
+        foreach ($this->annuled as [$from, $to]) {
+            if ($to < $this->current || $from > $this->to) {
+                continue;
             }
+
+            $annuled += min($to, $this->to) - max($from, $this->current) + 1;
         }
 
-        return $count;
+        return max(0, $total - $annuled);
     }
 
     /**
      * Groups consecutive available folio ranges into groups, like `[[1, 4], [6, 10]]`.
+     *
+     * @return array<int, array{int, int}>
      */
     public function blocks(): array
     {
         $blocks = [];
-        $blockStart = null;
+        $from = $this->current;
 
-        for ($i = $this->current; $i <= $this->to; $i++) {
-            if ($this->isNotAnnuled($i)) {
-                if ($blockStart === null) {
-                    $blockStart = $i;
-                }
-            } else {
-                if ($blockStart !== null) {
-                    $blocks[] = [$blockStart, $i - 1];
-                    $blockStart = null;
-                }
+        foreach ($this->annuled as [$a, $b]) {
+            if ($b < $this->current || $a > $this->to) {
+                continue;
             }
+
+            $a = max($a, $this->current);
+            $b = min($b, $this->to);
+
+            if ($from < $a) {
+                $blocks[] = [$from, $a - 1];
+            }
+
+            $from = max($from, $b + 1);
         }
 
-        if ($blockStart !== null) {
-            $blocks[] = [$blockStart, $this->to];
+        if ($from <= $this->to) {
+            $blocks[] = [$from, $this->to];
         }
 
         return $blocks;
@@ -289,8 +418,8 @@ class Folio
      */
     public function next(): ?int
     {
-        while ($this->isAnnuled($this->current) && $this->current <= $this->to) {
-            $this->current++;
+        while ($this->current <= $this->to && ($range = $this->rangeContaining($this->current)) !== null) {
+            $this->current = $range[1] + 1;
         }
 
         if ($this->current > $this->to) {

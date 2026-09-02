@@ -25,7 +25,7 @@ class DispatchGuideBuilderTest extends DatabaseTestCase
     {
         parent::setUp();
 
-        ConfigurationManager::setCompany(fn () => CompanyData::make(
+        ConfigurationManager::setCompany(fn() => CompanyData::make(
             IssuerData::make(
                 '76.123.456-0',
                 'Test Company',

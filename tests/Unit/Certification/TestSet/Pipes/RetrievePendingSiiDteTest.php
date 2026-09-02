@@ -26,8 +26,8 @@ class RetrievePendingSiiDteTest extends DatabaseTestCase
     public static function providesOneOrManyPendingSiiDte(): iterable
     {
         return [
-            'one' => [fn (Rut $rut) => SiiDte::factory(['issuer_rut' => $rut])->create()],
-            'many' => [fn (Rut $rut) => SiiDte::factory(2, ['issuer_rut' => $rut])->create()],
+            'one' => [fn(Rut $rut) => SiiDte::factory(['issuer_rut' => $rut])->create()],
+            'many' => [fn(Rut $rut) => SiiDte::factory(2, ['issuer_rut' => $rut])->create()],
         ];
     }
 

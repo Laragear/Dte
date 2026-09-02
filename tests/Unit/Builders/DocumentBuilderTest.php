@@ -44,7 +44,7 @@ class DocumentBuilderTest extends DatabaseTestCase
     {
         parent::setUp();
 
-        ConfigurationManager::setCompany(fn () => CompanyData::make(
+        ConfigurationManager::setCompany(fn() => CompanyData::make(
             IssuerData::make(
                 '76.123.456-0',
                 'Test Company',
@@ -73,7 +73,7 @@ class DocumentBuilderTest extends DatabaseTestCase
     {
         yield 'bool' => [true];
         yield 'integer' => [1];
-        yield 'callback' => [static fn (SiiDte $dte, ReceiptBuilder $builder) => true];
+        yield 'callback' => [static fn(SiiDte $dte, ReceiptBuilder $builder) => true];
     }
 
     /**
@@ -130,8 +130,8 @@ class DocumentBuilderTest extends DatabaseTestCase
         static::assertPendingDocument($dte, $issuer->rut->formatRaw(), $receiver->rut->formatRaw());
         static::assertSame('Consulting service', $dte->payload->data['items'][0]['name']);
         static::assertSame('2026-08-13', $dte->payload->data['issued_on']);
-        $events->assertDispatched(DteCreating::class, fn (DteCreating $event): bool => $event->builder === $builder);
-        $events->assertDispatched(DteCreated::class, fn (DteCreated $event): bool => $event->dte->is($dte));
+        $events->assertDispatched(DteCreating::class, fn(DteCreating $event): bool => $event->builder === $builder);
+        $events->assertDispatched(DteCreated::class, fn(DteCreated $event): bool => $event->dte->is($dte));
 
         $queue->assertPushed(QueuedCommand::class, function (QueuedCommand $job) {
             $this->app->call($job->handle(...));
@@ -338,15 +338,16 @@ class DocumentBuilderTest extends DatabaseTestCase
 
     public function test_handles_exempt_documents_and_modifiers_and_references(): void
     {
-        $builder = new class extends DocumentBuilder
-        {
+        $builder = new class extends DocumentBuilder {
             public $mockGlobal = [];
 
             public $mockItems = [];
 
             public $typeMock = DteType::InvoiceExempt;
 
-            public function __construct() {}
+            public function __construct()
+            {
+            }
 
             protected function buildDocument(): array
             {
@@ -473,7 +474,8 @@ class DocumentBuilderTest extends DatabaseTestCase
     {
         $builder = $this->app->make(InvoiceBuilder::class);
         $builder->issuedBy(BuilderFixture::issuer());
-        $builder->receivedBy(ReceiverData::make(\Laragear\Rut\Facades\Generator::asCompanies()->makeOne(), 'Company')); // Missing address and commune
+        $builder->receivedBy(ReceiverData::make(\Laragear\Rut\Facades\Generator::asCompanies()->makeOne(),
+            'Company')); // Missing address and commune
         $builder->addItem(BuilderFixture::item());
         $this->expectException(LogicException::class);
         $this->expectExceptionMessage('B2B documents require a receiver with a business activity, address, and commune.');

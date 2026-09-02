@@ -19,10 +19,10 @@ use Laragear\Dte\Data\ReceiverData;
 use Laragear\Dte\Data\ReferenceData;
 use Laragear\Dte\Enums\DteStatus;
 use Laragear\Dte\Enums\DteType;
+use Laragear\Dte\Enums\SiiTaxes;
 use Laragear\Dte\Events\DteCreated;
 use Laragear\Dte\Events\DteCreating;
 use Laragear\Dte\Models\SiiDte;
-use Laragear\Dte\Support\SiiTaxes;
 use Laragear\Rut\Rut;
 use LogicException;
 use function array_map;
@@ -219,7 +219,7 @@ abstract class DocumentBuilder
         }
 
         $this->items = array_map(
-            fn (array $item): Item => Item::make(
+            fn(array $item): Item => Item::make(
                 $item['name'],
                 $item['unit_price'],
                 $item['quantity'] ?? 1,
@@ -235,7 +235,7 @@ abstract class DocumentBuilder
         );
 
         $this->references = array_map(
-            fn (array $reference): ReferenceData => ReferenceData::make(
+            fn(array $reference): ReferenceData => ReferenceData::make(
                 $reference['document_type'],
                 $reference['folio'],
                 new DateTimeImmutable($reference['date']),
@@ -497,7 +497,7 @@ abstract class DocumentBuilder
             if ($this->documentType() === DteType::InvoiceExempt || $this->documentType() === DteType::ExemptReceipt) {
                 $tax = 0;
             } else {
-                $tax = (int) round($net * 0.19, mode: PHP_ROUND_HALF_UP);
+                $tax = (int) round($net * SiiTaxes::ivaDecimal(), mode: PHP_ROUND_HALF_UP);
             }
         }
 

@@ -109,7 +109,6 @@ class InboundDteProcessorTest extends DatabaseTestCase
                 ->andReturn($mockResponse);
 
             $mock->expects('withWsdl')->andReturnSelf();
-            $mock->expects('withOptions')->andReturnSelf();
             $mock->expects('build')->andReturn($soapClient);
         });
 
@@ -233,7 +232,6 @@ class InboundDteProcessorTest extends DatabaseTestCase
             $soapClient->expects('__soapCall')->andThrow(new RuntimeException('WS Error'));
 
             $mock->expects('withWsdl')->andReturnSelf();
-            $mock->expects('withOptions')->andReturnSelf();
             $mock->expects('build')->andReturn($soapClient);
         });
 
@@ -352,7 +350,6 @@ class InboundDteProcessorTest extends DatabaseTestCase
             $soapClient->expects('__soapCall')->andReturn($mockResponse);
 
             $mock->expects('withWsdl')->andReturnSelf();
-            $mock->expects('withOptions')->andReturnSelf();
             $mock->expects('build')->andReturn($soapClient);
         });
 

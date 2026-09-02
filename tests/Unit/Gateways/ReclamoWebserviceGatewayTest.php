@@ -5,7 +5,6 @@ namespace Tests\Unit\Gateways;
 use DateTimeImmutable;
 use Illuminate\Config\Repository;
 use Illuminate\Contracts\Foundation\Application;
-use Laragear\Dte\Contracts\TokenProviderInterface;
 use Laragear\Dte\Enums\DteEnvironment as DteEnv;
 use Laragear\Dte\Enums\InboundDteStatus;
 use Laragear\Dte\Environment\EnvironmentResolver;
@@ -13,6 +12,7 @@ use Laragear\Dte\Gateways\ReclamoWebserviceGateway;
 use Laragear\Dte\Gateways\Token;
 use Laragear\Dte\Models\SiiInboundDocument;
 use Laragear\Dte\Support\SoapProxy;
+use Laragear\Dte\Support\TokenAuthenticator;
 use Mockery;
 use Mockery\MockInterface;
 use RuntimeException;
@@ -24,7 +24,11 @@ class ReclamoWebserviceGatewayTest extends DatabaseTestCase
     protected function makeGateway(DteEnv $environment = DteEnv::Production): ReclamoWebserviceGateway
     {
         $token = new Token('sii-reclamo-token', new DateTimeImmutable('+1 hour'));
-        $this->mock(TokenProviderInterface::class)->expects('token')->andReturn($token);
+        $this->mock(TokenAuthenticator::class, static function (MockInterface $mock) use ($token): void {
+            $mock->expects('token')->zeroOrMoreTimes()->andReturn($token);
+            $mock->expects('retryWithFreshToken')->zeroOrMoreTimes()
+                ->andReturnUsing(fn($request, $issuer) => $request());
+        });
 
         $mockClient = Mockery::mock(SoapClient::class, static function (MockInterface $mock): void {
             $mock->expects('__setSoapHeaders');
@@ -38,7 +42,6 @@ class ReclamoWebserviceGatewayTest extends DatabaseTestCase
 
         $this->mock(SoapProxy::class, static function (MockInterface $mock) use ($mockClient): void {
             $mock->expects('withWsdl')->andReturnSelf();
-            $mock->expects('withOptions')->andReturnSelf();
             $mock->expects('build')->andReturn($mockClient);
         });
 
@@ -83,7 +86,11 @@ class ReclamoWebserviceGatewayTest extends DatabaseTestCase
     public function test_does_nothing_in_local_environment(): void
     {
         $token = new Token('sii-token', new DateTimeImmutable('+1 hour'));
-        $this->mock(TokenProviderInterface::class)->expects('token')->andReturn($token);
+        $this->mock(TokenAuthenticator::class, static function (MockInterface $mock) use ($token): void {
+            $mock->expects('token')->zeroOrMoreTimes()->andReturn($token);
+            $mock->expects('retryWithFreshToken')->zeroOrMoreTimes()
+                ->andReturnUsing(fn($request, $issuer) => $request());
+        });
 
         $this->mock(SoapProxy::class)->shouldNotReceive('build');
 
@@ -119,7 +126,11 @@ class ReclamoWebserviceGatewayTest extends DatabaseTestCase
     {
         $document = $this->makeDocument();
         $token = new Token('sii-token', new DateTimeImmutable('+1 hour'));
-        $this->mock(TokenProviderInterface::class)->expects('token')->andReturn($token);
+        $this->mock(TokenAuthenticator::class, static function (MockInterface $mock) use ($token): void {
+            $mock->expects('token')->zeroOrMoreTimes()->andReturn($token);
+            $mock->expects('retryWithFreshToken')->zeroOrMoreTimes()
+                ->andReturnUsing(fn($request, $issuer) => $request());
+        });
 
         $mockClient = Mockery::mock(SoapClient::class, static function (MockInterface $mock): void {
             $mock->expects('__setSoapHeaders');
@@ -132,7 +143,6 @@ class ReclamoWebserviceGatewayTest extends DatabaseTestCase
 
         $this->mock(SoapProxy::class, static function (MockInterface $mock) use ($mockClient): void {
             $mock->expects('withWsdl')->andReturnSelf();
-            $mock->expects('withOptions')->andReturnSelf();
             $mock->expects('build')->andReturn($mockClient);
         });
 

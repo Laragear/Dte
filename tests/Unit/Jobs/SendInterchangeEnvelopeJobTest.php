@@ -8,6 +8,9 @@ use Illuminate\Contracts\Mail\Factory;
 use Illuminate\Contracts\Mail\Mailer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Mail\PendingMail;
+use Illuminate\Queue\Attributes\Backoff;
+use Illuminate\Queue\Attributes\Timeout;
+use Illuminate\Queue\Attributes\Tries;
 use Illuminate\Support\Facades\Mail;
 use Laragear\Dte\Actions\CreateEnvelope\Assembly;
 use Laragear\Dte\Actions\CreateEnvelope\CreateEnvelope;
@@ -21,6 +24,7 @@ use Laragear\Dte\Models\SiiDteEnvelope;
 use Mockery;
 use Mockery\MockInterface;
 use Psr\Log\LoggerInterface;
+use ReflectionClass;
 use RuntimeException;
 use Tests\DatabaseTestCase as TestCase;
 
@@ -206,5 +210,18 @@ class SendInterchangeEnvelopeJobTest extends TestCase
 
         $job = new SendInterchangeEnvelopeJob($envelope);
         $this->app->call($job->handle(...));
+    }
+
+    public function test_job_has_tries_backoff_and_timeout_attributes(): void
+    {
+        $reflection = new ReflectionClass(SendInterchangeEnvelopeJob::class);
+
+        $backoff = $reflection->getAttributes(Backoff::class)[0]->newInstance()->backoff;
+        $tries = $reflection->getAttributes(Tries::class)[0]->newInstance()->tries;
+        $timeout = $reflection->getAttributes(Timeout::class)[0]->newInstance()->timeout;
+
+        static::assertSame([60, 120, 300], $backoff);
+        static::assertSame(3, $tries);
+        static::assertSame(120, $timeout);
     }
 }

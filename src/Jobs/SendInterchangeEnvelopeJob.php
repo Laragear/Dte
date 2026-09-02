@@ -8,6 +8,9 @@ use Illuminate\Contracts\Mail\Factory as MailFactory;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\Attributes\Backoff;
+use Illuminate\Queue\Attributes\Timeout;
+use Illuminate\Queue\Attributes\Tries;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Laragear\Dte\Actions\CreateEnvelope\CreateEnvelope;
@@ -20,6 +23,9 @@ use Psr\Log\LoggerInterface;
 use RuntimeException;
 use Throwable;
 
+#[Backoff([60, 120, 300])]
+#[Tries(3)]
+#[Timeout(120)]
 class SendInterchangeEnvelopeJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;

@@ -37,7 +37,7 @@ class SiiCafFolioAnnulmentTest extends DatabaseTestCase
 
         static::assertSame($caf->getKey(), $returned->getKey());
         static::assertTrue($caf->folios->isAnnuled(15));
-        static::assertSame([15], $caf->fresh()->folio_annuled);
+        static::assertSame([[15, 15]], $caf->fresh()->folio_annuled);
         static::assertSame(12, $caf->fresh()->folio_current);
     }
 
@@ -47,7 +47,7 @@ class SiiCafFolioAnnulmentTest extends DatabaseTestCase
 
         $caf->annulFolios([10, 12, [14, 16]], 'Daños');
 
-        static::assertSame([10, 12, 14, 15, 16], $caf->fresh()->folio_annuled);
+        static::assertSame([[10, 10], [12, 12], [14, 16]], $caf->fresh()->folio_annuled);
     }
 
     public function test_throws_when_folio_out_of_range(): void
@@ -120,7 +120,7 @@ class SiiCafFolioAnnulmentTest extends DatabaseTestCase
         foreach ([11, 13, 17, 18] as $expected) {
             static::assertSame(
                 $expected,
-                $manager->allocate($caf->rut, DteType::Invoice, static fn (SiiCaf $selected, int $folio): int => $folio),
+                $manager->allocate($caf->rut, DteType::Invoice, static fn(SiiCaf $selected, int $folio): int => $folio),
             );
         }
     }
@@ -135,7 +135,7 @@ class SiiCafFolioAnnulmentTest extends DatabaseTestCase
 
         Event::assertDispatched(
             CafFoliosAnnuled::class,
-            fn (CafFoliosAnnuled $event): bool => $event->caf->getKey() === $caf->getKey() && $event->folios === [15],
+            fn(CafFoliosAnnuled $event): bool => $event->caf->getKey() === $caf->getKey() && $event->folios === [15],
         );
     }
 
@@ -148,7 +148,7 @@ class SiiCafFolioAnnulmentTest extends DatabaseTestCase
         static::assertFalse($caf->folios->isAnnuled(10));
         static::assertFalse($caf->folios->isAnnuled(14));
         static::assertTrue($caf->folios->isAnnuled(12));
-        static::assertSame([12], $caf->fresh()->folio_annuled);
+        static::assertSame([[12, 12]], $caf->fresh()->folio_annuled);
     }
 
     public function test_annuls_folios_and_persists(): void
@@ -158,6 +158,6 @@ class SiiCafFolioAnnulmentTest extends DatabaseTestCase
         $caf->annulFolios([15], 'Daños');
 
         static::assertTrue($caf->folios->isAnnuled(15));
-        static::assertSame([15], $caf->fresh()->folio_annuled);
+        static::assertSame([[15, 15]], $caf->fresh()->folio_annuled);
     }
 }

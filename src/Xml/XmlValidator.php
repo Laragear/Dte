@@ -22,6 +22,9 @@ class XmlValidator
 {
     public const string XMLDSIGNS = 'http://www.w3.org/2000/09/xmldsig#';
 
+    /**
+     * Create a new Xml Validator instance.
+     */
     public function __construct(
         protected Container $container,
         protected OpenSslProxy $openSsl,
@@ -66,7 +69,7 @@ class XmlValidator
         $previous = $this->libxml->use_internal_errors(true);
 
         try {
-            $loaded = $document->loadXML($xml, LIBXML_NONET | LIBXML_PARSEHUGE);
+            $loaded = $document->loadXML($xml, LIBXML_NONET);
 
             if (!$loaded) {
                 throw new RuntimeException('Invalid DTE XML: the document is malformed or empty.');

@@ -13,6 +13,12 @@ use Laragear\Dte\Models\SiiDteEnvelope;
 class PollTrackStatusCommand extends Command
 {
     /**
+     * Maximum delay (in seconds) a queued job may use. 900s = 15 minutes, which
+     * is the hard ceiling for AWS-based queue backends (SQS/SNS).
+     */
+    protected const int MAX_QUEUE_DELAY_SECONDS = 900;
+
+    /**
      * The name and signature of the console command.
      *
      * @var string
@@ -43,7 +49,7 @@ class PollTrackStatusCommand extends Command
         $dispatchedCount = 0;
 
         foreach ($this->envelopes($date, $pollingIntervalMinutes) as $envelope) {
-            $delay = $delayCounter * $backoffSeconds;
+            $delay = min(self::MAX_QUEUE_DELAY_SECONDS, $delayCounter * $backoffSeconds);
 
             // We advance the `updated_at` timestamp by the delay. This ensures that if there's a
             // massive queue of polling jobs (e.g., 500 jobs × 60s = 8.3 hours), the cron won't

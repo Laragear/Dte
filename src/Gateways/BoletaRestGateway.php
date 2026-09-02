@@ -3,29 +3,44 @@
 namespace Laragear\Dte\Gateways;
 
 use Illuminate\Http\Client\Factory as Http;
-use Laragear\Dte\Contracts\CertificateResolverInterface;
 use Laragear\Dte\Environment\EnvironmentResolver;
+use Laragear\Dte\Gateways\Exceptions\TokenInvalidException;
 use Laragear\Dte\Models\SiiDte;
 use Laragear\Dte\Models\SiiDteEnvelope;
-use Laragear\Dte\Support\XmlDomFactory;
-use Laragear\Dte\Xml\XmlSigner;
+use Laragear\Dte\SiiEndpoints;
+use Laragear\Dte\Support\TokenAuthenticator;
 use Laragear\Rut\Rut;
 use RuntimeException;
 
-readonly class BoletaRestGateway
+/**
+ * Transport for the SII Boleta REST API (upload, track and document status).
+ *
+ * Token fetching and caching are owned by the TokenAuthenticator; on a 401
+ * the refresh-and-retry loop asks it to refresh the REST token and retries.
+ */
+class BoletaRestGateway
 {
+    /**
+     * Response returned when there is no REST base URL (non-production
+     * environments): the SII "received" status without a real envelope.
+     */
+    protected const array FAKE_TRACK_STATUS = ['estado' => 'REC', 'glosa' => 'Faked status'];
+
+    /**
+     * Create a new Boleta Rest Gateway instance.
+     */
     public function __construct(
         protected Http $http,
         protected EnvironmentResolver $environment,
-        protected CertificateResolverInterface $certificates,
-        protected XmlSigner $signer,
-        protected XmlDomFactory $xml,
+        protected TokenAuthenticator $authenticator,
     ) {
         //
     }
 
     /**
-     * Get an authentication token for the given issuer RUT.
+     * Get an authentication token string for the given issuer RUT.
+     *
+     * Delegates to the TokenAuthenticator which handles cache read + SII auth.
      */
     public function getToken(Rut $issuerRut, ?string $authUrl = null): string
     {
@@ -35,64 +50,7 @@ readonly class BoletaRestGateway
             return 'fake-token';
         }
 
-        // 1. Get Seed
-        $seedResponse = $this->http->get($authUrl.'/boleta.electronica.semilla');
-
-        if ($seedResponse->failed()) {
-            throw new RuntimeException('Failed to get seed from SII.');
-        }
-
-        $seedDocument = $this->xml->document('1.0', 'UTF-8');
-        $seedDocument->loadXML($seedResponse->body());
-        $seed = $seedDocument->getElementsByTagName('SEMILLA')->item(0)?->nodeValue;
-
-        if (!$seed) {
-            throw new RuntimeException('Invalid seed response from SII.');
-        }
-
-        // 2. Create XML and sign it
-        $tokenXml = $this->xml->document('1.0', 'UTF-8');
-        $getToken = $tokenXml->createElement('getToken');
-        $getToken->setAttribute('ID', 'GetToken'); // Required by XmlSigner
-        $item = $tokenXml->createElement('item');
-        $semilla = $tokenXml->createElement('Semilla', $seed);
-
-        $item->appendChild($semilla);
-        $getToken->appendChild($item);
-        $tokenXml->appendChild($getToken);
-
-        $certificate = $this->certificates->resolve($issuerRut);
-        if (!$certificate) {
-            throw new RuntimeException('No digital certificate resolved for issuer '.$issuerRut->formatBasic());
-        }
-
-        $this->signer->sign($getToken, $certificate);
-
-        $tokenXmlString = $tokenXml->saveXML();
-        $tokenXmlString = str_replace(["\r", "\n"], '', $tokenXmlString);
-        $tokenXmlString = str_replace(
-            '<?xml version="1.0" encoding="UTF-8"?>',
-            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n",
-            $tokenXmlString
-        );
-
-        // 3. POST /boleta.electronica.token
-        $tokenResponse = $this->http->withBody($tokenXmlString, 'application/xml')
-            ->post($authUrl.'/boleta.electronica.token');
-
-        if ($tokenResponse->failed()) {
-            throw new RuntimeException('Failed to get token from SII.');
-        }
-
-        $tokenDocument = $this->xml->document();
-        $tokenDocument->loadXML($tokenResponse->body());
-        $token = $tokenDocument->getElementsByTagName('TOKEN')->item(0)?->nodeValue;
-
-        if (!$token) {
-            throw new RuntimeException('Invalid token response from SII.');
-        }
-
-        return $token;
+        return $this->authenticator->restToken($issuerRut, $authUrl);
     }
 
     /**
@@ -106,39 +64,46 @@ readonly class BoletaRestGateway
             return 'fake-track-id-'.$envelope->getKey();
         }
 
-        $token = $this->getToken($envelope->issuer_rut, $authUrl);
-
-        // 4. POST /boleta.electronica.envio
         $issuer = $envelope->issuer_rut;
-        $sender = $envelope->sender_rut;
 
-        $uploadResponse = $this->http->baseUrl($authUrl)
-            ->withCookies(['TOKEN' => $token], parse_url($authUrl, PHP_URL_HOST))
-            ->withHeaders(['User-Agent' => 'Mozilla/4.0 ( compatible; PROG 1.0; Windows NT)'])
-            ->timeout(60)
-            ->post('/boleta.electronica.envio', [
-                'rutSender' => $sender->num,
-                'dvSender' => $sender->vd,
-                'rutCompany' => $issuer->num,
-                'dvCompany' => $issuer->vd,
-                'archivo' => base64_encode($signedXml),
-            ]);
+        return $this->authenticator->retryRestWithFreshToken(function () use (
+            $envelope,
+            $signedXml,
+            $authUrl,
+            $issuer
+        ): string {
+            $token = $this->authenticator->restToken($issuer, $authUrl);
+            $sender = $envelope->sender_rut;
 
-        if ($uploadResponse->unauthorized()) {
-            throw new RuntimeException('SII Upload rejected the authentication token (401).');
-        }
+            // 4. POST /boleta.electronica.envio
+            $uploadResponse = $this->http->baseUrl($authUrl)
+                ->withCookies([SiiEndpoints::TOKEN_COOKIE => $token], parse_url($authUrl, PHP_URL_HOST))
+                ->withHeaders([SiiEndpoints::USER_AGENT_HEADER => SiiEndpoints::USER_AGENT])
+                ->timeout(60)
+                ->post('/boleta.electronica.envio', [
+                    'rutSender' => $sender->num,
+                    'dvSender' => $sender->vd,
+                    'rutCompany' => $issuer->num,
+                    'dvCompany' => $issuer->vd,
+                    'archivo' => base64_encode($signedXml),
+                ]);
 
-        if ($uploadResponse->failed()) {
-            throw new RuntimeException('SII Upload request failed with status '.$uploadResponse->status().'.');
-        }
+            if ($uploadResponse->unauthorized()) {
+                throw new TokenInvalidException('SII Upload rejected the authentication token (401).');
+            }
 
-        $trackId = $uploadResponse->json('trackid');
+            if ($uploadResponse->failed()) {
+                throw new RuntimeException('SII Upload request failed with status '.$uploadResponse->status().'.');
+            }
 
-        if (!$trackId) {
-            throw new RuntimeException('SII Upload response did not contain a valid TrackID.');
-        }
+            $trackId = $uploadResponse->json('trackid');
 
-        return (string) $trackId;
+            if (!$trackId) {
+                throw new RuntimeException('SII Upload response did not contain a valid TrackID.');
+            }
+
+            return (string) $trackId;
+        }, $issuer);
     }
 
     /**
@@ -149,27 +114,30 @@ readonly class BoletaRestGateway
         $authUrl ??= $this->environment->resolve()->restBaseUrl();
 
         if ($authUrl === null) {
-            return ['estado' => 'REC', 'glosa' => 'Faked status'];
+            return static::FAKE_TRACK_STATUS;
         }
 
-        $token = $this->getToken($envelope->issuer_rut, $authUrl);
         $issuer = $envelope->issuer_rut;
 
-        $response = $this->http->baseUrl($authUrl)
-            ->withCookies(['TOKEN' => $token], parse_url($authUrl, PHP_URL_HOST))
-            ->withHeaders(['User-Agent' => 'Mozilla/4.0 ( compatible; PROG 1.0; Windows NT)'])
-            ->timeout(30)
-            ->get(sprintf('/boleta.electronica.envio/%s-%s-%s', $issuer->num, $issuer->vd, $envelope->track_id));
+        return $this->authenticator->retryRestWithFreshToken(function () use ($envelope, $authUrl, $issuer): array {
+            $token = $this->authenticator->restToken($issuer, $authUrl);
 
-        if ($response->unauthorized()) {
-            throw new RuntimeException('SII Status Query rejected the authentication token (401).');
-        }
+            $response = $this->http->baseUrl($authUrl)
+                ->withCookies([SiiEndpoints::TOKEN_COOKIE => $token], parse_url($authUrl, PHP_URL_HOST))
+                ->withHeaders([SiiEndpoints::USER_AGENT_HEADER => SiiEndpoints::USER_AGENT])
+                ->timeout(30)
+                ->get(sprintf('/boleta.electronica.envio/%s-%s-%s', $issuer->num, $issuer->vd, $envelope->track_id));
 
-        if ($response->failed()) {
-            throw new RuntimeException('SII Status Query failed with status '.$response->status().'.');
-        }
+            if ($response->unauthorized()) {
+                throw new TokenInvalidException('SII Status Query rejected the authentication token (401).');
+            }
 
-        return $response->json() ?? [];
+            if ($response->failed()) {
+                throw new RuntimeException('SII Status Query failed with status '.$response->status().'.');
+            }
+
+            return $response->json() ?? [];
+        }, $issuer);
     }
 
     /**
@@ -180,48 +148,51 @@ readonly class BoletaRestGateway
         $authUrl ??= $this->environment->resolve()->restBaseUrl();
 
         if ($authUrl === null) {
-            return ['estado' => 'REC', 'glosa' => 'Faked status'];
+            return static::FAKE_TRACK_STATUS;
         }
 
-        $token = $this->getToken($dte->issuer_rut, $authUrl);
         $issuer = $dte->issuer_rut;
 
-        $receiverNum = '0';
-        $receiverVd = '0';
+        return $this->authenticator->retryRestWithFreshToken(function () use ($dte, $authUrl, $issuer): array {
+            $token = $this->authenticator->restToken($issuer, $authUrl);
 
-        if ($dte->receiver_rut && $dte->receiver_rut->formatRaw() !== '0') {
-            $receiverNum = $dte->receiver_rut->num;
-            $receiverVd = $dte->receiver_rut->vd;
-        }
+            $receiverNum = '0';
+            $receiverVd = '0';
 
-        $monto = $dte->amount_total;
-        $fecha = $dte->created_at->format('d-m-Y'); // Format expected? Wait, OpenAPI says: monto, fecha. Let's see query params or path?
+            if ($dte->receiver_rut && $dte->receiver_rut->formatRaw() !== '0') {
+                $receiverNum = $dte->receiver_rut->num;
+                $receiverVd = $dte->receiver_rut->vd;
+            }
 
-        // OpenAPI path: /boleta.electronica/{rut}-{dv}-{tipo}-{folio}/estado
-        $response = $this->http->baseUrl($authUrl)
-            ->withCookies(['TOKEN' => $token], parse_url($authUrl, PHP_URL_HOST))
-            ->withHeaders(['User-Agent' => 'Mozilla/4.0 ( compatible; PROG 1.0; Windows NT)'])
-            ->timeout(30)
-            ->get(sprintf(
-                '/boleta.electronica/%s-%s-%s-%s/estado',
-                $issuer->num,
-                $issuer->vd,
-                $dte->document_type->value,
-                $dte->folio
-            ), [
-                'rut_receptor' => $receiverNum.'-'.$receiverVd,
-                'monto' => $monto,
-                'fechaEmision' => $fecha,
-            ]);
+            $monto = $dte->amount_total;
+            $fecha = $dte->issued_on->format('d-m-Y');
 
-        if ($response->unauthorized()) {
-            throw new RuntimeException('SII Document Status Query rejected the authentication token (401).');
-        }
+            // OpenAPI path: /boleta.electronica/{rut}-{dv}-{tipo}-{folio}/estado
+            $response = $this->http->baseUrl($authUrl)
+                ->withCookies([SiiEndpoints::TOKEN_COOKIE => $token], parse_url($authUrl, PHP_URL_HOST))
+                ->withHeaders([SiiEndpoints::USER_AGENT_HEADER => SiiEndpoints::USER_AGENT])
+                ->timeout(30)
+                ->get(sprintf(
+                    '/boleta.electronica/%s-%s-%s-%s/estado',
+                    $issuer->num,
+                    $issuer->vd,
+                    $dte->document_type->value,
+                    $dte->folio
+                ), [
+                    'rut_receptor' => $receiverNum.'-'.$receiverVd,
+                    'monto' => $monto,
+                    'fechaEmision' => $fecha,
+                ]);
 
-        if ($response->failed()) {
-            throw new RuntimeException('SII Document Status Query failed with status '.$response->status().'.');
-        }
+            if ($response->unauthorized()) {
+                throw new TokenInvalidException('SII Document Status Query rejected the authentication token (401).');
+            }
 
-        return $response->json() ?? [];
+            if ($response->failed()) {
+                throw new RuntimeException('SII Document Status Query failed with status '.$response->status().'.');
+            }
+
+            return $response->json() ?? [];
+        }, $issuer);
     }
 }

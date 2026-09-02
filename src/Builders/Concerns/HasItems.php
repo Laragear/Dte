@@ -5,6 +5,7 @@ namespace Laragear\Dte\Builders\Concerns;
 use InvalidArgumentException;
 use Laragear\Dte\Contracts\Itemable;
 use Laragear\Dte\Data\Item;
+use Laragear\Dte\Enums\SiiTaxes;
 use OverflowException;
 use function count;
 use function is_string;
@@ -13,8 +14,6 @@ use function round;
 trait HasItems
 {
     protected const int MAX_ITEMS = 60;
-
-    protected const float IVA_RATE = 0.19;
 
     /** @var list<Item> */
     protected array $items = [];
@@ -86,7 +85,7 @@ trait HasItems
      */
     public function taxAmount(): int
     {
-        return (int) round($this->netAmount() * static::IVA_RATE, mode: PHP_ROUND_HALF_UP);
+        return (int) round($this->netAmount() * SiiTaxes::ivaDecimal(), mode: PHP_ROUND_HALF_UP);
     }
 
     /**

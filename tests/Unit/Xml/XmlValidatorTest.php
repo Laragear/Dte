@@ -3,6 +3,8 @@
 namespace Tests\Unit\Xml;
 
 use DOMDocument;
+use DOMNode;
+use DOMXPath;
 use Exception;
 use Laragear\Dte\Certificate\DigitalCertificate;
 use Laragear\Dte\Support\LibxmlProxy;
@@ -307,13 +309,30 @@ class XmlValidatorTest extends TestCase
         $ssl = Mockery::mock(OpenSslProxy::class)->makePartial();
         $ssl->shouldReceive('verify')->andReturn(0); // 0 means invalid signature
 
-        $mock = new class($this->app, $ssl, $this->app->make(XmlDomFactory::class), $this->app->make(LibxmlProxy::class)) extends XmlValidator
-        {
-            protected function verifyDigest(\DOMXPath $xpath, \DOMNode $signature): void {}
+        $mock = new class($this->app, $ssl, $this->app->make(XmlDomFactory::class), $this->app->make(LibxmlProxy::class)) extends XmlValidator {
+            protected function verifyDigest(DOMXPath $xpath, DOMNode $signature): void
+            {
+            }
         };
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('Invalid DTE XML: XMLDSig signature verification failed.');
         $mock->verifySignature($xml);
+    }
+
+    public function test_parse_rejects_xml_over_10mb(): void
+    {
+        $validator = $this->makeValidator();
+
+        // A single text node larger than libxml2's default 10MB limit. The
+        // LIBXML_PARSEHUGE flag (which lifts this limit) must not be used when
+        // parsing inbound third-party XML.
+        $huge = str_repeat('a', (10 * 1024 * 1024) + 1);
+        $xml = '<?xml version="1.0"?><DTE><Documento ID="F1T33">'.$huge.'</Documento></DTE>';
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessageIs('Invalid DTE XML: the document is malformed or empty.');
+
+        $validator->validate($xml);
     }
 }

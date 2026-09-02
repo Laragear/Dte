@@ -6,6 +6,7 @@ use Laragear\Dte\Builders\Concerns\HasItems;
 use Laragear\Dte\Builders\Concerns\HasReferences;
 use Laragear\Dte\Enums\DteType;
 use Laragear\Dte\Enums\SiiRut;
+use Laragear\Dte\Enums\SiiTaxes;
 use Laragear\Rut\Rut;
 use LogicException;
 use function round;
@@ -28,7 +29,7 @@ class ReceiptBuilder extends DocumentBuilder
      */
     public function netAmount(): int
     {
-        return (int) round($this->grossAmount() / (1 + static::IVA_RATE), mode: PHP_ROUND_HALF_UP);
+        return (int) round($this->grossAmount() / (1 + SiiTaxes::ivaDecimal()), mode: PHP_ROUND_HALF_UP);
     }
 
     /**

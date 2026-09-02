@@ -173,7 +173,7 @@ class SiiCaf extends Model
             $locked->save();
 
             $this->getConnection()
-                ->afterCommit(fn (): mixed => CafFoliosAnnuled::dispatch($locked, $folios));
+                ->afterCommit(fn(): mixed => CafFoliosAnnuled::dispatch($locked, $folios));
 
             return $this->syncFolios($locked);
         });
@@ -193,7 +193,7 @@ class SiiCaf extends Model
             $locked->save();
 
             $this->getConnection()
-                ->afterCommit(fn (): mixed => CafFoliosRestored::dispatch($locked, $folios));
+                ->afterCommit(fn(): mixed => CafFoliosRestored::dispatch($locked, $folios));
 
             return $this->syncFolios($locked);
         });

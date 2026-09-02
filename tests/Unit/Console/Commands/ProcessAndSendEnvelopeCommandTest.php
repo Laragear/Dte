@@ -104,7 +104,7 @@ class ProcessAndSendEnvelopeCommandTest extends DatabaseTestCase
         $this->mock(CreateEnvelope::class, function (MockInterface $mock) use ($envelope): void {
             $mock
                 ->expects('send')
-                ->withArgs(fn ($s) => $s->is($envelope))
+                ->withArgs(fn($s) => $s->is($envelope))
                 ->once()
                 ->andReturnSelf();
             $mock

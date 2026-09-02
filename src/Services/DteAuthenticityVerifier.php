@@ -3,8 +3,11 @@
 namespace Laragear\Dte\Services;
 
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 use Laragear\Dte\Enums\DteType;
+use Laragear\Dte\Gateways\Exceptions\TokenInvalidException;
 use Laragear\Dte\Gateways\SoapGateway;
+use Laragear\Dte\Support\TokenAuthenticator;
 use Laragear\Dte\Support\XmlDomFactory;
 use Laragear\Rut\Rut;
 use Throwable;
@@ -17,6 +20,7 @@ class DteAuthenticityVerifier
     public function __construct(
         protected SoapGateway $soapGateway,
         protected XmlDomFactory $xml,
+        protected TokenAuthenticator $authenticator,
     ) {
         //
     }
@@ -34,26 +38,59 @@ class DteAuthenticityVerifier
         int $amountTotal,
     ): bool {
         try {
-            $response = $this->soapGateway->query($receiver, 'QueryEstDteAv', 'getEstDteAv', [
-                'RutEmisor' => $issuer->num,
-                'DvEmisor' => $issuer->vd,
-                'RutReceptor' => $receiver->num,
-                'DvReceptor' => $receiver->vd,
-                'TipoDoc' => (string) $type->value,
-                'Folio' => (string) $folio,
-                'FchEmis' => $issuedOn->format('d-m-Y'),
-                'MontoTotal' => (string) $amountTotal,
-                'Token' => $this->soapGateway->token($receiver)->value,
-            ]);
+            return $this->authenticator->retryWithFreshToken(function () use (
+                $issuer,
+                $receiver,
+                $type,
+                $folio,
+                $issuedOn,
+                $amountTotal
+            ): bool {
+                $token = $this->authenticator->token($receiver);
 
-            $xmlResponse = $this->xml->simpleXml($response->getEstDteAvResult);
-            $sii = $xmlResponse->children('http://www.sii.cl/XMLSchema');
-            $body = $sii->RESP_BODY->children('');
+                $response = $this->soapGateway->query($token, 'QueryEstDteAv', 'getEstDteAv', [
+                    'RutEmisor' => $issuer->num,
+                    'DvEmisor' => $issuer->vd,
+                    'RutReceptor' => $receiver->num,
+                    'DvReceptor' => $receiver->vd,
+                    'TipoDoc' => (string) $type->value,
+                    'Folio' => (string) $folio,
+                    'FchEmis' => $issuedOn->format('d-m-Y'),
+                    'MontoTotal' => (string) $amountTotal,
+                    'Token' => $token->value,
+                ]);
 
-            // 0: Aceptado, 3: Aceptado con Reparos
-            return in_array((string) $body->CODIGO_ESTADO, ['0', '3'], true);
+                $xml = is_object($response) ? (string) $response->getEstDteAvResult : (string) $response;
+
+                // SII returns 001/002/003 for an invalid token — signal the trait to refresh.
+                if ($this->isTokenInvalidStatus($xml)) {
+                    throw new TokenInvalidException('SII SOAP token was invalidated (001/002/003).');
+                }
+
+                $xmlResponse = $this->xml->simpleXml($xml);
+                $sii = $xmlResponse->children('http://www.sii.cl/XMLSchema');
+                $body = $sii->RESP_BODY->children('');
+
+                // 0: Aceptado, 3: Aceptado con Reparos
+                return in_array((string) $body->CODIGO_ESTADO, ['0', '3'], true);
+            }, $receiver);
         } catch (Throwable) {
             return false;
         }
+    }
+
+    /**
+     * Checks if the XML response indicates an invalid/expired SOAP token.
+     *
+     * SII returns 001 (inactive), 002 (invalid) or 003 (invalid) for a token
+     * that must be refreshed by re-authenticating.
+     */
+    protected function isTokenInvalidStatus(string $xml): bool
+    {
+        return Str::contains($xml, [
+            '<ESTADO>001</ESTADO>',
+            '<ESTADO>002</ESTADO>',
+            '<ESTADO>003</ESTADO>',
+        ]);
     }
 }

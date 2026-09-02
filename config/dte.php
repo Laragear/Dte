@@ -22,6 +22,21 @@ return [
 
     /*
      |--------------------------------------------------------------------------
+     | Tax Configuration
+     |--------------------------------------------------------------------------
+     |
+     | The current national IVA rate as an integer percentage. This is kept on
+     | the configuration because of future legislative rate changes: when the
+     | IVA changes, we will only needs a single edit here to propagate that.
+     |
+     */
+
+    'taxes' => [
+        'iva_rate' => env('DTE_IVA_RATE', 19),
+    ],
+
+    /*
+     |--------------------------------------------------------------------------
      | Digital Certificate Configuration
      |--------------------------------------------------------------------------
      |
@@ -73,6 +88,22 @@ return [
 
     /*
      |--------------------------------------------------------------------------
+     | Polling
+     |--------------------------------------------------------------------------
+     |
+     | SII requires a minimum wait before the first status poll after an envelope
+     | is uploaded, based on its size: at least 2 minutes (< 30 KB) or 6 minutes
+     | (>= 30 KB). The offsets below only ADD seconds to the base waiting time.
+     |
+     */
+
+    'polling' => [
+        'delay_under_30kb' => env('DTE_POLL_DELAY_SMALL', 0),
+        'delay_over_30kb' => env('DTE_POLL_DELAY_LARGE', 0),
+    ],
+
+    /*
+     |--------------------------------------------------------------------------
      | Cache
      |--------------------------------------------------------------------------
      |
@@ -85,6 +116,21 @@ return [
     'cache' => [
         'store' => null,
         'prefix' => env('DTE_CACHE_PREFIX', 'dte'),
+    ],
+
+    /*
+     |--------------------------------------------------------------------------
+     | SOAP Gateway Configuration
+     |--------------------------------------------------------------------------
+     |
+     | SII revokes SOAP session tokens after 1 hour (3600 seconds) since their
+     | last use, refreshing the window every time these are used. This states
+     | how long the library caches a token. It must not exceed 3600 seconds.
+     |
+     */
+
+    'soap' => [
+        'token_ttl' => env('DTE_SOAP_TOKEN_TTL', 60 * 60),
     ],
 
     /*

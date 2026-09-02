@@ -5,6 +5,7 @@ namespace Laragear\Dte\Actions\CompileDte\Pipes;
 use Closure;
 use Illuminate\Support\DateFactory;
 use Laragear\Dte\Actions\CompileDte\Compilation;
+use Laragear\Dte\Enums\SiiTaxes;
 use Laragear\Dte\Support\XmlDomFactory;
 use Laragear\Rut\Rut;
 use XMLWriter;
@@ -251,7 +252,7 @@ class BuildXml
         $this->positiveElement($writer, 'MntExe', $totals['exempt']);
 
         if ($totals['tax'] > 0) {
-            $writer->writeElement('TasaIVA', '19');
+            $writer->writeElement('TasaIVA', (string) SiiTaxes::ivaRate());
             $writer->writeElement('IVA', (string) $totals['tax']);
         }
 

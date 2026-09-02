@@ -38,6 +38,7 @@ class MakeFakeCertificateCommandTest extends TestCase
             ->expectsOutput('Generating dummy certificate for local (76.111.222-3)...')
             ->assertSuccessful();
     }
+
     public function test_generates_fake_certificate(): void
     {
         Storage::fake('local');

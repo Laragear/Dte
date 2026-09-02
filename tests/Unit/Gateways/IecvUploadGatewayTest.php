@@ -7,14 +7,15 @@ use Illuminate\Config\Repository;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http as HttpFacade;
-use Laragear\Dte\Contracts\TokenProviderInterface;
 use Laragear\Dte\Enums\DteEnvironment;
 use Laragear\Dte\Enums\EnvelopeStatus;
 use Laragear\Dte\Environment\EnvironmentResolver;
 use Laragear\Dte\Gateways\IecvUploadGateway;
 use Laragear\Dte\Gateways\Token;
 use Laragear\Dte\Models\SiiDteEnvelope;
+use Laragear\Dte\Support\TokenAuthenticator;
 use Mockery;
+use Mockery\MockInterface;
 use RuntimeException;
 use Tests\DatabaseTestCase;
 
@@ -29,8 +30,14 @@ class IecvUploadGatewayTest extends DatabaseTestCase
 
     protected function makeGateway(DteEnvironment $environment = DteEnvironment::Production): IecvUploadGateway
     {
-        $token = new Token('sii-token', new DateTimeImmutable('+1 hour'));
-        $this->mock(TokenProviderInterface::class)->expects('token')->zeroOrMoreTimes()->andReturn($token);
+        $this->mock(TokenAuthenticator::class, static function (MockInterface $mock): void {
+            $token = new Token('sii-token', new DateTimeImmutable('+1 hour'));
+
+            $mock->expects('token')->zeroOrMoreTimes()->andReturn($token);
+            $mock->expects('retryWithFreshToken')
+                ->zeroOrMoreTimes()
+                ->andReturnUsing(fn($request, $issuer) => $request());
+        });
 
         $this->instance(EnvironmentResolver::class, $this->makeEnvironmentResolver($environment));
 

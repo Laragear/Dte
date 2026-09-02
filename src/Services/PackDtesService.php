@@ -20,6 +20,13 @@ use function in_array;
 class PackDtesService
 {
     /**
+     * Maximum delay (in seconds) a queued job may use. 900s = 15 minutes, which
+     * is the hard ceiling for AWS-based queue backends (SQS/SNS), preventing
+     * oversized batch delays from producing an invalid dispatch.
+     */
+    protected const int MAX_QUEUE_DELAY_SECONDS = 900;
+
+    /**
      * Create a new Pack DTEs Service instance.
      */
     public function __construct(
@@ -141,7 +148,7 @@ class PackDtesService
     protected function dispatchEnvelope(SiiDteEnvelope $envelope, int $delayCounter): void
     {
         $backoffSeconds = $this->config->get('dte.envelopes.backoff_seconds', 60);
-        $delay = $delayCounter * $backoffSeconds;
+        $delay = min(self::MAX_QUEUE_DELAY_SECONDS, $delayCounter * $backoffSeconds);
 
         $this->artisan
             ->queue('dte:process-envelope', ['envelope_id' => $envelope->getKey()])

@@ -17,6 +17,7 @@ class Compilation
         public readonly SiiDte $dte,
         public ?DOMDocument $document = null,
         public ?DOMElement $ted = null,
+        public ?array $cafData = null,
     ) {
         //
     }
@@ -35,6 +36,16 @@ class Compilation
     public function requireTed(): DOMElement
     {
         return $this->ted ?? throw new LogicException('The DTE TED has not been generated.');
+    }
+
+    /**
+     * Return the cached CafParser output.
+     *
+     * @return array<string, mixed>
+     */
+    public function requireCafData(): array
+    {
+        return $this->cafData ?? throw new LogicException('CAF data not loaded');
     }
 
     /**

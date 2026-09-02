@@ -24,7 +24,7 @@ class CafManagerTest extends DatabaseTestCase
         return $manager->allocate(
             $issuer,
             DteType::Invoice,
-            static fn (SiiCaf $caf, int $folio): int => $folio,
+            static fn(SiiCaf $caf, int $folio): int => $folio,
         );
     }
 
@@ -80,7 +80,7 @@ class CafManagerTest extends DatabaseTestCase
         $selected = $this->app->make(CafManager::class)->allocate(
             $caf->rut,
             DteType::Invoice,
-            static fn (SiiCaf $selected, int $folio): array => [$selected->getKey(), $folio],
+            static fn(SiiCaf $selected, int $folio): array => [$selected->getKey(), $folio],
         );
 
         static::assertSame([$caf->getKey(), $caf->folio_from], $selected);
@@ -103,7 +103,7 @@ class CafManagerTest extends DatabaseTestCase
             $this->app->make(CafManager::class)->allocate(
                 $caf->rut,
                 DteType::Invoice,
-                static fn (SiiCaf $selected, int $folio): never => throw new RuntimeException('Compilation failed.'),
+                static fn(SiiCaf $selected, int $folio): never => throw new RuntimeException('Compilation failed.'),
             );
             static::fail('The allocation callback should have failed.');
         } catch (RuntimeException $exception) {
@@ -172,6 +172,32 @@ class CafManagerTest extends DatabaseTestCase
         static::assertTrue($called);
     }
 
+    public function test_allocate_throws_after_max_attempts(): void
+    {
+        $issuer = Rut::parse('76.123.456-7');
+
+        // Create more depleted CAFs than the circuit breaker allows, all of
+        // which look "available" (current <= to) but return null from next().
+        for ($i = 0; $i < CafManager::MAX_ALLOCATE_ATTEMPTS + 2; $i++) {
+            SiiCaf::factory()->create([
+                'rut' => $issuer,
+                'document_type' => DteType::Invoice,
+                'folio_from' => 10 + $i,
+                'folio_to' => 10 + $i,
+                'folio_current' => 10 + $i,
+                'folio_annuled' => [10 + $i],
+                'expires_on' => now()->addDays(10),
+            ]);
+        }
+
+        $this->expectException(DepletionException::class);
+        $this->expectExceptionMessageIs(
+            'Unable to allocate a folio after '.CafManager::MAX_ALLOCATE_ATTEMPTS.' attempts.',
+        );
+
+        $this->allocate($this->app->make(CafManager::class), $issuer);
+    }
+
     public function test_annuls_folios_through_the_found_caf(): void
     {
         $caf = SiiCaf::factory()->create([
@@ -187,7 +213,7 @@ class CafManagerTest extends DatabaseTestCase
             ->annulFolios($caf->rut, DteType::Invoice, 'Daños', [15, 16]);
 
         static::assertSame($caf->getKey(), $result->getKey());
-        static::assertSame([15, 16], $caf->fresh()->folio_annuled);
+        static::assertSame([[15, 16]], $caf->fresh()->folio_annuled);
     }
 
     public function test_annuls_folios_through_the_caf_facade(): void

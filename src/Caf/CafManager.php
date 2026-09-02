@@ -24,6 +24,14 @@ use function today;
 class CafManager
 {
     /**
+     * Maximum number of CAFs to try in a single allocation before giving up.
+     *
+     * Each iteration consumes all remaining folios of one CAF, so more than these
+     * many consecutive depleted CAFs indicates a data integrity problem.
+     */
+    public const int MAX_ALLOCATE_ATTEMPTS = 10;
+
+    /**
      * Create a Caf Manager instance.
      */
     public function __construct(
@@ -87,7 +95,9 @@ class CafManager
         return SiiCaf::query()
             ->getConnection()
             ->transaction(function () use ($issuer, $documentType, $callback): mixed {
-                while (true) {
+                $attempts = 0;
+
+                while ($attempts < static::MAX_ALLOCATE_ATTEMPTS) {
                     $caf = $this->availableCaf($issuer, $documentType);
 
                     $folio = $caf->folios->next();
@@ -99,7 +109,13 @@ class CafManager
                     if ($folio !== null) {
                         return $callback($caf, $folio);
                     }
+
+                    $attempts++;
                 }
+
+                throw new DepletionException(
+                    'Unable to allocate a folio after '.static::MAX_ALLOCATE_ATTEMPTS.' attempts.',
+                );
             });
     }
 

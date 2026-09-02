@@ -8,6 +8,8 @@ use Laragear\Dte\DteServiceProvider;
 use Laragear\Dte\Environment\EnvironmentResolver;
 use Laragear\Dte\Pdf\Pdf417Generator;
 use Laragear\MetaTesting\InteractsWithServiceProvider;
+use Mockery;
+use ReflectionClass;
 use Tests\TestCase;
 
 class DteServiceProviderTest extends TestCase
@@ -59,10 +61,10 @@ class DteServiceProviderTest extends TestCase
     {
         $sp = new DteServiceProvider($this->app);
 
-        $mockApp = \Mockery::mock($this->app)->makePartial();
+        $mockApp = Mockery::mock($this->app)->makePartial();
         $mockApp->shouldReceive('runningInConsole')->andReturn(false);
 
-        $reflection = new \ReflectionClass($sp);
+        $reflection = new ReflectionClass($sp);
         $property = $reflection->getProperty('app');
         $property->setAccessible(true);
         $property->setValue($sp, $mockApp);

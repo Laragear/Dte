@@ -56,7 +56,8 @@ class ConfigurationManagerTest extends TestCase
 
     public function test_has_sender_resolver(): void
     {
-        ConfigurationManager::resolveSenderUsing(function () {});
+        ConfigurationManager::resolveSenderUsing(function () {
+        });
         $manager = $this->app->make(ConfigurationManager::class);
         static::assertTrue($manager->hasSenderResolver());
     }

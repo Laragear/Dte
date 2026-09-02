@@ -25,7 +25,7 @@ class PackReadyDtesCommandTest extends DatabaseTestCase
     {
         parent::setUp();
 
-        ConfigurationManager::setCompany(fn () => CompanyData::make(
+        ConfigurationManager::setCompany(fn() => CompanyData::make(
             IssuerData::make(
                 '76.123.456-0',
                 'Test Company',
@@ -141,7 +141,7 @@ class PackReadyDtesCommandTest extends DatabaseTestCase
 
         static::assertCount(3, $envelopes); // 1 for rut1, 2 for rut2
 
-        $rut1Envelopes = $envelopes->filter(fn ($e) => (string) $e->issuer_rut === (string) $rut1);
+        $rut1Envelopes = $envelopes->filter(fn($e) => (string) $e->issuer_rut === (string) $rut1);
 
         static::assertCount(1, $rut1Envelopes);
 
@@ -161,7 +161,7 @@ class PackReadyDtesCommandTest extends DatabaseTestCase
             $firstEnvelope->resolution_number,
         );
 
-        $rut2Envelopes = $envelopes->filter(fn ($e) => (string) $e->issuer_rut === (string) $rut2);
+        $rut2Envelopes = $envelopes->filter(fn($e) => (string) $e->issuer_rut === (string) $rut2);
 
         static::assertCount(2, $rut2Envelopes);
         static::assertEquals(2, $rut2Envelopes->first()->dtes()->count());

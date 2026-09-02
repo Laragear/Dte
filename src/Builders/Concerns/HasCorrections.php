@@ -82,7 +82,7 @@ trait HasCorrections
             $dte->document_type,
             (string) $dte->folio,
             $dte->issued_on?->clone()->toDateTimeImmutable()
-                ?? $this->date->now('America/Santiago')->toDateTimeImmutable(),
+            ?? $this->date->now('America/Santiago')->toDateTimeImmutable(),
         ];
     }
 }

@@ -17,8 +17,7 @@ class GeneratePdfs
     public function __construct(
         protected PdfBuilder $builder,
         protected DateFactory $date,
-    )
-    {
+    ) {
         //
     }
 

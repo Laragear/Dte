@@ -43,15 +43,16 @@
         "illuminate/events": "^13.27",
         "illuminate/filesystem": "^13.27",
         "illuminate/http": "^13.27",
+        "illuminate/mail": "^13.27",
         "illuminate/pipeline": "^13.27",
         "illuminate/queue": "^13.27",
         "illuminate/support": "^13.27",
         "illuminate/view": "^13.27",
-        "illuminate/mail": "^13.27",
         "laragear/rut": "^5.1.4",
         "laravel/prompts": "^0.3.22",
         "leongrdic/pdf417": "^1.0.0",
-        "spatie/laravel-pdf": "^2.12"
+        "spatie/laravel-pdf": "^2.13",
+        "zbateson/mail-mime-parser": "^4.0.3"
     },
     "require-dev": {
         "ext-zlib": "*",

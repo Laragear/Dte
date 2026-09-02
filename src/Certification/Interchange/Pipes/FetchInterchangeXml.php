@@ -12,7 +12,6 @@ use Laragear\Dte\Data\InboundEmailData;
 use Laragear\Dte\Mailbox\MailboxManager;
 use RuntimeException;
 use Throwable;
-use function now;
 
 class FetchInterchangeXml
 {

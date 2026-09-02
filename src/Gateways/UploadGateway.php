@@ -4,25 +4,30 @@ namespace Laragear\Dte\Gateways;
 
 use Illuminate\Http\Client\Factory as Http;
 use Illuminate\Http\Client\PendingRequest;
-use Laragear\Dte\Contracts\TokenProviderInterface;
 use Laragear\Dte\Environment\EnvironmentResolver;
+use Laragear\Dte\Gateways\Exceptions\TokenInvalidException;
 use Laragear\Dte\Models\SiiDteEnvelope;
+use Laragear\Dte\SiiEndpoints;
+use Laragear\Dte\Support\TokenAuthenticator;
 use RuntimeException;
 use function sprintf;
 
 /**
  * Uploads signed DTE envelopes to the SII via their upload service.
  */
-final readonly class UploadGateway
+class UploadGateway
 {
     /**
      * SII upload endpoint path.
      */
-    protected const string UPLOAD_PATH = '/cgi_dte/UPL/DTEUpload';
+    public const string UPLOAD_PATH = '/cgi_dte/UPL/DTEUpload';
 
+    /**
+     * Create a new Upload Gateway instance.
+     */
     public function __construct(
         protected Http $http,
-        protected TokenProviderInterface $tokens,
+        protected TokenAuthenticator $authenticator,
         protected EnvironmentResolver $environment,
     ) {
         //
@@ -42,33 +47,40 @@ final readonly class UploadGateway
         $issuer = $envelope->issuer_rut;
         $sender = $envelope->sender_rut;
 
-        $token = $this->tokens->token($issuer, $baseUrl);
+        return $this->authenticator->retryWithFreshToken(function () use (
+            $issuer,
+            $sender,
+            $signedXml,
+            $baseUrl
+        ): string {
+            $token = $this->authenticator->token($issuer, $baseUrl);
 
-        $response = $this->client($token->value, $baseUrl)
-            ->attach(
-                'archivo',
-                $signedXml,
-                'envio.xml',
-            )
-            ->post(self::UPLOAD_PATH, [
-                'rutSender' => $sender->num,
-                'dvSender' => $sender->vd,
-                'rutCompany' => $issuer->num,
-                'dvCompany' => $issuer->vd,
-            ]);
+            $response = $this->client($token->value, $baseUrl)
+                ->attach(
+                    'archivo',
+                    $signedXml,
+                    'envio.xml',
+                )
+                ->post(self::UPLOAD_PATH, [
+                    'rutSender' => $sender->num,
+                    'dvSender' => $sender->vd,
+                    'rutCompany' => $issuer->num,
+                    'dvCompany' => $issuer->vd,
+                ]);
 
-        if ($response->unauthorized()) {
-            throw new RuntimeException('SII Upload rejected the authentication token (401).');
-        }
+            if ($response->unauthorized()) {
+                throw new TokenInvalidException('SII Upload rejected the authentication token (401).');
+            }
 
-        if ($response->failed()) {
-            throw new RuntimeException(sprintf(
-                'SII Upload request failed with status %d.',
-                $response->status(),
-            ));
-        }
+            if ($response->failed()) {
+                throw new RuntimeException(sprintf(
+                    'SII Upload request failed with status %d.',
+                    $response->status(),
+                ));
+            }
 
-        return $this->parseTrackId($response->body());
+            return $this->parseTrackId($response->body());
+        }, $issuer);
     }
 
     /**
@@ -95,7 +107,8 @@ final readonly class UploadGateway
         return $this->http
             ->createPendingRequest()
             ->baseUrl($baseUrl)
-            ->withCookies(['TOKEN' => $token], parse_url($baseUrl, PHP_URL_HOST))
+            ->withCookies([SiiEndpoints::TOKEN_COOKIE => $token], parse_url($baseUrl, PHP_URL_HOST))
+            ->withHeaders([SiiEndpoints::USER_AGENT_HEADER => SiiEndpoints::USER_AGENT])
             ->timeout(60)
             ->asMultipart();
     }

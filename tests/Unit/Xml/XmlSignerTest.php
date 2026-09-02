@@ -188,7 +188,7 @@ class XmlSignerTest extends TestCase
     {
         $document = $this->app->make(XmlDomFactory::class)->document();
 
-        if (! $document->loadXML($xml, LIBXML_NONET)) {
+        if (!$document->loadXML($xml, LIBXML_NONET)) {
             throw new RuntimeException('Unable to load the XML test fixture.');
         }
 

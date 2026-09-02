@@ -5,7 +5,6 @@ namespace Laragear\Dte\Builders;
 use DateTimeImmutable;
 use Laragear\Dte\Builders\Concerns\HasCorrections;
 use Laragear\Dte\Builders\Concerns\HasItems;
-use Laragear\Dte\Data\ReferenceData;
 use Laragear\Dte\Enums\DteType;
 use Laragear\Dte\Enums\ReferenceType;
 use Laragear\Dte\Models\SiiDte;

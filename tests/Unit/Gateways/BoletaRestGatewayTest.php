@@ -2,11 +2,14 @@
 
 namespace Tests\Unit\Gateways;
 
+use DateTimeImmutable;
 use DOMElement;
 use Illuminate\Config\Repository;
+use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http as HttpFacade;
+use InvalidArgumentException;
 use Laragear\Dte\Certificate\DigitalCertificate;
 use Laragear\Dte\Contracts\CertificateResolverInterface;
 use Laragear\Dte\Enums\DteEnvironment;
@@ -14,6 +17,7 @@ use Laragear\Dte\Enums\DteType;
 use Laragear\Dte\Enums\EnvelopeStatus;
 use Laragear\Dte\Environment\EnvironmentResolver;
 use Laragear\Dte\Gateways\BoletaRestGateway;
+use Laragear\Dte\Gateways\Token;
 use Laragear\Dte\Models\SiiDte;
 use Laragear\Dte\Models\SiiDteEnvelope;
 use Laragear\Dte\Xml\XmlSigner;
@@ -29,7 +33,16 @@ class BoletaRestGatewayTest extends DatabaseTestCase
     {
         parent::setUp();
 
+        $this->app->make('cache')->flush();
+
         HttpFacade::preventStrayRequests();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->app->make('cache')->flush();
+
+        parent::tearDown();
     }
 
     protected function makeGateway(DteEnvironment $environment = DteEnvironment::Production): BoletaRestGateway
@@ -434,6 +447,162 @@ class BoletaRestGatewayTest extends DatabaseTestCase
         $status = $gateway->documentStatus($dte);
 
         static::assertEquals(['estado' => 'DOK'], $status);
+    }
+
+    public function test_get_token_caches_result(): void
+    {
+        $gateway = $this->makeGateway(DteEnvironment::Production);
+
+        HttpFacade::fake([
+            'https://api.sii.cl/recursos/v1/boleta.electronica.semilla' => HttpFacade::response(
+                '<RESPUESTA><RESP_BODY><SEMILLA>030530912644</SEMILLA></RESP_BODY></RESPUESTA>',
+                200,
+            ),
+            'https://api.sii.cl/recursos/v1/boleta.electronica.token' => HttpFacade::response(
+                '<RESPUESTATOKEN><TOKEN>P7VQKYLDNHJGP</TOKEN></RESPUESTATOKEN>',
+                200,
+            ),
+        ]);
+
+        $issuer = $this->makeEnvelope()->issuer_rut;
+
+        $first = $gateway->getToken($issuer);
+        $second = $gateway->getToken($issuer);
+
+        static::assertSame('P7VQKYLDNHJGP', $first);
+        static::assertSame('P7VQKYLDNHJGP', $second);
+
+        // Only one seed round-trip: the second call is served from cache.
+        HttpFacade::assertSentCount(2);
+        HttpFacade::assertSent(function (Request $request): bool {
+            return str_contains($request->url(), 'boleta.electronica.semilla');
+        });
+    }
+
+    public function test_get_token_re_authenticates_when_cached_token_expired(): void
+    {
+        $gateway = $this->makeGateway(DteEnvironment::Production);
+
+        HttpFacade::fake([
+            'https://api.sii.cl/recursos/v1/boleta.electronica.semilla' => HttpFacade::response(
+                '<RESPUESTA><RESP_BODY><SEMILLA>030530912644</SEMILLA></RESP_BODY></RESPUESTA>',
+                200,
+            ),
+            'https://api.sii.cl/recursos/v1/boleta.electronica.token' => HttpFacade::response(
+                '<RESPUESTATOKEN><TOKEN>P7VQKYLDNHJGP</TOKEN></RESPUESTATOKEN>',
+                200,
+            ),
+        ]);
+
+        $issuer = $this->makeEnvelope()->issuer_rut;
+
+        // Seed a short-lived expired token so the gateway must re-authenticate.
+        $this->app->make('cache')->put(
+            'dte|rest_token|business:'.$issuer->formatRaw(),
+            new Token('STALE', new DateTimeImmutable('-1 hour')),
+        );
+
+        $token = $gateway->getToken($issuer);
+
+        static::assertSame('P7VQKYLDNHJGP', $token);
+    }
+
+    public function test_get_token_touches_cache_on_reuse(): void
+    {
+        $issuer = $this->makeEnvelope()->issuer_rut;
+        $cacheKey = 'dte|rest_token|business:'.$issuer->formatRaw();
+
+        $cache = Mockery::mock(CacheRepository::class);
+        $cache->shouldReceive('get')->with($cacheKey)->once()->andReturn(new Token('CACHED',
+            new DateTimeImmutable('+1 hour')));
+        $cache->shouldReceive('touch')->with($cacheKey, 3600)->once();
+
+        $this->instance(CacheRepository::class, $cache);
+
+        $gateway = $this->makeGateway(DteEnvironment::Production);
+
+        static::assertSame('CACHED', $gateway->getToken($issuer));
+    }
+
+    public function test_get_token_throws_if_ttl_exceeds_3600(): void
+    {
+        $gateway = $this->makeGateway(DteEnvironment::Production);
+
+        $this->app->make('config')->set('dte.soap.token_ttl', 7200);
+
+        HttpFacade::fake([
+            'https://api.sii.cl/recursos/v1/boleta.electronica.semilla' => HttpFacade::response(
+                '<RESPUESTA><RESP_BODY><SEMILLA>030530912644</SEMILLA></RESP_BODY></RESPUESTA>',
+                200,
+            ),
+            'https://api.sii.cl/recursos/v1/boleta.electronica.token' => HttpFacade::response(
+                '<RESPUESTATOKEN><TOKEN>P7VQKYLDNHJGP</TOKEN></RESPUESTATOKEN>',
+                200,
+            ),
+        ]);
+
+        $this->expectException(InvalidArgumentException::class);
+
+        $gateway->getToken($this->makeEnvelope()->issuer_rut);
+    }
+
+    public function test_cache_key_uses_rest_prefix(): void
+    {
+        $issuer = $this->makeEnvelope()->issuer_rut;
+
+        $gateway = $this->makeGateway(DteEnvironment::Production);
+
+        HttpFacade::fake([
+            'https://api.sii.cl/recursos/v1/boleta.electronica.semilla' => HttpFacade::response(
+                '<RESPUESTA><RESP_BODY><SEMILLA>030530912644</SEMILLA></RESP_BODY></RESPUESTA>',
+                200,
+            ),
+            'https://api.sii.cl/recursos/v1/boleta.electronica.token' => HttpFacade::response(
+                '<RESPUESTATOKEN><TOKEN>P7VQKYLDNHJGP</TOKEN></RESPUESTATOKEN>',
+                200,
+            ),
+        ]);
+
+        $gateway->getToken($issuer);
+
+        static::assertInstanceOf(Token::class,
+            $this->app->make('cache')->get('dte|rest_token|business:'.$issuer->formatRaw()));
+    }
+
+    public function test_document_status_uses_issued_on_not_created_at(): void
+    {
+        $dte = SiiDte::factory()->create([
+            'issuer_rut' => '76.543.210-K',
+            'receiver_rut' => '66.666.666-6',
+            'document_type' => DteType::Receipt,
+            'folio' => 900,
+            'amount_total' => 1500,
+            'issued_on' => '2026-05-02 10:00:00',
+            'created_at' => '2026-05-01 10:00:00',
+        ]);
+
+        HttpFacade::fake([
+            'https://api.sii.cl/recursos/v1/boleta.electronica.semilla' => HttpFacade::response(
+                '<RESPUESTA><RESP_BODY><SEMILLA>030530912644</SEMILLA></RESP_BODY></RESPUESTA>',
+                200,
+            ),
+            'https://api.sii.cl/recursos/v1/boleta.electronica.token' => HttpFacade::response(
+                '<RESPUESTATOKEN><TOKEN>P7VQKYLDNHJGP</TOKEN></RESPUESTATOKEN>',
+                200,
+            ),
+            'https://api.sii.cl/recursos/v1/boleta.electronica*' => HttpFacade::response(['estado' => 'DOK'], 200),
+        ]);
+
+        $gateway = $this->makeGateway(DteEnvironment::Production);
+        $gateway->documentStatus($dte);
+
+        HttpFacade::assertSent(function (Request $request) use ($dte): bool {
+            if (str_contains($request->url(), '/estado')) {
+                static::assertStringContainsString('fechaEmision=02-05-2026', $request->url());
+            }
+
+            return true;
+        });
     }
 
     /*

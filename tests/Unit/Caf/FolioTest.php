@@ -34,7 +34,7 @@ class FolioTest extends TestCase
     {
         static::assertSame([10, 12, 14, 15, 16], Folio::normalize([10, 12, [14, 16]]));
         static::assertSame([10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20], Folio::normalize([[10, 20]]));
-        static::assertSame([1, 5], Folio::normalize(['1', 5]));
+        static::assertSame([1, 5], Folio::normalize([1, 5]));
         static::assertSame([10, 11, 12], Folio::normalize([10, 10, [10, 12]]));
     }
 
@@ -61,7 +61,7 @@ class FolioTest extends TestCase
     public function test_annuls_individual_folios(): void
     {
         $folio = new Folio(1, 100, 1);
-        $folio->annul(5, 7, '10');
+        $folio->annul(5, 7, 10);
 
         static::assertTrue($folio->isAnnuled(5));
         static::assertTrue($folio->isAnnuled(7));
@@ -193,10 +193,10 @@ class FolioTest extends TestCase
         static::assertSame([[5, 10]], $folio->annuled);
     }
 
-    public function test_restore_string_number(): void
+    public function test_restores_integer_removing_single_entry_from_list(): void
     {
         $folio = new Folio(1, 10, 5, [6, [7, 8]]);
-        $folio->restore('6'); // Numeric strings are matched as ints
+        $folio->restore(6);
         static::assertSame([[7, 8]], $folio->annuled);
     }
 
@@ -213,5 +213,91 @@ class FolioTest extends TestCase
     {
         $folio = new Folio(1, 10, 8, [[8, 10]]);
         static::assertNull($folio->last());
+    }
+
+    public function test_annuls_single_folio_to_range_tuple(): void
+    {
+        $folio = new Folio(1, 100, 1);
+        $folio->annul(5);
+
+        static::assertSame([[5, 5]], $folio->annuled);
+    }
+
+    public function test_annuls_range_merges_adjacent(): void
+    {
+        $folio = new Folio(1, 100, 1);
+        $folio->annul([1, 5]);
+        $folio->annul([6, 10]);
+
+        static::assertSame([[1, 10]], $folio->annuled);
+    }
+
+    public function test_annuls_overlapping_ranges_merges(): void
+    {
+        $folio = new Folio(1, 100, 1);
+        $folio->annul([1, 10]);
+        $folio->annul([5, 15]);
+
+        static::assertSame([[1, 15]], $folio->annuled);
+    }
+
+    public function test_restores_single_from_range_splits(): void
+    {
+        $folio = new Folio(1, 100, 1);
+        $folio->annul([1, 10]);
+        $folio->restore(5);
+
+        static::assertSame([[1, 4], [6, 10]], $folio->annuled);
+    }
+
+    public function test_remaining_uses_math_on_large_range(): void
+    {
+        $folio = new Folio(1, 100000, 1);
+        $folio->annulRange(500, 1500);   // 1001 annulled
+        $folio->annulRange(5000, 6000);  // 1001 annulled
+        $folio->annulRange(50000, 51000); // 1001 annulled
+
+        static::assertSame(100000 - 3003, $folio->remaining());
+    }
+
+    public function test_next_jumps_past_annulled_range(): void
+    {
+        $folio = new Folio(1, 10000, 1);
+        $folio->annulRange(5, 9999);
+
+        static::assertSame(1, $folio->next());
+        static::assertSame(2, $folio->next());
+        static::assertSame(3, $folio->next());
+        static::assertSame(4, $folio->next());
+
+        // current is now 5 but [5, 9999] is annulled -> jump straight to 10000
+        static::assertSame(10000, $folio->next());
+        static::assertNull($folio->next());
+    }
+
+    public function test_constructor_normalizes_legacy_mixed_annuled(): void
+    {
+        $folio = new Folio(1, 20, 1, [5, [6, 10], 12, [15, 17]]);
+
+        static::assertSame([[5, 10], [12, 12], [15, 17]], $folio->annuled);
+        static::assertTrue($folio->isAnnuled(8));
+        static::assertTrue($folio->isAnnuled(16));
+        static::assertFalse($folio->isAnnuled(11));
+    }
+
+    public function test_normalize_throws_on_huge_range(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        Folio::normalize([[1, 100000]]);
+    }
+
+    public function test_blocks_from_merged_ranges(): void
+    {
+        $folio = new Folio(1, 10, 1);
+        $folio->annul([3, 4]);
+        $folio->annul(8);
+
+        static::assertSame([[1, 2], [5, 7], [9, 10]], $folio->blocks());
     }
 }

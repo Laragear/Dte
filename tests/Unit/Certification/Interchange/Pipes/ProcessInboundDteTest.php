@@ -12,7 +12,6 @@ use Laragear\Dte\Models\SiiInterchangeLog;
 use Laragear\Dte\Services\InboundDteProcessor;
 use Laragear\MetaTesting\Pipeline\InteractsWithPipelines;
 use Laragear\Rut\Rut;
-use Laravel\Prompts\Note;
 use Mockery\MockInterface;
 use RuntimeException;
 use Tests\DatabaseTestCase;

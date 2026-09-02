@@ -8,6 +8,7 @@ use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Contracts\Validation\Factory;
 use Illuminate\Support\ServiceProvider;
+use InvalidArgumentException;
 use Laragear\Dte\Certificate\CertificateResolver;
 use Laragear\Dte\Certification\CertificationManager;
 use Laragear\Dte\Configuration\ConfigurationManager;
@@ -25,10 +26,11 @@ use Laragear\Dte\Contracts\TokenProviderInterface;
 use Laragear\Dte\Enums\DteEnvironment;
 use Laragear\Dte\Environment\EnvironmentResolver;
 use Laragear\Dte\Events\InboundDteAcknowledged;
-use Laragear\Dte\Gateways\SoapGateway;
 use Laragear\Dte\Listeners\SendCommercialReceiptListener;
 use Laragear\Dte\Mailbox\MailboxManager;
 use Laragear\Dte\Pdf\Pdf417Generator;
+use Laragear\Dte\Support\TokenAuthenticator;
+use Laragear\Dte\Support\TokenRepository;
 use Le\PDF417\PDF417;
 use Le\PDF417\Renderer\ImageRenderer;
 
@@ -64,13 +66,22 @@ class DteServiceProvider extends ServiceProvider
         $this->app->singleton(CertificateResolver::class);
         $this->app->scoped(CertificationManager::class);
         $this->app->bind(CertificateResolverInterface::class, CertificateResolver::class);
-        $this->app->bind(TokenProviderInterface::class, SoapGateway::class);
+
+        // TokenRepository: the only owner of the token cache mechanics.
+        $this->app->scoped(TokenRepository::class);
         $this->app
-            ->when(SoapGateway::class)
+            ->when(TokenRepository::class)
             ->needs(CacheRepositoryContract::class)
             ->give(function (Container $app) {
                 return $app->make('cache')->store($app->make('config')->get('dte.cache.store'));
             });
+
+        // TokenAuthenticator: owns SII auth + refresh, the only TokenRepository caller.
+        $this->app->scoped(TokenAuthenticator::class);
+
+        // Bind the token interface to the authenticator (gateways no longer authenticate).
+        $this->app->bind(TokenProviderInterface::class, TokenAuthenticator::class);
+
         $this->app->singleton(MailboxManager::class);
 
         // Avoid clashing with other generator instances.
@@ -139,6 +150,15 @@ class DteServiceProvider extends ServiceProvider
             $event->listen(
                 InboundDteAcknowledged::class,
                 SendCommercialReceiptListener::class,
+            );
+        }
+
+        /** Validate the configured IVA rate before serving the library. */
+        $ivaRate = (int) $config->get('dte.taxes.iva_rate', 19);
+
+        if ($ivaRate < 1 || $ivaRate > 100) {
+            throw new InvalidArgumentException(
+                "The dte.taxes.iva_rate configuration must be between 1 and 100. Got: {$ivaRate}"
             );
         }
 

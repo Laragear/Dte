@@ -81,4 +81,39 @@ class PollTrackStatusCommandTest extends DatabaseTestCase
             },
         );
     }
+
+    public function test_caps_poll_delay_to_fifteen_minutes(): void
+    {
+        $queue = Queue::fake();
+
+        $this->app->make('config')->set('dte.queue.track.connection', 'database');
+        $this->app->make('config')->set('dte.queue.track.name', 'dte-queue');
+        $this->app->make('config')->set('dte.envelopes.backoff_seconds', 2000);
+
+        SiiDteEnvelope::factory()->create([
+            'status' => EnvelopeStatus::Uploaded,
+            'track_id' => '111111111',
+            'updated_at' => now()->subMinutes(35),
+        ]);
+
+        SiiDteEnvelope::factory()->create([
+            'status' => EnvelopeStatus::Uploaded,
+            'track_id' => '222222222',
+            'updated_at' => now()->subMinutes(35),
+        ]);
+
+        $this
+            ->artisan('dte:poll-track-status')
+            ->assertSuccessful();
+
+        $jobs = $queue->pushed(PollEnvelopeTrackIdJob::class);
+
+        static::assertCount(2, $jobs);
+
+        // Without the cap, at least one job would be delayed 2000 seconds.
+        $maxDelay = $jobs->max(fn(PollEnvelopeTrackIdJob $job) => (int) $job->delay);
+
+        static::assertLessThanOrEqual(905, $maxDelay);
+        static::assertGreaterThan(0, $maxDelay);
+    }
 }

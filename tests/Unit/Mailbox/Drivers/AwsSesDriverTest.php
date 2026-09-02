@@ -51,7 +51,13 @@ class AwsSesDriverTest extends TestCase
                 ->with(['Bucket' => 'test-bucket', 'Key' => 'emails/unread/msg1'])
                 ->once()
                 ->andReturn([
-                    'Body' => "Message-ID: <msg1>\r\nFrom: sender@domain.com\r\nSubject: Test 1\r\n\r\n<?xml version=\"1.0\"?><EnvioDTE></EnvioDTE>",
+                    'Body' => "Message-ID: <msg1>\r\nFrom: sender@domain.com\r\nSubject: Test 1\r\n"
+                        ."Content-Type: multipart/mixed; boundary=\"b1\"\r\n\r\n"
+                        ."--b1\r\nContent-Type: text/plain\r\n\r\nHello\r\n"
+                        ."--b1\r\nContent-Type: text/xml\r\nContent-Disposition: attachment; filename=\"envio.xml\"\r\n"
+                        ."Content-Transfer-Encoding: base64\r\n\r\n"
+                        .base64_encode('<?xml version="1.0"?><EnvioDTE></EnvioDTE>')
+                        ."\r\n--b1--\r\n",
                 ]);
 
             $mock
@@ -59,8 +65,13 @@ class AwsSesDriverTest extends TestCase
                 ->with(['Bucket' => 'test-bucket', 'Key' => 'emails/unread/msg2'])
                 ->once()
                 ->andReturn([
-                    'Body' => "Message-ID: <msg2>\r\nFrom: sender2@domain.com\r\nSubject: Test 2\r\n\r\nContent-Type: text/xml\r\n\r\n"
-                        .base64_encode('<?xml version="1.0"?><EnvioDTE></EnvioDTE>'),
+                    'Body' => "Message-ID: <msg2>\r\nFrom: sender2@domain.com\r\nSubject: Test 2\r\n"
+                        ."Content-Type: multipart/mixed; boundary=\"b2\"\r\n\r\n"
+                        ."--b2\r\nContent-Type: text/plain\r\n\r\nHello\r\n"
+                        ."--b2\r\nContent-Type: application/xml\r\nContent-Disposition: attachment; filename=\"envio.xml\"\r\n"
+                        ."Content-Transfer-Encoding: base64\r\n\r\n"
+                        .base64_encode('<?xml version="1.0"?><EnvioDTE></EnvioDTE>')
+                        ."\r\n--b2--\r\n",
                 ]);
 
             $mock

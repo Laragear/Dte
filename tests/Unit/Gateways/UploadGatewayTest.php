@@ -7,14 +7,15 @@ use Illuminate\Config\Repository;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http as HttpFacade;
-use Laragear\Dte\Contracts\TokenProviderInterface;
 use Laragear\Dte\Enums\DteEnvironment;
 use Laragear\Dte\Enums\EnvelopeStatus;
 use Laragear\Dte\Environment\EnvironmentResolver;
 use Laragear\Dte\Gateways\Token;
 use Laragear\Dte\Gateways\UploadGateway;
 use Laragear\Dte\Models\SiiDteEnvelope;
+use Laragear\Dte\Support\TokenAuthenticator;
 use Mockery;
+use Mockery\MockInterface;
 use RuntimeException;
 use Tests\DatabaseTestCase;
 
@@ -30,7 +31,12 @@ class UploadGatewayTest extends DatabaseTestCase
     protected function makeGateway(DteEnvironment $environment = DteEnvironment::Production): UploadGateway
     {
         $token = new Token('sii-token', new DateTimeImmutable('+1 hour'));
-        $this->mock(TokenProviderInterface::class)->expects('token')->zeroOrMoreTimes()->andReturn($token);
+
+        $this->mock(TokenAuthenticator::class, static function (MockInterface $mock) use ($token): void {
+            $mock->expects('token')->zeroOrMoreTimes()->andReturn($token);
+            $mock->expects('retryWithFreshToken')->zeroOrMoreTimes()
+                ->andReturnUsing(fn($request, $issuer) => $request());
+        });
 
         $this->instance(EnvironmentResolver::class, $this->makeEnvironmentResolver($environment));
 
@@ -99,6 +105,27 @@ class UploadGatewayTest extends DatabaseTestCase
 
         HttpFacade::assertSent(function (Request $request) use ($envelope): bool {
             static::assertStringContainsString($envelope->issuer_rut->num, $request->body());
+
+            return true;
+        });
+    }
+
+    public function test_upload_sends_prog_user_agent_header(): void
+    {
+        $envelope = $this->makeEnvelope();
+
+        HttpFacade::fake([
+            'https://palena.sii.cl/cgi_dte/UPL/DTEUpload*' => HttpFacade::response(
+                '<RESPONSE><STATUS>0</STATUS><TRACKID>123</TRACKID></RESPONSE>',
+                200,
+            ),
+        ]);
+
+        $gateway = $this->makeGateway();
+        $gateway->upload($envelope, '<EnvioDTE/>');
+
+        HttpFacade::assertSent(function (Request $request): bool {
+            static::assertStringContainsString('PROG 1.0', implode(', ', $request->header('User-Agent', [])));
 
             return true;
         });

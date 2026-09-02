@@ -2,7 +2,6 @@
 
 namespace Tests\Unit\Caf;
 
-use DateTimeImmutable;
 use Exception;
 use Illuminate\Foundation\Testing\Attributes\UnitTest;
 use Illuminate\Support\Carbon;
@@ -58,7 +57,8 @@ class CafParserTest extends TestCase
         static::assertSame(10, $data['folio_from']);
         static::assertSame(20, $data['folio_to']);
         static::assertSame(10, $data['folio_current']);
-        static::assertEquals(Carbon::createFromDate(2026, 8, 1, 'America/Santiago')->startOfDay(), $data['authorized_on']);
+        static::assertEquals(Carbon::createFromDate(2026, 8, 1, 'America/Santiago')->startOfDay(),
+            $data['authorized_on']);
         static::assertSame($fixture->modulus, $data['public_key_modulus']);
         static::assertSame($fixture->exponent, $data['public_key_exponent']);
         static::assertSame(rtrim($fixture->privateKey), $data['private_key']);

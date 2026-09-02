@@ -16,7 +16,6 @@ use Laragear\MetaTesting\Pipeline\InteractsWithPipelines;
 use Laragear\Rut\Rut;
 use RuntimeException;
 use Tests\TestCase;
-
 use function now;
 
 class OutputIecvPurchasesTest extends TestCase
@@ -148,7 +147,7 @@ class OutputIecvPurchasesTest extends TestCase
         $this->mock(CertificateResolver::class)->expects('resolve')->andReturn(new DigitalCertificate('fake', 'fake'));
 
         $pipe = $this->app->make(OutputIecvPurchases::class);
-        $pipe->handle($data, fn ($d) => $d);
+        $pipe->handle($data, fn($d) => $d);
     }
 
     public function test_throws_unable_to_find_envio_libro(): void
@@ -171,6 +170,6 @@ class OutputIecvPurchasesTest extends TestCase
         $this->mock(CertificateResolver::class)->expects('resolve')->andReturn(new DigitalCertificate('fake', 'fake'));
 
         $pipe = $this->app->make(OutputIecvPurchases::class);
-        $pipe->handle($data, fn ($d) => $d);
+        $pipe->handle($data, fn($d) => $d);
     }
 }

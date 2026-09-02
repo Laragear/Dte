@@ -10,7 +10,6 @@ use Laragear\Dte\Data\IssuerData;
 use Laragear\Dte\Enums\DteType;
 use Laragear\Dte\Models\SiiCaf;
 use Laragear\Dte\Support\OpenSslProxy;
-use Laragear\Rut\Rut;
 use Mockery;
 use Mockery\MockInterface;
 use OpenSSLAsymmetricKey;

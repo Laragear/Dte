@@ -3,6 +3,7 @@
 namespace Laragear\Dte\Support;
 
 use SoapClient;
+use const WSDL_CACHE_DISK;
 
 class SoapProxy
 {
@@ -47,6 +48,10 @@ class SoapProxy
     {
         $options = array_merge($this->options, [
             'soap_version' => SOAP_1_1,
+            'trace' => 1,
+            'exceptions' => true,
+            // SII WSDL files can be very huge, so we will cache these on disk when available.
+            'cache_wsdl' => WSDL_CACHE_DISK,
         ]);
 
         return new SoapClient($this->wsdl, $options);

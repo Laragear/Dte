@@ -41,7 +41,7 @@ class SiiDteAnnulmentTest extends DatabaseTestCase
 
         static::assertSame($dte, $dte->annulFolio('Dañado'));
         static::assertTrue($dte->isFolioAnnuled());
-        static::assertSame([10], $caf->fresh()->folio_annuled);
+        static::assertSame([[10, 10]], $caf->fresh()->folio_annuled);
         static::assertSame(12, $caf->fresh()->folio_current);
     }
 
@@ -52,7 +52,7 @@ class SiiDteAnnulmentTest extends DatabaseTestCase
         $dte->annulFolio();
 
         // The document folio (10) is below the CAF pointer (12), yet the annulment succeeds.
-        static::assertSame([10], $caf->fresh()->folio_annuled);
+        static::assertSame([[10, 10]], $caf->fresh()->folio_annuled);
     }
 
     public function test_throws_when_dte_has_no_folio(): void

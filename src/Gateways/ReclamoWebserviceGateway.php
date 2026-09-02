@@ -2,12 +2,14 @@
 
 namespace Laragear\Dte\Gateways;
 
-use Laragear\Dte\Contracts\TokenProviderInterface;
 use Laragear\Dte\Environment\EnvironmentResolver;
+use Laragear\Dte\Gateways\Exceptions\TokenInvalidException;
 use Laragear\Dte\Models\SiiInboundDocument;
 use Laragear\Dte\Support\SoapProxy;
+use Laragear\Dte\Support\TokenAuthenticator;
 use RuntimeException;
 use SoapHeader;
+use function in_array;
 use function sprintf;
 
 /**
@@ -32,7 +34,7 @@ class ReclamoWebserviceGateway
     public const string ACTION_ACCEPT = 'ACD';
 
     public function __construct(
-        protected TokenProviderInterface $tokens,
+        protected TokenAuthenticator $authenticator,
         protected EnvironmentResolver $environment,
         protected SoapProxy $soapProxy,
     ) {
@@ -69,47 +71,50 @@ class ReclamoWebserviceGateway
     protected function claim(SiiInboundDocument $document, string $action, string $reason): void
     {
         $issuer = $document->receiver_rut;
-        $token = $this->tokens->token($issuer);
-        $baseUrl ??= $this->environment->resolve()->soapBaseUrl();
 
-        if ($baseUrl === null) {
-            return;
-        }
+        $this->authenticator->retryWithFreshToken(function () use ($document, $action, $reason, $issuer): void {
+            $token = $this->authenticator->token($issuer);
+            $baseUrl = $this->environment->resolve()->soapBaseUrl();
 
-        $wsdlUrl = $baseUrl.'/DTEWS/ReclamoRecibos.asmx?WSDL';
+            if ($baseUrl === null) {
+                return;
+            }
 
-        $client = $this->soapProxy
-            ->withWsdl($wsdlUrl)
-            ->withOptions([
-                'trace' => 1,
-                'exceptions' => true,
-                'cache_wsdl' => WSDL_CACHE_NONE,
-            ])
-            ->build();
+            $wsdlUrl = $baseUrl.'/DTEWS/ReclamoRecibos.asmx?WSDL';
 
-        $header = new SoapHeader('http://www.sii.cl/ws/', 'Token', $token->value);
-        $client->__setSoapHeaders($header);
+            $client = $this->soapProxy
+                ->withWsdl($wsdlUrl)
+                ->build();
 
-        $result = $client->__soapCall('ReclamoDoc', [
-            [
-                'RutEmisor' => $document->issuer_rut->num,
-                'DvEmisor' => $document->issuer_rut->vd,
-                'TipoDoc' => $document->document_type->value,
-                'Folio' => $document->folio,
-                'AccionDoc' => $action,
-                'MotivoReclamo' => $reason,
-            ],
-        ]);
+            $header = new SoapHeader('http://www.sii.cl/ws/', 'Token', $token->value);
+            $client->__setSoapHeaders($header);
 
-        $status = (int) ($result->ReclamoDocResult->status ?? -1);
+            $result = $client->__soapCall('ReclamoDoc', [
+                [
+                    'RutEmisor' => $document->issuer_rut->num,
+                    'DvEmisor' => $document->issuer_rut->vd,
+                    'TipoDoc' => $document->document_type->value,
+                    'Folio' => $document->folio,
+                    'AccionDoc' => $action,
+                    'MotivoReclamo' => $reason,
+                ],
+            ]);
 
-        if ($status !== 0) {
-            throw new RuntimeException(sprintf(
-                'SII Reclamo WS returned non-zero status %d for document %s/%d.',
-                $status,
-                $document->issuer_rut->formatBasic(),
-                $document->folio,
-            ));
-        }
+            $status = (string) ($result->ReclamoDocResult->status ?? '-1');
+
+            // SII signals an inactive/invalid token with 001/002/003: refresh and retry.
+            if (in_array($status, ['001', '002', '003'], true)) {
+                throw new TokenInvalidException('SII Reclamo WS rejected the authentication token.');
+            }
+
+            if ((int) $status !== 0) {
+                throw new RuntimeException(sprintf(
+                    'SII Reclamo WS returned non-zero status %d for document %s/%d.',
+                    (int) $status,
+                    $document->issuer_rut->formatBasic(),
+                    $document->folio,
+                ));
+            }
+        }, $issuer);
     }
 }

@@ -71,6 +71,16 @@ class BuilderConcernsTest extends TestCase
         static::assertSame(120, $builder->totalAmount());
     }
 
+    public function test_tax_amount_uses_configured_iva_rate(): void
+    {
+        $this->app->make('config')->set('dte.taxes.iva_rate', 21);
+
+        $builder = (new DummyBuilder)->addItem(Item::make('Rounded service', 100.5));
+
+        static::assertSame(101, $builder->netAmount());
+        static::assertSame(21, $builder->taxAmount());
+    }
+
     public function test_references_are_added_fluently_in_order(): void
     {
         $builder = new DummyBuilder;

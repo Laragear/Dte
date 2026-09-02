@@ -4,8 +4,10 @@ namespace Laragear\Dte\Gateways;
 
 use Illuminate\Http\Client\Factory as Http;
 use Illuminate\Http\Client\PendingRequest;
-use Laragear\Dte\Contracts\TokenProviderInterface;
 use Laragear\Dte\Environment\EnvironmentResolver;
+use Laragear\Dte\Gateways\Exceptions\TokenInvalidException;
+use Laragear\Dte\SiiEndpoints;
+use Laragear\Dte\Support\TokenAuthenticator;
 use Laragear\Rut\Rut;
 use RuntimeException;
 use function sprintf;
@@ -18,14 +20,14 @@ class IecvUploadGateway
     /**
      * SII upload endpoint path.
      */
-    protected const string UPLOAD_PATH = '/cgi_dte/UPL/DTEUpload';
+    protected const string UPLOAD_PATH = UploadGateway::UPLOAD_PATH;
 
     /**
      * Create a new Iecv Upload Gateway instance.
      */
     public function __construct(
         protected readonly Http $http,
-        protected readonly TokenProviderInterface $tokens,
+        protected readonly TokenAuthenticator $authenticator,
         protected readonly EnvironmentResolver $environment,
     ) {
         //
@@ -42,33 +44,40 @@ class IecvUploadGateway
             return 'fake-iecv-track-id-'.time();
         }
 
-        $token = $this->tokens->token($issuer, $baseUrl);
+        return $this->authenticator->retryWithFreshToken(function () use (
+            $issuer,
+            $sender,
+            $signedXml,
+            $baseUrl
+        ): string {
+            $token = $this->authenticator->token($issuer, $baseUrl);
 
-        $response = $this->client($token->value, $baseUrl)
-            ->attach(
-                'archivo',
-                $signedXml,
-                'iecv.xml',
-            )
-            ->post(self::UPLOAD_PATH, [
-                'rutSender' => $sender->num,
-                'dvSender' => $sender->vd,
-                'rutCompany' => $issuer->num,
-                'dvCompany' => $issuer->vd,
-            ]);
+            $response = $this->client($token->value, $baseUrl)
+                ->attach(
+                    'archivo',
+                    $signedXml,
+                    'iecv.xml',
+                )
+                ->post(self::UPLOAD_PATH, [
+                    'rutSender' => $sender->num,
+                    'dvSender' => $sender->vd,
+                    'rutCompany' => $issuer->num,
+                    'dvCompany' => $issuer->vd,
+                ]);
 
-        if ($response->unauthorized()) {
-            throw new RuntimeException('SII Upload rejected the authentication token (401).');
-        }
+            if ($response->unauthorized()) {
+                throw new TokenInvalidException('SII Upload rejected the authentication token (401).');
+            }
 
-        if ($response->failed()) {
-            throw new RuntimeException(sprintf(
-                'SII Upload request failed with status %d.',
-                $response->status(),
-            ));
-        }
+            if ($response->failed()) {
+                throw new RuntimeException(sprintf(
+                    'SII Upload request failed with status %d.',
+                    $response->status(),
+                ));
+            }
 
-        return $this->parseTrackId($response->body());
+            return $this->parseTrackId($response->body());
+        }, $issuer);
     }
 
     /**
@@ -95,7 +104,8 @@ class IecvUploadGateway
         return $this->http
             ->createPendingRequest()
             ->baseUrl($baseUrl)
-            ->withCookies(['TOKEN' => $token], parse_url($baseUrl, PHP_URL_HOST))
+            ->withCookies([SiiEndpoints::TOKEN_COOKIE => $token], parse_url($baseUrl, PHP_URL_HOST))
+            ->withHeaders([SiiEndpoints::USER_AGENT_HEADER => SiiEndpoints::USER_AGENT])
             ->timeout(60)
             ->asMultipart();
     }

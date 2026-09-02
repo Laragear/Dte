@@ -4,10 +4,10 @@ namespace Tests\Unit\Mailbox;
 
 use DateTimeImmutable;
 use Illuminate\Contracts\Cache\Factory;
-use Laragear\Dte\Contracts\TokenProviderInterface;
 use Laragear\Dte\Gateways\Token;
 use Laragear\Dte\Mailbox\RutEmailResolver;
 use Laragear\Dte\Support\SoapProxy;
+use Laragear\Dte\Support\TokenAuthenticator;
 use Laragear\Rut\Rut;
 use Mockery;
 use Mockery\MockInterface;
@@ -37,7 +37,11 @@ class RutEmailResolverTest extends TestCase
         bool $cacheEnabled = true,
     ): RutEmailResolver {
         $token = new Token('sii-dir-token', new DateTimeImmutable('+1 hour'));
-        $this->mock(TokenProviderInterface::class)->expects('token')->andReturn($token);
+        $this->mock(TokenAuthenticator::class, static function (Mockery\MockInterface $mock) use ($token): void {
+            $mock->expects('token')->zeroOrMoreTimes()->andReturn($token);
+            $mock->expects('retryWithFreshToken')->zeroOrMoreTimes()
+                ->andReturnUsing(fn($request, $issuer) => $request());
+        });
 
         $this->app['config']->set([
             'dte.environment' => $environment,
@@ -111,7 +115,7 @@ class RutEmailResolverTest extends TestCase
             'cached@empresa.cl');
 
         $this->mock(SoapProxy::class)->shouldNotReceive('build');
-        $this->mock(TokenProviderInterface::class)->shouldNotReceive('token');
+        $this->mock(TokenAuthenticator::class)->shouldNotReceive('token');
 
         $this->app['config']->set([
             'dte.environment' => 'certification',
@@ -132,7 +136,11 @@ class RutEmailResolverTest extends TestCase
         $rut = Rut::parse('76.123.456-7');
 
         $token = new Token('tok', new DateTimeImmutable('+1 hour'));
-        $this->mock(TokenProviderInterface::class)->expects('token')->andReturn($token);
+        $this->mock(TokenAuthenticator::class, static function (Mockery\MockInterface $mock) use ($token): void {
+            $mock->expects('token')->zeroOrMoreTimes()->andReturn($token);
+            $mock->expects('retryWithFreshToken')->zeroOrMoreTimes()
+                ->andReturnUsing(fn($request, $issuer) => $request());
+        });
 
         $this->app['config']->set([
             'dte.environment' => 'certification',
@@ -151,7 +159,6 @@ class RutEmailResolverTest extends TestCase
 
         $this->mock(SoapProxy::class, static function (MockInterface $mock) use ($mockClient): void {
             $mock->expects('withWsdl')->andReturnSelf();
-            $mock->expects('withOptions')->andReturnSelf();
             $mock->expects('build')->andReturn($mockClient);
         });
 
@@ -177,7 +184,11 @@ class RutEmailResolverTest extends TestCase
     public function test_throws_exception_on_soap_fault(): void
     {
         $token = new Token('tok', new DateTimeImmutable('+1 hour'));
-        $this->mock(TokenProviderInterface::class)->expects('token')->andReturn($token);
+        $this->mock(TokenAuthenticator::class, static function (Mockery\MockInterface $mock) use ($token): void {
+            $mock->expects('token')->zeroOrMoreTimes()->andReturn($token);
+            $mock->expects('retryWithFreshToken')->zeroOrMoreTimes()
+                ->andReturnUsing(fn($request, $issuer) => $request());
+        });
 
         $this->app['config']->set([
             'dte.environment' => 'certification',
@@ -192,7 +203,6 @@ class RutEmailResolverTest extends TestCase
 
         $this->mock(SoapProxy::class, static function (MockInterface $mock) use ($mockClient): void {
             $mock->expects('withWsdl')->andReturnSelf();
-            $mock->expects('withOptions')->andReturnSelf();
             $mock->expects('build')->andReturn($mockClient);
         });
 

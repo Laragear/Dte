@@ -5,12 +5,15 @@ namespace Laragear\Dte\Mailbox;
 use Illuminate\Contracts\Cache\Repository as Cache;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
 use Illuminate\Support\DateFactory;
-use Laragear\Dte\Contracts\TokenProviderInterface;
+use Laragear\Dte\Enums\DteEnvironment;
+use Laragear\Dte\Gateways\Exceptions\TokenInvalidException;
 use Laragear\Dte\Support\SoapProxy;
+use Laragear\Dte\Support\TokenAuthenticator;
 use Laragear\Rut\Rut;
 use RuntimeException;
 use SoapFault;
 use SoapHeader;
+use function in_array;
 
 /**
  * Resolves the official DTE interchange email address for a given RUT,
@@ -24,7 +27,7 @@ final readonly class RutEmailResolver
         protected Cache $cache,
         protected ConfigRepository $config,
         protected DateFactory $date,
-        protected TokenProviderInterface $tokens,
+        protected TokenAuthenticator $authenticator,
         protected SoapProxy $soapProxy,
     ) {
         //
@@ -60,48 +63,62 @@ final readonly class RutEmailResolver
 
     /**
      * Fetch the exchange email from the SII SOAP directory service.
+     *
+     * Uses the authenticator's retryWithFreshToken() loop: on
+     * TokenInvalidException (SII returned 001/002/003), the authenticator
+     * refreshes the token and retries — up to 3 total attempts.
      */
     protected function fetchFromSii(Rut $rut): ?string
     {
-        $token = $this->tokens->token($rut);
-        $environment = $this->config->get('dte.environment', 'local');
+        $environment = DteEnvironment::tryFrom(
+            $this->config->get('dte.environment', DteEnvironment::DEFAULT->value)
+        );
 
-        if ($environment === 'local' || $environment === 'testing') {
+        if ($environment === DteEnvironment::Local || $environment === DteEnvironment::Testing) {
             return null;
         }
 
-        $baseUrl = $environment === 'production'
+        $baseUrl = $environment === DteEnvironment::Production
             ? 'https://palena.sii.cl'
             : 'https://maullin.sii.cl';
 
-        $wsdlUrl = $baseUrl.'/DTEWS/CrSeed.asmx?WSDL';
+        return $this->authenticator->retryWithFreshToken(function () use ($rut, $baseUrl): ?string {
+            $token = $this->authenticator->token($rut);
 
-        $client = $this->soapProxy
-            ->withWsdl($wsdlUrl)
-            ->withOptions([
-                'trace' => 1,
-                'exceptions' => true,
-                'cache_wsdl' => WSDL_CACHE_NONE,
-            ])
-            ->build();
+            $wsdlUrl = $baseUrl.'/DTEWS/CrSeed.asmx?WSDL';
 
-        $header = new SoapHeader('http://www.sii.cl/ws/', 'Token', $token->value);
-        $client->__setSoapHeaders($header);
+            $client = $this->soapProxy
+                ->withWsdl($wsdlUrl)
+                ->build();
 
-        try {
-            $result = $client->__soapCall('getEmailByCodigo', [
-                [
-                    'RutEmpresa' => $rut->num,
-                    'DvEmpresa' => $rut->vd,
-                ],
-            ]);
+            $header = new SoapHeader('http://www.sii.cl/ws/', 'Token', $token->value);
+            $client->__setSoapHeaders($header);
+
+            try {
+                $result = $client->__soapCall('getEmailByCodigo', [
+                    [
+                        'RutEmpresa' => $rut->num,
+                        'DvEmpresa' => $rut->vd,
+                    ],
+                ]);
+            } catch (SoapFault) {
+                throw new RuntimeException('SII directory service failed to resolve email for '.$rut->formatBasic().'.');
+            }
+
+            // SII signals an inactive/invalid token with 001/002/003 in the
+            // response header: refresh and retry.
+            $estado = $result->ESTADO
+                ?? $result->getEmailByCodigoResult->ESTADO
+                ?? null;
+
+            if (in_array((string) $estado, ['001', '002', '003'], true)) {
+                throw new TokenInvalidException('SII directory service rejected the authentication token.');
+            }
 
             $email = (string) ($result->getEmailByCodigoResult->email ?? '');
 
             return $email !== '' ? $email : null;
-        } catch (SoapFault) {
-            throw new RuntimeException('SII directory service failed to resolve email for '.$rut->formatBasic().'.');
-        }
+        }, $rut);
     }
 
     /**

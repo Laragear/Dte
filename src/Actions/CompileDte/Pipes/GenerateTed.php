@@ -36,6 +36,10 @@ class GenerateTed
     {
         $document = $compilation->requireDocument();
 
+        $caf = $compilation->dte->caf ?? throw new RuntimeException('The DTE does not have an allocated CAF.');
+
+        $compilation->cafData ??= $this->caf->parse($caf->xml);
+
         $ted = $document->createElementNS(XmlDomFactory::XML_NAMESPACE, 'TED');
         $ted->setAttribute('version', '1.0');
 
@@ -79,8 +83,7 @@ class GenerateTed
      */
     protected function appendSignature(Compilation $compilation, DOMElement $ted, DOMElement $details): void
     {
-        $caf = $compilation->dte->caf ?? throw new RuntimeException('The DTE does not have an allocated CAF.');
-        $privateKey = $this->caf->parse($caf->xml)['private_key'];
+        $privateKey = $compilation->requireCafData()['private_key'];
 
         $signature = $this->element($ted, 'FRMT', $this->signer->sign($details, $privateKey));
         $signature->setAttribute('algoritmo', 'SHA1withRSA');
@@ -91,8 +94,7 @@ class GenerateTed
      */
     protected function cafNode(Compilation $compilation): DOMElement
     {
-        $caf = $compilation->dte->caf ?? throw new RuntimeException('The DTE does not have an allocated CAF.');
-        $document = $this->cafDocument($caf->xml);
+        $document = $this->cafDocument($compilation->requireCafData()['xml']);
         $node = $document->getElementsByTagName('CAF')->item(0);
 
         return $node instanceof DOMElement

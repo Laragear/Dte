@@ -1,6 +1,6 @@
 <?php
 
-namespace Laragear\Dte\Support;
+namespace Laragear\Dte\Enums;
 
 use function in_array;
 
@@ -145,5 +145,23 @@ enum SiiTaxes: int
         }
 
         return $code->isRetained();
+    }
+
+    /**
+     * The configured national IVA rate as an integer percentage.
+     */
+    public static function ivaRate(): int
+    {
+        $rate = config('dte.taxes.iva_rate', 19);
+
+        return $rate === null ? 19 : (int) $rate;
+    }
+
+    /**
+     * The configured national IVA rate as a decimal.
+     */
+    public static function ivaDecimal(): float
+    {
+        return static::ivaRate() / 100;
     }
 }

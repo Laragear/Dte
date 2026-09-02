@@ -10,6 +10,7 @@ use function is_string;
 
 final class EnvironmentResolver
 {
+
     /**
      * The resolved DTE environment.
      */

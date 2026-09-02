@@ -16,6 +16,7 @@ use Laragear\Dte\Gateways\SoapGateway;
 use Laragear\Dte\Gateways\Token;
 use Laragear\Dte\Jobs\PollDteStatusJob;
 use Laragear\Dte\Models\SiiDte;
+use Laragear\Dte\Support\TokenAuthenticator;
 use Laragear\Dte\Xml\XmlSigner;
 use Mockery;
 use Mockery\MockInterface;
@@ -29,6 +30,7 @@ class PollDteStatusJobTest extends DatabaseTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
         $this->app['env'] = 'production';
         $this->app->make('config')->set('app.env', 'production');
         $this->app->make('config')->set('dte.environment', 'production');
@@ -41,11 +43,17 @@ class PollDteStatusJobTest extends DatabaseTestCase
 
         $dte = SiiDte::factory()->hasPayload(['sii_response' => null])->create(['status' => DteStatus::Pending]);
 
-        $this->mock(SoapGateway::class, static function (MockInterface $mock): void {
+        $this->mock(TokenAuthenticator::class, static function (MockInterface $mock): void {
             $mock->expects('token')
+                ->zeroOrMoreTimes()
                 ->andReturn(new Token('FAKE_TOKEN', now()->addHour()->toDateTimeImmutable()));
+            $mock->expects('retryWithFreshToken')->zeroOrMoreTimes()
+                ->andReturnUsing(fn($request, $issuer) => $request());
+        });
+
+        $this->mock(SoapGateway::class, static function (MockInterface $mock): void {
             $mock->expects('query')
-                ->withArgs(fn ($rut, $service, $action, $args) => $args['Token'] === 'FAKE_TOKEN')
+                ->withArgs(fn($token, $service, $action, $args) => $args['Token'] === 'FAKE_TOKEN')
                 ->andReturn('<ESTADO>DOK</ESTADO>');
         });
 
@@ -64,9 +72,15 @@ class PollDteStatusJobTest extends DatabaseTestCase
 
         $dte = SiiDte::factory()->hasPayload(['sii_response' => null])->create(['status' => DteStatus::Pending]);
 
-        $this->mock(SoapGateway::class, static function (MockInterface $mock): void {
+        $this->mock(TokenAuthenticator::class, static function (MockInterface $mock): void {
             $mock->expects('token')
+                ->zeroOrMoreTimes()
                 ->andReturn(new Token('FAKE_TOKEN', now()->addHour()->toDateTimeImmutable()));
+            $mock->expects('retryWithFreshToken')->zeroOrMoreTimes()
+                ->andReturnUsing(fn($request, $issuer) => $request());
+        });
+
+        $this->mock(SoapGateway::class, static function (MockInterface $mock): void {
             $mock->expects('query')
                 ->andReturn('<ESTADO>FAU</ESTADO>');
         });
@@ -84,9 +98,15 @@ class PollDteStatusJobTest extends DatabaseTestCase
     {
         $dte = SiiDte::factory()->hasPayload(['sii_response' => null])->create(['status' => DteStatus::Pending]);
 
-        $this->mock(SoapGateway::class, static function (MockInterface $mock): void {
+        $this->mock(TokenAuthenticator::class, static function (MockInterface $mock): void {
             $mock->expects('token')
+                ->zeroOrMoreTimes()
                 ->andReturn(new Token('FAKE_TOKEN', now()->addHour()->toDateTimeImmutable()));
+            $mock->expects('retryWithFreshToken')->zeroOrMoreTimes()
+                ->andReturnUsing(fn($request, $issuer) => $request());
+        });
+
+        $this->mock(SoapGateway::class, static function (MockInterface $mock): void {
             $mock->expects('query')
                 ->andReturn('<ESTADO>UNKNOWN_STATUS</ESTADO>');
         });
@@ -142,7 +162,7 @@ class PollDteStatusJobTest extends DatabaseTestCase
 
         $dte = SiiDte::factory()->hasPayload(['sii_response' => null])->create(['status' => DteStatus::Rejected]);
 
-        $this->mock(SoapGateway::class, static function (MockInterface $mock): void {
+        $this->mock(TokenAuthenticator::class, static function (MockInterface $mock): void {
             $mock->expects('token')->never();
         });
 
@@ -262,9 +282,9 @@ class PollDteStatusJobTest extends DatabaseTestCase
             'status' => DteStatus::Pending,
         ]);
 
-        $gateway = Mockery::mock(SoapGateway::class);
-        $gateway->expects('token')->andThrow(new RuntimeException('Connection failed'));
-        $this->app->instance(SoapGateway::class, $gateway);
+        $authenticator = Mockery::mock(TokenAuthenticator::class);
+        $authenticator->expects('retryWithFreshToken')->andThrow(new RuntimeException('Connection failed'));
+        $this->app->instance(TokenAuthenticator::class, $authenticator);
 
         $this->mock(LoggerInterface::class)
             ->expects('error')

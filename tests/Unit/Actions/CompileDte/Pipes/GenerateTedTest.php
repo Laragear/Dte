@@ -3,9 +3,9 @@
 namespace Tests\Unit\Actions\CompileDte\Pipes;
 
 use Illuminate\Support\Carbon;
+use InvalidArgumentException;
 use Laragear\Dte\Actions\CompileDte\Compilation;
 use Laragear\Dte\Actions\CompileDte\Compile;
-use Laragear\Dte\Actions\CompileDte\Pipes\BuildXml;
 use Laragear\Dte\Actions\CompileDte\Pipes\GenerateTed;
 use Laragear\Dte\Caf\CafParser;
 use Laragear\Dte\Enums\DteType;
@@ -73,7 +73,10 @@ class GenerateTedTest extends DatabaseTestCase
 
         $compilation = $this->makeCompilation();
 
-        $this->mock(CafParser::class)->expects('parse')->once()->andReturn(['private_key' => 'fake_private_key']);
+        $this->mock(CafParser::class)->expects('parse')->once()->andReturn([
+            'private_key' => 'fake_private_key',
+            'xml' => '<AUTORIZACION><CAF><DA><RE>11111111-1</RE></DA></CAF></AUTORIZACION>',
+        ]);
 
         $this->mock(TimbreSigner::class)->expects('sign')->once()->andReturn('fake_signature');
 
@@ -106,6 +109,31 @@ class GenerateTedTest extends DatabaseTestCase
             });
     }
 
+    public function test_caf_data_stored_on_compilation(): void
+    {
+        $compilation = $this->makeCompilation();
+
+        $this->mock(CafParser::class)->expects('parse')->once()->andReturn([
+            'private_key' => 'cached_private_key',
+            'xml' => '<AUTORIZACION><CAF><DA><RE>11111111-1</RE></DA></CAF></AUTORIZACION>',
+        ]);
+
+        $this->mock(TimbreSigner::class)->expects('sign')->once()->andReturn('fake_signature');
+
+        $this->pipeline(Compile::class)
+            ->isolatePipe(GenerateTed::class)
+            ->send($compilation)
+            ->assertPassable(function (Compilation $result) {
+                static::assertSame('cached_private_key', $result->cafData['private_key']);
+                static::assertSame(
+                    '<AUTORIZACION><CAF><DA><RE>11111111-1</RE></DA></CAF></AUTORIZACION>',
+                    $result->cafData['xml']
+                );
+
+                return true;
+            });
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Angry paths
@@ -132,8 +160,13 @@ class GenerateTedTest extends DatabaseTestCase
         $compilation = $this->makeCompilation();
         $compilation->dte->caf->xml = '<AUTORIZACION></AUTORIZACION>';
 
-        $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessageIs('The allocated CAF XML does not contain a CAF element.');
+        $this->mock(CafParser::class)
+            ->expects('parse')
+            ->once()
+            ->andThrow(new InvalidArgumentException('The XML document does not contain a CAF node.'));
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageIs('The XML document does not contain a CAF node.');
 
         $this->pipeline(Compile::class)
             ->isolatePipe(GenerateTed::class)
@@ -144,6 +177,11 @@ class GenerateTedTest extends DatabaseTestCase
     {
         $compilation = $this->makeCompilation();
         $compilation->dte->caf->xml = 'not xml at all';
+
+        $this->mock(CafParser::class)
+            ->expects('parse')
+            ->once()
+            ->andThrow(new RuntimeException('Unable to parse the allocated CAF XML.'));
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessageIs('Unable to parse the allocated CAF XML.');

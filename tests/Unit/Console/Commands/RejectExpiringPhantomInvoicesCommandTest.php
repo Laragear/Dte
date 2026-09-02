@@ -3,19 +3,18 @@
 namespace Tests\Unit\Console\Commands;
 
 use DateTimeImmutable;
-use Laragear\Dte\Contracts\TokenProviderInterface;
 use Laragear\Dte\Enums\InboundDteStatus;
 use Laragear\Dte\Environment\EnvironmentResolver;
 use Laragear\Dte\Gateways\Token;
 use Laragear\Dte\Models\SiiInboundDocument;
 use Laragear\Dte\Support\SoapProxy;
+use Laragear\Dte\Support\TokenAuthenticator;
 use Mockery;
 use Mockery\MockInterface;
 use Psr\Log\LoggerInterface;
 use RuntimeException;
 use SoapClient;
 use Tests\DatabaseTestCase;
-
 use function now;
 
 class RejectExpiringPhantomInvoicesCommandTest extends DatabaseTestCase
@@ -81,17 +80,14 @@ class RejectExpiringPhantomInvoicesCommandTest extends DatabaseTestCase
 
         $this->mock(SoapProxy::class, static function (MockInterface $mock) use ($client): void {
             $mock->expects('withWsdl')->twice()->andReturnSelf();
-            $mock->expects('withOptions')->twice()->andReturnSelf();
             $mock->expects('build')->twice()->andReturn($client);
         });
 
         $this
-            ->mock(TokenProviderInterface::class)
-            ->expects('token')
-            ->twice()
-            ->andReturn(
-                new Token('fake', new DateTimeImmutable('+1 hour')),
-            );
+            ->mock(TokenAuthenticator::class, static function (MockInterface $mock): void {
+                $mock->expects('token')->twice()->andReturn(new Token('fake', new DateTimeImmutable('+1 hour')));
+                $mock->expects('retryWithFreshToken')->twice()->andReturnUsing(fn($request, $issuer) => $request());
+            });
 
         $this
             ->artisan('dte:reject-phantom-invoices')
@@ -150,16 +146,14 @@ class RejectExpiringPhantomInvoicesCommandTest extends DatabaseTestCase
 
         $this->mock(SoapProxy::class, static function (MockInterface $mock) use ($client): void {
             $mock->expects('withWsdl')->andReturnSelf();
-            $mock->expects('withOptions')->andReturnSelf();
             $mock->expects('build')->andReturn($client);
         });
 
         $this
-            ->mock(TokenProviderInterface::class)
-            ->expects('token')
-            ->andReturn(
-                new Token('fake', new DateTimeImmutable('+1 hour')),
-            );
+            ->mock(TokenAuthenticator::class, static function (MockInterface $mock): void {
+                $mock->expects('token')->andReturn(new Token('fake', new DateTimeImmutable('+1 hour')));
+                $mock->expects('retryWithFreshToken')->andReturnUsing(fn($request, $issuer) => $request());
+            });
 
         $this
             ->artisan('dte:reject-phantom-invoices')

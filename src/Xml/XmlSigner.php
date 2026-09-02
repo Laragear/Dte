@@ -3,6 +3,7 @@
 namespace Laragear\Dte\Xml;
 
 use DOMElement;
+use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laragear\Dte\Certificate\DigitalCertificate;
@@ -13,6 +14,7 @@ use RuntimeException;
 use function base64_encode;
 use function is_array;
 use function sha1;
+use function str_replace;
 
 class XmlSigner
 {
@@ -20,6 +22,7 @@ class XmlSigner
      * Create a new XML Signer instance.
      */
     public function __construct(
+        protected Filesystem $file,
         protected OpenSslProxy $openSsl,
         protected LibxmlProxy $libxml,
         protected XmlDomFactory $xml,
@@ -101,19 +104,11 @@ class XmlSigner
      */
     protected function buildSignedInfoXml(string $id, string $digest): string
     {
-        return <<<XML
-<SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#">
-<CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
-<SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/>
-<Reference URI="#{$id}">
-<Transforms>
-<Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
-</Transforms>
-<DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/>
-<DigestValue>{$digest}</DigestValue>
-</Reference>
-</SignedInfo>
-XML;
+        return str_replace(
+            ['{$id}', '{$digest}'],
+            [$id, $digest],
+            $this->file->get(__DIR__.'/stubs/signedinfo.stub')
+        );
     }
 
     /**
@@ -152,23 +147,11 @@ XML;
         string $exponent,
         string $x509b64
     ): string {
-        return <<<XML
-<Signature xmlns="http://www.w3.org/2000/09/xmldsig#">
-{$signedInfoXml}
-<SignatureValue>{$signatureValue}</SignatureValue>
-<KeyInfo>
-<KeyValue>
-<RSAKeyValue>
-<Modulus>{$modulus}</Modulus>
-<Exponent>{$exponent}</Exponent>
-</RSAKeyValue>
-</KeyValue>
-<X509Data>
-<X509Certificate>{$x509b64}</X509Certificate>
-</X509Data>
-</KeyInfo>
-</Signature>
-XML;
+        return str_replace(
+            ['{$signedInfoXml}', '{$signatureValue}', '{$modulus}', '{$exponent}', '{$x509b64}'],
+            [$signedInfoXml, $signatureValue, $modulus, $exponent, $x509b64],
+            $this->file->get(__DIR__.'/stubs/signature.stub')
+        );
     }
 
     protected function parseX509(string $certificate): string

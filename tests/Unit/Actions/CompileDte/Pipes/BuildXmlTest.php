@@ -91,6 +91,22 @@ class BuildXmlTest extends DatabaseTestCase
             });
     }
 
+    public function test_tasa_iva_element_reads_from_config(): void
+    {
+        $this->app->make('config')->set('dte.taxes.iva_rate', 21);
+
+        $compilation = $this->makeCompilation();
+
+        $this->pipeline(Compile::class)
+            ->isolatePipe(BuildXml::class)
+            ->send($compilation)
+            ->assertPassable(function (Compilation $result) {
+                static::assertStringContainsString('<TasaIVA>21</TasaIVA>', $result->document->saveXML());
+
+                return true;
+            });
+    }
+
     public function test_append_receiver_returns_early_when_receiver_is_null(): void
     {
         // Line 119: return when receiver is null
