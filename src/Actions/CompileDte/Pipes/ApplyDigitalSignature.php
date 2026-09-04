@@ -26,7 +26,7 @@ class ApplyDigitalSignature
     }
 
     /**
-     * Sign and persist the final DTE XML.
+     * Handle the incoming DTE compilation.
      *
      * @param  Closure(Compilation): Compilation  $next
      */

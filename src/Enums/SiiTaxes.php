@@ -2,6 +2,7 @@
 
 namespace Laragear\Dte\Enums;
 
+use InvalidArgumentException;
 use function in_array;
 
 /**
@@ -153,6 +154,12 @@ enum SiiTaxes: int
     public static function ivaRate(): int
     {
         $rate = config('dte.taxes.iva_rate', 19);
+
+        if ($rate < 1 || $rate > 100) {
+            throw new InvalidArgumentException(
+                "The dte.taxes.iva_rate configuration must be between 1 and 100. Got: {$rate}"
+            );
+        }
 
         return $rate === null ? 19 : (int) $rate;
     }

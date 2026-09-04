@@ -43,15 +43,15 @@ class XmlCanonicalizer
     protected function document(string $xml): DOMDocument
     {
         $document = $this->xml->document();
-        $previous = $this->libxml->use_internal_errors(true);
+        $previous = $this->libxml->useInternalErrors(true);
 
         try {
             if (!$document->loadXML($xml, LIBXML_NONET)) {
                 throw new DOMException('Unable to parse XML for canonicalization.');
             }
         } finally {
-            $this->libxml->clear_errors();
-            $this->libxml->use_internal_errors($previous);
+            $this->libxml->clearErrors();
+            $this->libxml->useInternalErrors($previous);
         }
 
         return $document;

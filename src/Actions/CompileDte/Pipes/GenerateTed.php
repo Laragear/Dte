@@ -28,7 +28,7 @@ class GenerateTed
     }
 
     /**
-     * Generate and sign the tax stamp for the allocated folio.
+     * Handle the incoming DTE compilation.
      *
      * @param  Closure(Compilation): Compilation  $next
      */

@@ -2,7 +2,6 @@
 
 namespace Tests\Unit\Certification\PrintSample\Pipes;
 
-use Illuminate\Console\ManuallyFailedException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laragear\Dte\Certification\PrintSample\Pipes\GeneratePdfs;
 use Laragear\Dte\Certification\PrintSample\PrintSample;
@@ -20,20 +19,19 @@ class GeneratePdfsTest extends DatabaseTestCase
     use InteractsWithPipelines;
     use RefreshDatabase;
 
-    public function test_generates_pdfs_for_unique_document_types(): void
+    public function test_generates_pdfs_for_given_dte_ids(): void
     {
-
-        SiiDte::factory()->create([
+        $dte1 = SiiDte::factory()->create([
             'issuer_rut' => '76123456-0',
             'document_type' => 33,
             'created_at' => now(),
         ]);
-        SiiDte::factory()->create([
+        $dte2 = SiiDte::factory()->create([
             'issuer_rut' => '76123456-0',
             'document_type' => 33,
             'created_at' => now(),
         ]);
-        SiiDte::factory()->create([
+        $dte3 = SiiDte::factory()->create([
             'issuer_rut' => '76123456-0',
             'document_type' => 34,
             'created_at' => now(),
@@ -48,7 +46,7 @@ class GeneratePdfsTest extends DatabaseTestCase
             );
         });
 
-        $data = new PrintSampleData(new Rut(76_123_456, 0));
+        $data = new PrintSampleData(new Rut(76_123_456, 0), [$dte1->id, $dte2->id, $dte3->id]);
 
         $this->pipeline(PrintSample::class)
             ->isolatePipe(GeneratePdfs::class)
@@ -61,19 +59,5 @@ class GeneratePdfsTest extends DatabaseTestCase
 
                 return true;
             });
-
-    }
-
-    public function test_fails_when_no_dtes_found(): void
-    {
-        $this->expectException(ManuallyFailedException::class);
-        $this->expectExceptionMessageIs('No DTEs found in the last 24 hours. You need to create the DTEs first (Step 1).');
-
-        $data = new PrintSampleData(new Rut(76_123_456, 0));
-
-        $this->pipeline(PrintSample::class)
-            ->isolatePipe(GeneratePdfs::class)
-            ->send($data)
-            ->thenReturn();
     }
 }

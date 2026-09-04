@@ -3,7 +3,6 @@
 namespace Laragear\Dte\Jobs;
 
 use Exception;
-use Illuminate\Contracts\Config\Repository as ConfigRepository;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -77,10 +76,6 @@ class PollDteStatusJob implements ShouldQueue
 
     /**
      * Queries the SII for the current status of the DTE.
-     *
-     * Uses the authenticator's retryWithFreshToken() loop: on
-     * TokenInvalidException (SII returned 001/002/003), the authenticator
-     * refreshes the token and retries — up to 3 total attempts.
      */
     protected function queryDteStatus(SoapGateway $gateway): string
     {
@@ -228,11 +223,4 @@ class PollDteStatusJob implements ShouldQueue
         }
     }
 
-    /**
-     * Computes the minimum delay before the next DTE status poll.
-     */
-    protected function effectiveDelay(ConfigRepository $config): int
-    {
-        return 120 + max(0, (int) $config->get('dte.polling.delay_under_30kb', 0));
-    }
 }

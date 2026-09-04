@@ -7,6 +7,7 @@ use Illuminate\Support\Str;
 use Laragear\Dte\Enums\DteType;
 use Laragear\Dte\Gateways\Exceptions\TokenInvalidException;
 use Laragear\Dte\Gateways\SoapGateway;
+use Laragear\Dte\Gateways\TokenStatus;
 use Laragear\Dte\Support\TokenAuthenticator;
 use Laragear\Dte\Support\XmlDomFactory;
 use Laragear\Rut\Rut;
@@ -87,10 +88,9 @@ class DteAuthenticityVerifier
      */
     protected function isTokenInvalidStatus(string $xml): bool
     {
-        return Str::contains($xml, [
-            '<ESTADO>001</ESTADO>',
-            '<ESTADO>002</ESTADO>',
-            '<ESTADO>003</ESTADO>',
-        ]);
+        return Str::contains($xml, array_map(
+            static fn(string $code) => '<ESTADO>'.$code.'</ESTADO>',
+            TokenStatus::INVALID_CODES,
+        ));
     }
 }

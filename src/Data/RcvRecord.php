@@ -6,20 +6,20 @@ use Illuminate\Support\Carbon;
 use Laragear\Dte\Enums\DteType;
 use Laragear\Rut\Rut;
 
-class RcvRecord
+readonly class RcvRecord
 {
     /**
      * Create a new RCV Record instance.
      */
     public function __construct(
-        public readonly Rut $issuer,
-        public readonly Rut $receiver,
-        public readonly DteType $documentType,
-        public readonly int $folio,
-        public readonly int $amountTotal,
-        public readonly string $characterization,
-        public readonly ?Carbon $issuedOn = null,
-        public readonly ?Carbon $acknowledgedAt = null,
+        public Rut $issuer,
+        public Rut $receiver,
+        public DteType $documentType,
+        public int $folio,
+        public int $amountTotal,
+        public string $characterization,
+        public ?Carbon $issuedOn = null,
+        public ?Carbon $acknowledgedAt = null,
     ) {
     }
 }

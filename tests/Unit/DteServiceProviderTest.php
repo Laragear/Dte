@@ -2,13 +2,15 @@
 
 namespace Tests\Unit;
 
+use Illuminate\Contracts\Console\Kernel as ConsoleKernel;
+use Illuminate\Contracts\Foundation\Application;
 use Laragear\Dte\Certificate\CertificateResolver;
 use Laragear\Dte\Contracts\CertificateResolverInterface;
 use Laragear\Dte\DteServiceProvider;
 use Laragear\Dte\Environment\EnvironmentResolver;
 use Laragear\Dte\Pdf\Pdf417Generator;
 use Laragear\MetaTesting\InteractsWithServiceProvider;
-use Mockery;
+use Orchestra\Testbench\Attributes\DefineEnvironment;
 use ReflectionClass;
 use Tests\TestCase;
 
@@ -57,22 +59,66 @@ class DteServiceProviderTest extends TestCase
         static::assertPublishes($this->app->databasePath('migrations'), 'migrations');
     }
 
+    public function test_registers_commands(): void
+    {
+        $this->assertHasCommand(
+            'dte:check-cafs',
+            'dte:fetch-mailbox',
+            'dte:reject-phantom-invoices',
+            'dte:poll-track-status',
+            'dte:compile',
+            'dte:process-envelope',
+            'dte:pack-ready',
+        );
+    }
+
+    protected function asInRequestMode(Application $app): void
+    {
+        new ReflectionClass($app)->getProperty('isRunningInConsole')->setValue($app, false);
+    }
+
+    #[DefineEnvironment('asInRequestMode')]
     public function test_should_not_register_fake_commands_when_not_in_console(): void
     {
-        $sp = new DteServiceProvider($this->app);
+        $commands = $this->app->make(ConsoleKernel::class)->all();
 
-        $mockApp = Mockery::mock($this->app)->makePartial();
-        $mockApp->shouldReceive('runningInConsole')->andReturn(false);
+        foreach (['dte:make-fake-cert', 'dte:make-fake-caf'] as $alias) {
+            static::assertThat(
+                $commands, static::logicalNot(static::arrayHasKey($alias)), "The '$alias' command is registered."
+            );
+        }
+    }
 
-        $reflection = new ReflectionClass($sp);
-        $property = $reflection->getProperty('app');
-        $property->setAccessible(true);
-        $property->setValue($sp, $mockApp);
+    protected function asProduction(Application $app): void
+    {
+        $app['config']->set('dte.environment', 'production');
+    }
 
-        $method = $reflection->getMethod('shouldRegisterFakeCommands');
-        $method->setAccessible(true);
+    #[DefineEnvironment('asProduction')]
+    public function test_should_not_register_fake_commands_in_production(): void
+    {
+        $commands = $this->app->make(ConsoleKernel::class)->all();
 
-        $result = $method->invoke($sp, $this->app->make(EnvironmentResolver::class));
-        static::assertFalse($result);
+        foreach (['dte:make-fake-cert', 'dte:make-fake-caf'] as $alias) {
+            static::assertThat(
+                $commands, static::logicalNot(static::arrayHasKey($alias)),
+                "The '$alias' command is registered in production."
+            );
+        }
+    }
+
+    protected function asLocal(Application $app): void
+    {
+        $app['config']->set('dte.environment', 'local');
+    }
+
+    #[DefineEnvironment('asLocal')]
+    public function test_should_register_fake_commands_in_local(): void
+    {
+        $commands = $this->app->make(ConsoleKernel::class)->all();
+
+        foreach (['dte:make-fake-cert', 'dte:make-fake-caf'] as $alias) {
+            static::assertArrayHasKey($alias, $commands, "The '$alias' command is not registered in local.");
+        }
     }
 }

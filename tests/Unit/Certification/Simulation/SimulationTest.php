@@ -2,6 +2,7 @@
 
 namespace Tests\Unit\Certification\Simulation;
 
+use Laragear\Dte\Certification\Pipes\EnsureDtesCompiled;
 use Laragear\Dte\Certification\Simulation\Pipes\CompileEnvelope;
 use Laragear\Dte\Certification\Simulation\Pipes\GenerateSimulationDtes;
 use Laragear\Dte\Certification\Simulation\Pipes\SendEnvelope;
@@ -17,6 +18,7 @@ class SimulationTest extends TestCase
     public function test_check_pipes_order(): void
     {
         $this->pipeline(Simulation::class)->assertPipes([
+            EnsureDtesCompiled::class,
             GenerateSimulationDtes::class,
             CompileEnvelope::class,
             SendEnvelope::class,

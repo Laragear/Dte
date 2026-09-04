@@ -3,13 +3,13 @@
 namespace Tests\Unit\Certification\Interchange\Pipes;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laragear\Dte\Actions\InboundDte\ProcessInboundDte as ProcessInboundDtePipeline;
 use Laragear\Dte\Certification\Interchange\Interchange;
 use Laragear\Dte\Certification\Interchange\InterchangeData;
-use Laragear\Dte\Certification\Interchange\Pipes\ProcessInboundDte;
+use Laragear\Dte\Certification\Interchange\Pipes\ProcessInboundDte as ProcessInboundDtePipe;
 use Laragear\Dte\Data\InboundEmailData;
 use Laragear\Dte\Models\SiiInboundDocument;
 use Laragear\Dte\Models\SiiInterchangeLog;
-use Laragear\Dte\Services\InboundDteProcessor;
 use Laragear\MetaTesting\Pipeline\InteractsWithPipelines;
 use Laragear\Rut\Rut;
 use Mockery\MockInterface;
@@ -36,7 +36,7 @@ class ProcessInboundDteTest extends DatabaseTestCase
             xmlAttachment: '<xml></xml>'
         );
 
-        $this->mock(InboundDteProcessor::class)->expects('process')->once()->with($emailData);
+        $this->mock(ProcessInboundDtePipeline::class)->expects('handle')->once()->with($emailData);
 
         $log = SiiInterchangeLog::factory()->create(['message_id' => 'found']);
         $doc = SiiInboundDocument::factory()->create(['sii_interchange_log_id' => $log->id]);
@@ -47,7 +47,7 @@ class ProcessInboundDteTest extends DatabaseTestCase
         );
 
         $this->pipeline(Interchange::class)
-            ->isolatePipe(ProcessInboundDte::class)
+            ->isolatePipe(ProcessInboundDtePipe::class)
             ->send($data)
             ->assertPassable(function (InterchangeData $result) use ($doc) {
                 static::assertTrue($result->inboundDocument->is($doc));
@@ -71,8 +71,8 @@ class ProcessInboundDteTest extends DatabaseTestCase
             xmlAttachment: '<xml></xml>'
         );
 
-        $this->mock(InboundDteProcessor::class, function (MockInterface $mock) use ($emailData) {
-            $mock->expects('process')->once()->with($emailData)->andThrow(new RuntimeException('Processing failed'));
+        $this->mock(ProcessInboundDtePipeline::class, function (MockInterface $mock) use ($emailData) {
+            $mock->expects('handle')->once()->with($emailData)->andThrow(new RuntimeException('Processing failed'));
         });
 
         $data = new InterchangeData(new Rut(76_123_456, 0));
@@ -82,7 +82,7 @@ class ProcessInboundDteTest extends DatabaseTestCase
         $this->expectExceptionMessageIs('Processing failed');
 
         $this->pipeline(Interchange::class)
-            ->isolatePipe(ProcessInboundDte::class)
+            ->isolatePipe(ProcessInboundDtePipe::class)
             ->send($data);
     }
 }

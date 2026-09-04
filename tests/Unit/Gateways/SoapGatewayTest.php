@@ -12,11 +12,13 @@ use Laragear\Dte\Enums\DteEnvironment;
 use Laragear\Dte\Environment\EnvironmentResolver;
 use Laragear\Dte\Gateways\Exceptions\SiiAuthenticationException;
 use Laragear\Dte\Gateways\Exceptions\SiiSeedUnavailableException;
+use Laragear\Dte\Gateways\SoapClientFactory;
 use Laragear\Dte\Gateways\SoapGateway;
 use Laragear\Dte\Gateways\Token;
 use Laragear\Dte\Support\OpenSslProxy;
 use Laragear\Dte\Support\SoapProxy;
 use Laragear\Dte\Support\XmlDomFactory;
+use Laragear\Dte\Xml\XmlSigner;
 use Laragear\Rut\Rut;
 use Mockery;
 use Mockery\MockInterface;
@@ -51,6 +53,8 @@ class SoapGatewayTest extends TestCase
                 $app->make(SoapProxy::class),
                 $app->make(OpenSslProxy::class),
                 $app->make(XmlDomFactory::class),
+                $app->make(XmlSigner::class),
+                $app->make(SoapClientFactory::class),
             ) extends SoapGateway {
                 protected function sleepFor(int $seconds): void
                 {
@@ -98,8 +102,6 @@ class SoapGatewayTest extends TestCase
                         return $mock;
                     }
                 );
-
-                $mock->expects('withOptions')->zeroOrMoreTimes()->andReturnSelf();
 
                 $mock->expects('build')->zeroOrMoreTimes()->andReturnUsing(
                     static function () use (&$currentWsdl, &$buildCalls, $seedSetup, $tokenSetup) {
@@ -151,6 +153,8 @@ class SoapGatewayTest extends TestCase
             $this->app->make(SoapProxy::class),
             $this->app->make(OpenSslProxy::class),
             $this->app->make(XmlDomFactory::class),
+            $this->app->make(XmlSigner::class),
+            $this->app->make(SoapClientFactory::class),
         ) extends SoapGateway {
             public function exposeNewSoapClient(string $wsdl): SoapClient
             {

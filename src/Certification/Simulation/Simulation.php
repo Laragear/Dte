@@ -3,6 +3,7 @@
 namespace Laragear\Dte\Certification\Simulation;
 
 use Illuminate\Pipeline\Pipeline;
+use Laragear\Dte\Certification\Pipes\EnsureDtesCompiled;
 use Laragear\Rut\Rut;
 
 class Simulation extends Pipeline
@@ -13,6 +14,7 @@ class Simulation extends Pipeline
      * @var array
      */
     protected $pipes = [
+        EnsureDtesCompiled::class,
         Pipes\GenerateSimulationDtes::class,
         Pipes\CompileEnvelope::class,
         Pipes\SendEnvelope::class,

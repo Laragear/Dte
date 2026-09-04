@@ -34,6 +34,8 @@ class SendTestingIecvTest extends TestCase
             ->isolatePipe(SendTestingIecv::class)
             ->send($data)
             ->assertPassable(function (TestSetData $result) use ($data) {
+                static::assertSame('123456', $result->iecvTrackId);
+
                 return $result === $data;
             });
     }

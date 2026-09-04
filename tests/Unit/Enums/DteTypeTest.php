@@ -34,4 +34,34 @@ class DteTypeTest extends TestCase
     {
         static::assertSame(DteType::{$type}, DteType::from($code));
     }
+
+    public function test_is_receipt(): void
+    {
+        static::assertTrue(DteType::Receipt->isReceipt());
+        static::assertTrue(DteType::ExemptReceipt->isReceipt());
+        static::assertFalse(DteType::Invoice->isReceipt());
+        static::assertFalse(DteType::CreditNote->isReceipt());
+    }
+
+    public static function providesDocumentTypesWithSchema(): Generator
+    {
+        yield 'InvoicePhysical' => [DteType::InvoicePhysical, null];
+        yield 'InvoicePhysicalExempt' => [DteType::InvoicePhysicalExempt, null];
+
+        yield 'Invoice' => [DteType::Invoice, 'DTE_v10.xsd'];
+        yield 'InvoiceExempt' => [DteType::InvoiceExempt, 'DTE_v10.xsd'];
+        yield 'Receipt' => [DteType::Receipt, 'DTE_v10.xsd'];
+        yield 'ExemptReceipt' => [DteType::ExemptReceipt, 'DTE_v10.xsd'];
+        yield 'InvoiceLiquidation' => [DteType::InvoiceLiquidation, 'DTE_v10.xsd'];
+        yield 'PurchaseInvoice' => [DteType::PurchaseInvoice, 'DTE_v10.xsd'];
+        yield 'DispatchGuide' => [DteType::DispatchGuide, 'DTE_v10.xsd'];
+        yield 'DebitNote' => [DteType::DebitNote, 'DTE_v10.xsd'];
+        yield 'CreditNote' => [DteType::CreditNote, 'DTE_v10.xsd'];
+    }
+
+    #[DataProvider('providesDocumentTypesWithSchema')]
+    public function test_schema_xsd(DteType $type, ?string $schema): void
+    {
+        static::assertSame($schema, $type->schemaXsd());
+    }
 }

@@ -4,7 +4,6 @@ namespace Laragear\Dte\Pdf;
 
 use Closure;
 use DateTimeInterface;
-use DOMElement;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Filesystem\Factory as Filesystem;
 use Illuminate\Contracts\Support\Responsable;
@@ -13,13 +12,10 @@ use Illuminate\Contracts\View\View as ViewContract;
 use InvalidArgumentException;
 use Laragear\Dte\Data\PdfData;
 use Laragear\Dte\Models\SiiDte;
-use Laragear\Dte\Support\LibxmlProxy;
-use Laragear\Dte\Support\XmlDomFactory;
 use Spatie\LaravelPdf\Facades\Pdf;
 use Spatie\LaravelPdf\FakePdfBuilder;
 use Spatie\LaravelPdf\PdfBuilder as SpatiePdfBuilder;
 use Symfony\Component\HttpFoundation\Response;
-use function is_a;
 use function trim;
 
 class PdfBuilder implements Responsable
@@ -42,8 +38,7 @@ class PdfBuilder implements Responsable
         protected Filesystem $storage,
         protected ViewFactory $view,
         protected Pdf417Generator $barcode,
-        protected LibxmlProxy $libxml,
-        protected XmlDomFactory $xml,
+        protected TedExtractor $extractor,
     ) {
         //
     }
@@ -107,7 +102,7 @@ class PdfBuilder implements Responsable
     {
         $html = $this->view($view, $data)->render();
 
-        // Using the facade allows us to test with `Pdf::fake()`. Blame Spatie.
+        // Using the facade allows us to test with `Pdf::fake()`.
         $builder = Pdf::html($html)
             ->driver($this->config->get('dte.pdf.driver', 'dompdf'))
             ->format('letter');
@@ -131,7 +126,7 @@ class PdfBuilder implements Responsable
         $xml = $this->dte->payload?->xml
             ?? throw new InvalidArgumentException('The DTE must have an XML payload to generate a PDF.');
 
-        $ted = $this->extractTed($xml);
+        $ted = $this->extractor->extract($xml);
 
         return $this->view->make($viewName, array_merge([
             'dte' => $this->dte,
@@ -183,17 +178,7 @@ class PdfBuilder implements Responsable
      */
     public function binary(): string
     {
-        $spatie = $this->resolveSpatieBuilder();
-
-        // Defensively return fake binary content when the stupidly made
-        // fake builder calls for binary content. Spatie quality.
-        $fake = '\Spatie\LaravelPdf\FakePdfBuilder';
-
-        if (class_exists($fake) && is_a($spatie, $fake, true)) {
-            return 'fake-pdf-content';
-        }
-
-        return $spatie->generatePdfContent();
+        return $this->resolveSpatieBuilder()->generatePdfContent();
     }
 
     /**
@@ -240,33 +225,5 @@ class PdfBuilder implements Responsable
     public function toResponse($request): Response
     {
         return $this->resolveSpatieBuilder()->inline()->toResponse($request);
-    }
-
-    /**
-     * Extract the raw <TED>...</TED> element from the compiled XML payload.
-     */
-    protected function extractTed(string $xml): string
-    {
-        $document = $this->xml->document();
-
-        $previous = $this->libxml->use_internal_errors(true);
-        $loaded = $document->loadXML($xml, LIBXML_NONET);
-        $this->libxml->clear_errors();
-        $this->libxml->use_internal_errors($previous);
-
-        if (!$loaded) {
-            throw new InvalidArgumentException('The XML payload is invalid.');
-        }
-
-        $xpath = $this->xml->xpath($document);
-        $xpath->registerNamespace('sii', XmlDomFactory::XML_NAMESPACE);
-
-        $ted = $xpath->query('//sii:TED')->item(0);
-
-        if (!$ted instanceof DOMElement) {
-            throw new InvalidArgumentException('The XML payload does not contain a TED element.');
-        }
-
-        return $document->saveXML($ted) ?: throw new InvalidArgumentException('Unable to extract the TED XML.');
     }
 }

@@ -25,11 +25,11 @@ class YieldLazyCollection
     }
 
     /**
-     * Handle the given context.
+     * Handle the incoming RCV Parsing.
      *
      * @param  Closure(ParsingContext):ParsingContext  $next
      */
-    public function handle(ParsingContext $context, Closure $next): mixed
+    public function handle(ParsingContext $context, Closure $next): ParsingContext
     {
         if (!$this->extractHeaders($context)) {
             $context->records = LazyCollection::empty();
@@ -54,7 +54,7 @@ class YieldLazyCollection
         }
 
         $context->headerMap = array_map(static function (string $val): string {
-            return trim($val, "\xEF\xBB\xBF\xC3\xAF\xC2\xBB\xC2\xBF \t\n\r\0\x0B");
+            return trim($val, "\xEF\xBB\xBF\xC3\xAF\xC2 \t\n\r\0\x0B");
         }, $headerLine);
 
         return true;
@@ -131,14 +131,14 @@ class YieldLazyCollection
     protected function mapToRcvRecord(array $mapped, ParsingContext $context): RcvRecord
     {
         return new RcvRecord(
-            issuer: $this->resolveIssuer($mapped, $context),
-            receiver: $this->resolveReceiver($mapped, $context),
-            documentType: DteType::from((int) $mapped['Tipo Doc']),
-            folio: (int) ($mapped['Folio'] ?? 0),
-            amountTotal: $this->parseAmount($mapped),
-            characterization: $mapped['Tipo Compra'] ?? $mapped['Tipo Venta'] ?? 'Del Giro',
-            issuedOn: $this->parseDate($mapped, 'Fecha Docto'),
-            acknowledgedAt: $this->parseDate($mapped, 'Fecha Acuse'),
+            $this->resolveIssuer($mapped, $context),
+            $this->resolveReceiver($mapped, $context),
+            DteType::from((int) $mapped['Tipo Doc']),
+            (int) ($mapped['Folio'] ?? 0),
+            $this->parseAmount($mapped),
+            $mapped['Tipo Compra'] ?? $mapped['Tipo Venta'] ?? 'Del Giro',
+            $this->parseDate($mapped, 'Fecha Docto'),
+            $this->parseDate($mapped, 'Fecha Acuse'),
         );
     }
 

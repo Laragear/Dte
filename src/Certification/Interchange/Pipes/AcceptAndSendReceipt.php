@@ -35,10 +35,10 @@ class AcceptAndSendReceipt
         }
 
         $this->claimService->accept(
-            document: $data->inboundDocument,
-            signer: $signerRut,
-            location: $location,
-            certificate: $certificate,
+            $data->inboundDocument,
+            $signerRut,
+            $location,
+            $certificate,
         );
 
         return $next($data);

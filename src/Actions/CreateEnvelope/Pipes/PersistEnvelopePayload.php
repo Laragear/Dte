@@ -20,7 +20,7 @@ class PersistEnvelopePayload
     }
 
     /**
-     * Persist the signed envelope XML and final state.
+     * Hande the incoming DTE Envelope Assembly.
      *
      * @param  Closure(Assembly): Assembly  $next
      */

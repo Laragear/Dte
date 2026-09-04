@@ -83,7 +83,7 @@ class ProcessAndSendEnvelopeCommandTest extends DatabaseTestCase
                 '<RESPUESTATOKEN><TOKEN>P7VQKYLDNHJGP</TOKEN></RESPUESTATOKEN>',
                 200,
             ),
-            'https://api.sii.cl/recursos/v1/boleta.electronica.envio' => Http::response(
+            'https://rahue.sii.cl/recursos/v1/boleta.electronica.envio' => Http::response(
                 ['trackid' => 'boleta-track-id', 'estado' => 'REC', 'codigo' => 0],
                 200,
             ),

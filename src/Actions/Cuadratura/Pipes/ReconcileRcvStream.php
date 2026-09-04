@@ -26,11 +26,11 @@ class ReconcileRcvStream
     }
 
     /**
-     * Handle the given context.
+     * Hande the incoming Cuadratura.
      *
-     * @param  Closure(CuadraturaContext):CuadraturaContext  $next
+     * @param  Closure(CuadraturaContext): CuadraturaContext  $next
      */
-    public function handle(CuadraturaContext $context, Closure $next): mixed
+    public function handle(CuadraturaContext $context, Closure $next): CuadraturaContext
     {
         $type = $context->parsingContext->type;
 
@@ -87,6 +87,7 @@ class ReconcileRcvStream
 
         if (!$model) {
             $this->event->dispatch(new DteUnregistered($record));
+
             $context->metrics['phantoms']++;
 
             return;
@@ -144,7 +145,6 @@ class ReconcileRcvStream
         }
 
         if ($record->acknowledgedAt !== null) {
-            /** @phpstan-ignore-next-line */
             $model->acknowledged_at = $record->acknowledgedAt;
         }
 

@@ -87,6 +87,47 @@ class FetchInterchangeXmlTest extends DatabaseTestCase
             });
     }
 
+    public function test_auto_detects_file_mode_when_xml_content_provided_with_default_source(): void
+    {
+        $this->mock(MailboxManager::class, function (MockInterface $mock) {
+            // Mailbox should not be consulted when xmlContent is provided.
+            $mock->shouldNotReceive('driver');
+        });
+
+        $this->pipeline(Interchange::class)
+            ->isolatePipe(FetchInterchangeXml::class)
+            ->send(new InterchangeData(new Rut(76_123_456, 0), xmlContent: '<raw></raw>'))
+            ->assertPassable(function (InterchangeData $data) {
+                static::assertStringContainsString('manual-file-', $data->emailData->messageId);
+                static::assertSame('sii_dte_intercambio@sii.cl', $data->emailData->sender);
+                static::assertSame('<raw></raw>', $data->emailData->xmlAttachment);
+
+                return true;
+            });
+    }
+
+    public function test_auto_detects_file_mode_when_file_path_provided_with_default_source(): void
+    {
+        $this->mock(Filesystem::class, function (MockInterface $mock) {
+            $mock->expects('get')->with('/dummy.xml')->andReturn('<xml></xml>');
+        });
+
+        $this->mock(MailboxManager::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('driver');
+        });
+
+        $this->pipeline(Interchange::class)
+            ->isolatePipe(FetchInterchangeXml::class)
+            ->send(new InterchangeData(new Rut(76_123_456, 0), filePath: '/dummy.xml'))
+            ->assertPassable(function (InterchangeData $data) {
+                static::assertStringContainsString('manual-file-', $data->emailData->messageId);
+                static::assertSame('sii_dte_intercambio@sii.cl', $data->emailData->sender);
+                static::assertSame('<xml></xml>', $data->emailData->xmlAttachment);
+
+                return true;
+            });
+    }
+
     public function test_fails_when_file_does_not_exist(): void
     {
         $this->mock(Filesystem::class, function (MockInterface $mock) {

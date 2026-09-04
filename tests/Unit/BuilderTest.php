@@ -3,8 +3,8 @@
 namespace Tests\Unit;
 
 use Generator;
+use Laragear\Dte\Actions\Aec\CompileAec;
 use Laragear\Dte\Builder;
-use Laragear\Dte\Builders\AecBuilder;
 use Laragear\Dte\Builders\AecCessionBuilder;
 use Laragear\Dte\Builders\CreditNoteBuilder;
 use Laragear\Dte\Builders\DebitNoteBuilder;
@@ -50,7 +50,7 @@ class BuilderTest extends TestCase
 
     public function test_builds_aec(): void
     {
-        $instance = $this->mock(AecBuilder::class);
+        $instance = $this->mock(CompileAec::class);
         static::assertSame($instance, $this->app->make(Builder::class)->aec());
     }
 

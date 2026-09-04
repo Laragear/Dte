@@ -2,7 +2,6 @@
 
 namespace Laragear\Dte\Gateways;
 
-use DOMElement;
 use Illuminate\Filesystem\Filesystem;
 use Laragear\Dte\Certificate\DigitalCertificate;
 use Laragear\Dte\Contracts\CertificateResolverInterface;
@@ -13,30 +12,16 @@ use Laragear\Dte\Gateways\Exceptions\SiiSeedUnavailableException;
 use Laragear\Dte\Support\OpenSslProxy;
 use Laragear\Dte\Support\SoapProxy;
 use Laragear\Dte\Support\XmlDomFactory;
+use Laragear\Dte\Xml\XmlSigner;
 use Laragear\Rut\Rut;
 use RuntimeException;
 use SoapClient;
-use SoapHeader;
 use Throwable;
-use function base64_encode;
-use function is_array;
 use function is_object;
-use function sha1;
 use function sleep;
 use function sprintf;
-use function str_contains;
-use function str_replace;
 use function trim;
 
-/**
- * SOAP Gateway for communicating with SII legacy Web Services.
- *
- * Pure transport layer: authenticate() performs the raw SII auth flow
- * (CrSeed → GetTokenFromSeed) and query() dispatches authenticated SOAP
- * calls with a token provided by the caller. Token caching and lifetime are
- * owned by TokenRepository via TokenAuthenticator — this class has no
- * token-fetching or caching responsibility.
- */
 class SoapGateway
 {
     /**
@@ -66,6 +51,8 @@ class SoapGateway
         protected SoapProxy $soapProxy,
         protected OpenSslProxy $openSsl,
         protected XmlDomFactory $xml,
+        protected XmlSigner $xmlSigner,
+        protected SoapClientFactory $soapClientFactory,
     ) {
         //
     }
@@ -116,14 +103,7 @@ class SoapGateway
         $baseUrl ??= $this->environment->resolve()->soapBaseUrl();
         $wsdlUrl = $this->resolveWsdlUrl($baseUrl, $service);
 
-        $client = $this->newSoapClient($wsdlUrl);
-
-        // Add authentication header
-        $client->__setSoapHeaders(new SoapHeader(
-            'http://www.sii.cl/ws/',
-            'Token',
-            $token->value,
-        ));
+        $client = $this->soapClientFactory->createAuthenticatedClient($wsdlUrl, $token);
 
         return $client->__soapCall($action, $arguments);
     }
@@ -298,6 +278,13 @@ class SoapGateway
 
     /**
      * Build the XMLDSig enveloped-signed `<getToken>` document for a seed.
+     *
+     * Uses XmlSigner::signRoot() which applies an enveloped signature (URI="")
+     * as required by the SII auth flow. This differs from DTE document signing
+     * which uses URI="#{id}" to reference a specific element.
+     *
+     * @see https://www4c.sii.cl/bolcoreinternetui/api/openapi.yaml (getToken step)
+     * @see knowledge/documentation/autenticacion.md
      */
     protected function buildSignedSeedXml(string $seed, DigitalCertificate $certificate): string
     {
@@ -311,99 +298,11 @@ class SoapGateway
 
         $item->appendChild($doc->createElement('Semilla', $seed));
 
-        $digest = $this->computeSeedDigest($root);
-
-        $pem = $this->openSsl->readPkcs12String($certificate->pkcs12, $certificate->password);
-
-        $signedInfoXml = $this->buildSignedInfoXml($digest);
-        $signatureValue = $this->computeSignatureValue($signedInfoXml, $pem[static::PEM_PRIVATE_KEY]);
-        [$modulus, $exponent] = $this->extractRsaComponents($pem[static::PEM_PRIVATE_KEY]);
-        $x509b64 = $this->parseX509($pem['cert']);
-
-        $signatureXml = $this->buildSignatureXml($signedInfoXml, $signatureValue, $modulus, $exponent, $x509b64);
-
-        $sigDoc = $this->xml->document();
-        $sigDoc->loadXML($signatureXml);
-        $sigNode = $doc->importNode($sigDoc->documentElement, true);
-        $root->appendChild($sigNode);
+        // Use XmlSigner for the enveloped signature (URI="").
+        // This is a SII requirement for the seed token auth flow.
+        $this->xmlSigner->signRoot($root, $certificate);
 
         return $doc->saveXML();
-    }
-
-    /**
-     * Compute the SHA-1 digest over the canonicalized unsigned getToken document.
-     */
-    protected function computeSeedDigest(DOMElement $root): string
-    {
-        return base64_encode(sha1($root->C14N(false, false), true));
-    }
-
-    /**
-     * Build the SignedInfo XML string with an enveloped-signature transform.
-     */
-    protected function buildSignedInfoXml(string $digest): string
-    {
-        return str_replace('{$digest}', $digest, $this->file->get(__DIR__.'/stubs/xmlsignatureinfo.stub'));
-    }
-
-    /**
-     * Compute the RSA-SHA1 signature value over the canonicalized SignedInfo.
-     */
-    protected function computeSignatureValue(string $signedInfoXml, string $privateKey): string
-    {
-        $siDoc = $this->xml->document();
-        $siDoc->loadXML($signedInfoXml);
-
-        return $this->openSsl->sign($siDoc->documentElement->C14N(false, false), $privateKey);
-    }
-
-    /**
-     * Extract the RSA modulus and exponent from the certificate private key.
-     */
-    protected function extractRsaComponents(string $privateKey): array
-    {
-        $details = $this->openSsl->privateKeyDetails($privateKey);
-        $rsa = is_array($details) ? ($details['rsa'] ?? null) : null;
-
-        if (!is_array($rsa)) {
-            throw new RuntimeException('Unable to extract the certificate RSA public key.');
-        }
-
-        return [base64_encode($rsa['n']), base64_encode($rsa['e'])];
-    }
-
-    /**
-     * Build the full Signature XML string.
-     */
-    protected function buildSignatureXml(
-        string $signedInfoXml,
-        string $signatureValue,
-        string $modulus,
-        string $exponent,
-        string $x509b64
-    ): string {
-        return str_replace(
-            ['{$signedInfoXml}', '{$signatureValue}', '{$modulus}', '{$exponent}', '{$x509b64}'],
-            [$signedInfoXml, $signatureValue, $modulus, $exponent, $x509b64],
-            $this->file->get(__DIR__.'/stubs/xmlsignature.stub')
-        );
-    }
-
-    /**
-     * Extract the base64-encoded X.509 certificate from its PEM representation.
-     */
-    protected function parseX509(string $certificate): string
-    {
-        $lines = explode("\n", trim($certificate));
-        $b64 = '';
-
-        foreach ($lines as $line) {
-            if (!str_contains($line, '-----')) {
-                $b64 .= trim($line);
-            }
-        }
-
-        return $b64;
     }
 
     /**

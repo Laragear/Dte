@@ -79,8 +79,8 @@ If you are new to Chilean tax accounting (SII), the gist is straightforward: doc
 The implementation is not _straightforward_. The SII requires any app to comply with seven points:
 
 1. Receive a CAF XML that authorizes a DTE number range (folio).
-2. DTE created must be signed with both CAF and Digital Certificate.
-3. Send DTE as "envelopes" and track their processing constantly, signed with the Digital Certificate.
+2. DTE created must include the CAF they belong to and signed.
+3. Sign and send DTE as "envelopes" and poll its status.
 4. Receive and answer DTEs received at your `dte@my-app.cl`.
 5. Create a legally correct PDF for your DTEs.
 6. Send DTE XML to the target business `dte@business.cl`.
@@ -91,10 +91,10 @@ To deal with this, this library implements the following:
 1. Automatically loads CAF XML into the library.
 2. Automatically allocates folios, signing the DTE XML with the CAF and Digital Certificate.
 3. Automatically fills and sends envelopes, polling their status at SII for updates.
-4. Automatically reads your `dte@my-app.cl` via IMAP, driver or your own custom driver.
+4. Automatically reads your `dte@my-app.cl` (IMAP/driver) and sends acknowledgements.
 5. Automatically renders PDF for any DTE using a standard design.
 6. Once envelopes are approved, sends each DTE to the target business using Laravel's Mail driver.
-7. Allows your app to hook up into the `DteAccepted` and `EnvelopeAccepted` to save XML payloads on your storage.
+7. All XML documents are stored separately from the original payload on the database.
 
 Odds are you already know some document types before implementing this library, but if you feel lost, check the [glossary section](#glossary) and come back. 
 
@@ -106,7 +106,7 @@ You can start to use this library in less than three minutes in your library, or
 
 By default, this library creates a fake business with all the data required, so there is no need to set your own for development. You can safely skip this step.
 
-On the other hand, if your app retrieves this data dynamically (e.g. from the database), like when the end-user is onboarded into the application, you can use the convenient `ConfigurationManager::setCompany()` helper to fill the required company data.
+On the other hand, if your app retrieves this data dynamically (e.g., from the database), like when the end-user is onboarded into the application, you can use the convenient `ConfigurationManager::setCompany()` helper to fill the required company data.
 
 ```php
 use Laragear\Dte\Configuration\ConfigurationManager;
@@ -649,7 +649,7 @@ Your application will require Digital Certificates to operate completely with th
 
 ### Resolving Certificates
 
-The `DigitalCertificate` class loads a PKCS#12 (`.p12|pfx`) file into memory and exposes its public key, private key, and validity dates. 
+The `DigitalCertificate` class loads a PKCS#12 (`.p12|pfx`) file into memory and exposes its public key, private key, and validity dates.
 
 The most direct approach to resolve certificates is just using `CertificateResolver::resolveUsing()` with a callback that receives the target RUT, and should return a `DigitalCertificate` instance or `null` if not found.
 
@@ -833,9 +833,7 @@ When satisfying complex *Libro de Compras* setups with "Proportional IVA" requir
 Assign the `iva_uso_comun` flag, and map the custom `IecvProperty::CommonIvaFactor` property so the `IecvBuilder` can correctly remap traditional nodes towards `<TotOpIVAUsoComun>`, `<TotCredIVAUsoComun>` and other advanced retention structures natively.
 
 ```php
-use Laragear\Dte\Certification\IecvBuilder;
-use Laragear\Dte\Certification\IecvProperty;
-use Laragear\Dte\Certification\IecvType;
+use Laragear\Dte\Certification\IecvBuilder;use Laragear\Dte\Enums\IecvProperty;use Laragear\Dte\Enums\IecvType;
 
 $invoice->iva_uso_comun = true; 
 
@@ -1435,86 +1433,7 @@ public function test_polling_updates_envelope_status()
 }
 ```
 
-## Certification & Production
-
-> [!CAUTION]
-> 
-> For Certification and Production, you **require a real certificate**, [which can be bought separately](https://www.sii.cl/servicios_online/1039-certificado_digital-1182.html). Do not proceed until it's made available to the library.
-
-To operate with the SII, the _Certification Process_ is mandatory. SII will _test_ your application if it complies with the basic and legal procedures to manage DTE. Luckily for you, this library makes this process simple.
-
-Switch environments via the `DteEnvironment` enum (`local`, `testing`, `certification`, `production`) in your config or `.env`. Then, you can build a GUI in your application that delegates the handshake process with SII's Maullín endpoint to the `CertificationManager`.
-
-```dotenv
-DTE_ENV=certification
-```
-
-You will be faced with several tasks to [comply with the certification process](https://www.sii.cl/servicios_online/1039-proc_postulacion-1184.html), all handled via the manager:
-
-1. **Test Set:** The SII will instruct you to create a list of DTE in your application (amounts, receiver RUT, etc.). The manager will take care of sending them in an envelope to SII Servers, and generate the IECV XML for manual upload.
-2. **Simulate:** The manager automatically sends a batch of 10-100 recent/real documents to simulate continuous operation.
-3. **Interchange:** The manager automatically ingests an uploaded Interchange DTE XML, validates it, and mails the response back to the SII.
-4. **PDF Printing:** The manager will automatically generate PDF for all the test files. If SII requires a single PDF, you will need to concatenate it. Don't worry; there are free online services to concatenate PDF like: [I Love PDF](https://www.ilovepdf.com/), [BentoPDF](https://www.bentopdf.com/), [EmbedPDF](https://www.embedpdf.com/tools/pdf-merge), [PrivatePDF Merge](https://privatepdfmerge.com/), [Pipefile](https://pipefile.com/tools/pdf-merger), [Toolflic](https://toolflic.com/tool/pdf-merge/), and many more.
-5. **Compliance:** The SII will let you digitally sign your compliance to operate on production servers.
-
-```php
-use Laragear\Dte\Certification\CertificationManager;
-
-public function certify(CertificationManager $manager)
-{
-    // Step 1: Send the Test Set envelope and get the IECV XML
-    $data = $manager->testSet('76.123.456-0', dteIds: [1, 2, 3]);
-    
-    // Step 2: Send a Simulation envelope of 10 documents
-    $data = $manager->simulate('76.123.456-0', quantity: 10);
-    
-    // Step 3: Handle the Interchange XML from SII
-    $data = $manager->interchange('76.123.456-0', xmlContent: '...', location: 'Santiago');
-    
-    // Step 4: Generate PDFs for the test documents
-    $data = $manager->printSample('76.123.456-0');
-    
-    // After you are done with the certification, securely wipe the certification data!
-    $manager->purgeDatabase();
-}
-```
-
-Once your application is prepared to operate with real transactions, move the package to `production`:
-
-```dotenv
-DTE_ENV=production
-```
-
-> [!WARNING]
->
-> Once you sign, you will no longer be able to access the SII Web App to manage DTE. Back up all your historical data before. If you consider this a drawback, desist and use this library as a way to manually mirror your data in SII.
-
-## Legal Contingency and Backups
-
-The SII requires businesses to safely back up generated DTE documents as a contingency measure for 6 years. This library delegates the backup logic to your application, allowing you to use your preferred cloud storage.
-
-To automate backups, listen to the `DteCompiled` or `EnvelopeSent` [events](#events) and push a queued job to save the document once it's compiled:
-
-```php
-namespace App\Listeners;
-
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Support\Facades\Storage;
-use Laragear\Dte\Events\DteCompiled;
-
-class BackupDteDocument implements ShouldQueue
-{
-    public function handle(DteCompiled $event): void
-    {
-        Storage::disk('cold-storage')->put(
-            "dte/backups/{$event->dte->issuer_rut}/{$event->dte->document_type->value}-{$event->dte->folio}.xml",
-            $event->dte->payload->xml
-        );
-    }
-}
-```
-
-Remember to register this listener in your `EventServiceProvider` or let Laravel discover it automatically.
+## [Certification & Production](CERTIFICATION.md)
 
 ## Configuration
 
@@ -1597,6 +1516,7 @@ This package includes Laravel Boost AI Guidelines for your agents. Also included
 - Set up
 - Document building (Basic)
 - PDF generation
+- Certification
 
 After installing this package, ensure your Laravel Boost files are updated using the `boost:update` command:
 
@@ -1669,13 +1589,13 @@ No, references are character-limited. Use an alternative reference instead (rand
 
 - **I'm building a multi-tenant SaaS. Can I configure the mailbox listener to poll `dte@client-a.cl`, `dte@client-b.cl`, and `dte@client-c.cl?`**
 
-No, this library does not support fetching emails from multiple sources. Instead, point your customers to an unified `dte@your-app.cl` and fetch from there.
+No, this library does not support fetching emails from multiple sources. Instead, point your customers to an unified `dte@your-app.cl` and fetch from there. This is a performance tradeoff. 
 
 - **I wrote an event listener to automatically accept incoming vendor invoices the second they hit the mailbox. Good idea?**
 
 Terrible idea! **Never** pay invoices immediately upon email receipt. If you didn't put money on it, the invoice may be a scam.
 
-- **I tried streaming 100+ invoice PDFs at once using the  `binary()` method to send to a third-party API, and my server crashed with an Out Of Memory (OOM) error. Is the package leaking memory?**
+- **I tried streaming 100+ invoice PDFs at once using the `binary()` method to send to a third-party API, and my server crashed with an Out Of Memory (OOM) error. Is the package leaking memory?**
 
 It's not a leak. You're just holding massive amounts of data in RAM. Stop using `binary()` for large operations. Use a single queued-job for each PDF.
 
@@ -1685,13 +1605,17 @@ No, you need to be [certified by SII](#certification--production). This library 
 
 - **If I build this automated integration, can my client still log into the free SII web portal to manually issue a quick invoice if my app goes down?**
 
-No. Once they sign to production with your software, they are locked out of the free SII tool.
+No. Once they sign to production with your software, they are locked out of the free SII tool. Ensure your app has high availability.
 
 - **I want to charge clients for my web app. Do I have to open-source my entire codebase if I use this? I heard Chilean DTE libraries enforce this.**
 
 No, you can keep your application closed-source and commercial, or even totally private.
 
 [LibreDTE](https://github.com/LibreDTE/libredte-lib-core) uses the [AGPL License](https://choosealicense.com/es/licenses/agpl-3.0/), which imposes restrictions on usage and distribution. This library does not.
+
+- **Do I need to back-up XML for 6 years?**
+
+No, you _should_ back-up your data periodically (database, storage). I recommend the [1-2-3 backup strategy](https://en.wikipedia.org/wiki/Glossary_of_backup_terms). You can always dump the database.
 
 ## Glossary
 

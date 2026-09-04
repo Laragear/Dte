@@ -4,15 +4,17 @@ namespace Laragear\Dte\Actions\CreateEnvelope\Pipes;
 
 use Closure;
 use DOMElement;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Support\LazyCollection;
 use Laragear\Dte\Actions\CreateEnvelope\Assembly;
 use Laragear\Dte\Models\SiiDtePayload;
+use Laragear\Rut\Rut;
 use RuntimeException;
 
 class EmbedDteNodes
 {
     /**
-     * Stream each signed DTE into the temporary envelope file.
+     * Hande the incoming DTE Envelope Assembly.
      *
      * @param  Closure(Assembly): Assembly  $next
      */
@@ -61,7 +63,9 @@ class EmbedDteNodes
     protected function payloads(Assembly $assembly): LazyCollection
     {
         return $assembly->envelope->dtePayloads()
-            ->when($assembly->targetReceiverRut, fn($q, $rut) => $q->where('sii_dtes.receiver_num', $rut->num))
+            ->when($assembly->targetReceiverRut, static function (EloquentBuilder $query, Rut $rut) {
+                $query->where('sii_dtes.receiver_num', $rut->num);
+            })
             ->orderBy('sii_dtes.id')
             ->cursor();
     }
@@ -79,10 +83,7 @@ class EmbedDteNodes
             throw new RuntimeException('An envelope payload does not contain a DTE root element.');
         }
 
-        $xml = $document->saveXML($root);
-
-        return $xml !== false
-            ? $xml
-            : throw new RuntimeException('Unable to serialize a DTE payload into the envelope.');
+        return $document->saveXML($root)
+            ?: throw new RuntimeException('Unable to serialize a DTE payload into the envelope.');
     }
 }

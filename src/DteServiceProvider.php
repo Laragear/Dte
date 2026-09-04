@@ -8,7 +8,6 @@ use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Contracts\Validation\Factory;
 use Illuminate\Support\ServiceProvider;
-use InvalidArgumentException;
 use Laragear\Dte\Certificate\CertificateResolver;
 use Laragear\Dte\Certification\CertificationManager;
 use Laragear\Dte\Configuration\ConfigurationManager;
@@ -23,7 +22,6 @@ use Laragear\Dte\Console\Commands\ProcessAndSendEnvelopeCommand;
 use Laragear\Dte\Console\Commands\RejectExpiringPhantomInvoicesCommand;
 use Laragear\Dte\Contracts\CertificateResolverInterface;
 use Laragear\Dte\Contracts\TokenProviderInterface;
-use Laragear\Dte\Enums\DteEnvironment;
 use Laragear\Dte\Environment\EnvironmentResolver;
 use Laragear\Dte\Events\InboundDteAcknowledged;
 use Laragear\Dte\Listeners\SendCommercialReceiptListener;
@@ -31,6 +29,7 @@ use Laragear\Dte\Mailbox\MailboxManager;
 use Laragear\Dte\Pdf\Pdf417Generator;
 use Laragear\Dte\Support\TokenAuthenticator;
 use Laragear\Dte\Support\TokenRepository;
+use Laragear\Dte\Validation\ValidatesSiiDocuments;
 use Le\PDF417\PDF417;
 use Le\PDF417\Renderer\ImageRenderer;
 
@@ -42,14 +41,18 @@ class DteServiceProvider extends ServiceProvider
 
     public const string VIEWS = __DIR__.'/../resources/views';
 
+    public const string LANG = __DIR__.'/../lang';
+
+    public const string XSD_ASSETS = __DIR__.'/../resources/xsd';
+
     /**
      * Rules to register into the validator.
      *
      * @var array<string[]>
      */
     public const array RULES = [
-        ['sii_certificate', 'validateSiiCertificate', 'sii::validation.certificate'],
-        ['sii_caf', 'validateSiiCaf', 'sii::validation.caf'],
+        ['sii_certificate', 'validateSiiCertificate', 'dte::validation.certificate'],
+        ['sii_caf', 'validateSiiCaf', 'dte::validation.caf'],
     ];
 
     /**
@@ -58,8 +61,8 @@ class DteServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(static::CONFIG, 'dte');
-
         $this->loadViewsFrom(static::VIEWS, 'dte');
+        $this->loadTranslationsFrom(static::LANG, 'dte');
 
         $this->app->scoped(EnvironmentResolver::class);
         $this->app->singleton(ConfigurationManager::class);
@@ -108,6 +111,9 @@ class DteServiceProvider extends ServiceProvider
                     'padding' => 20,
                 ]);
             });
+
+        // Use the default certificate resolver that uses development values
+        CertificateResolver::resolveUsingDefaults();
     }
 
     /**
@@ -128,6 +134,7 @@ class DteServiceProvider extends ServiceProvider
         });
 
         $this->publishes([static::CONFIG => $this->app->configPath('dte.php')], 'config');
+        $this->publishes([static::XSD_ASSETS => $this->app->resourcePath('xsd')], 'xsd');
 
         $this->publishesMigrations([
             static::MIGRATIONS => $this->app->databasePath('/migrations'),
@@ -153,15 +160,6 @@ class DteServiceProvider extends ServiceProvider
             );
         }
 
-        /** Validate the configured IVA rate before serving the library. */
-        $ivaRate = (int) $config->get('dte.taxes.iva_rate', 19);
-
-        if ($ivaRate < 1 || $ivaRate > 100) {
-            throw new InvalidArgumentException(
-                "The dte.taxes.iva_rate configuration must be between 1 and 100. Got: {$ivaRate}"
-            );
-        }
-
         /** Validate the operational environment before serving the library. */
         if ($this->shouldRegisterFakeCommands($environment)) {
             $this->commands([
@@ -172,14 +170,12 @@ class DteServiceProvider extends ServiceProvider
     }
 
     /**
-     * Check if the environment is not production or certification to make fake certificates/CAF.
+     * Check if the environment allows registering fake certificate/CAF commands.
      */
     protected function shouldRegisterFakeCommands(EnvironmentResolver $environment): bool
     {
         if ($this->app->runningInConsole()) {
-            $resolved = $environment->resolve();
-
-            return $resolved !== DteEnvironment::Production;
+            return $environment->resolve()->allowsFakeAssets();
         }
 
         return false;

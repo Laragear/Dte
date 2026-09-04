@@ -3,9 +3,9 @@
 namespace Tests\Unit\Certification;
 
 use Laragear\Dte\Certification\IecvBuilder;
-use Laragear\Dte\Certification\IecvProperty;
-use Laragear\Dte\Certification\IecvType;
 use Laragear\Dte\Enums\DteType;
+use Laragear\Dte\Enums\IecvProperty;
+use Laragear\Dte\Enums\IecvType;
 use Laragear\Dte\Models\SiiDte;
 use Laragear\Rut\Rut;
 use Tests\DatabaseTestCase;

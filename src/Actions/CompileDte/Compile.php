@@ -20,6 +20,7 @@ class Compile extends Pipeline
         Pipes\ValidateState::class,
         Pipes\AcquireFolio::class,
         Pipes\BuildXml::class,
+        Pipes\XsdValidation::class,
         Pipes\GenerateTed::class,
         Pipes\ApplyTedToDom::class,
         Pipes\CanonicalizeXml::class,

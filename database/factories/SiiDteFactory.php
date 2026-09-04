@@ -152,7 +152,7 @@ class SiiDteFactory extends DteFactory
             /** @var $type int */
             $type = $attributes['document_type']->value;
 
-            if (! isset(static::$folio[$type])) {
+            if (!isset(static::$folio[$type])) {
                 static::$folio[$type] = $start;
             }
 

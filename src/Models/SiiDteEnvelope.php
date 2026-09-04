@@ -16,15 +16,14 @@ use Illuminate\Support\Carbon;
 use Laragear\Dte\Database\Factories\SiiDteEnvelopeFactory;
 use Laragear\Dte\Enums\DteType;
 use Laragear\Dte\Enums\EnvelopeStatus;
-use Laragear\Dte\Models\Attributes\RutAttribute;
 use Laragear\Dte\Models\Concerns\HasDocumentType;
 use Laragear\Dte\Models\Concerns\HasSiiStatus;
+use Laragear\Rut\Eloquent\RutAttribute;
 use Laragear\Rut\Rut;
 
 /**
  * Tracks an outbound DTE envelope and its SII submission lifecycle.
  * ---
- *
  * @see  SiiDteEnvelopeFactory
  * @link database/migrations/2026_01_01_000004_create_sii_dte_envelopes_table.php
  * ---
@@ -197,7 +196,7 @@ class SiiDteEnvelope extends Model
      */
     protected function issuerRut(): Attribute
     {
-        return RutAttribute::make('issuer');
+        return RutAttribute::for('issuer');
     }
 
     /**
@@ -205,7 +204,7 @@ class SiiDteEnvelope extends Model
      */
     protected function senderRut(): Attribute
     {
-        return RutAttribute::make('sender');
+        return RutAttribute::for('sender');
     }
 
     /*

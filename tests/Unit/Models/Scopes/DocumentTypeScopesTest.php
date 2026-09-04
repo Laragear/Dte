@@ -24,41 +24,6 @@ class DocumentTypeScopesTest extends TestCase
         yield 'inbound document' => [SiiInboundDocument::class, 'sii_inbound_documents'];
     }
 
-    public static function providesDocumentTypeScopes(): iterable
-    {
-        return [
-            'Invoice' => [DteType::Invoice, 'invoices'],
-            'Exempt Invoice' => [DteType::InvoiceExempt, 'exemptInvoices'],
-            'Receipt' => [DteType::Receipt, 'receipts'],
-            'Invoice Liquidation' => [DteType::InvoiceLiquidation, 'invoiceLiquidations'],
-            'Purchase Invoice' => [DteType::PurchaseInvoice, 'purchaseInvoices'],
-            'Dispatch Guide' => [DteType::DispatchGuide, 'dispatchGuides'],
-            'Debit Note' => [DteType::DebitNote, 'debitNotes'],
-            'Credit Note' => [DteType::CreditNote, 'creditNotes'],
-        ];
-    }
-
-    protected function binding(string $sql): int
-    {
-        return (int) substr($sql, strrpos($sql, ' ') + 1);
-    }
-
-    /** @param  class-string  $model */
-    #[DataProvider('models')]
-    public function test_models_scope_queries_by_document_type(string $model, string $table): void
-    {
-        static::assertSame(
-            "select * from \"$table\" where \"document_type\" = ".DteType::CreditNote->value,
-            $model::query()->whereDocumentType(DteType::CreditNote)->toRawSql(),
-        );
-    }
-
-    #[DataProvider('providesDocumentTypeScopes')]
-    public function test_exposes_a_scope_for_each_supported_document_type(DteType $type, string $method): void
-    {
-        static::assertSame($type->value, $this->binding(SiiDte::query()->{$method}()->toRawSql()));
-    }
-
     /** @param  class-string  $model */
     #[DataProvider('models')]
     public function test_models_cast_document_types_to_enum(string $model, string $table): void

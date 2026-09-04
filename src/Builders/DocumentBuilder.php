@@ -9,6 +9,8 @@ use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Console\Kernel as ConsoleContract;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\DateFactory;
+use InvalidArgumentException;
+use Laragear\Dte\Actions\PersistDte\PersistDte;
 use Laragear\Dte\Builders\Concerns\HasGlobalModifiers;
 use Laragear\Dte\Configuration\ConfigurationManager;
 use Laragear\Dte\Contracts\Issuable;
@@ -28,7 +30,6 @@ use LogicException;
 use function array_map;
 use function array_merge;
 use function min;
-use function value;
 
 abstract class DocumentBuilder
 {
@@ -69,6 +70,19 @@ abstract class DocumentBuilder
     protected DateTimeImmutable $issueDate;
 
     /**
+     * IndMntNeto indicator for boletas (types 39/41).
+     *
+     * Values:
+     * - null: omitted (SII defaults to gross pricing with IVA included)
+     * - 0: Prices are gross (with IVA included) - same as omitting
+     * - 1: Prices are net (without IVA)
+     * - 2: Prices are gross, but net amount is explicitly stated
+     *
+     * @see knowledge/documentation/formato_boleta_electronica.md Section 3.1
+     */
+    protected ?int $indMntNeto = null;
+
+    /**
      * Create a Document Builder instance.
      */
     public function __construct(
@@ -76,6 +90,7 @@ abstract class DocumentBuilder
         protected Repository $config,
         protected Dispatcher $events,
         protected DateFactory $date,
+        protected PersistDte $pipeline,
     ) {
         $this->issueDate = $date->today('America/Santiago')->toDateTimeImmutable();
     }
@@ -86,19 +101,34 @@ abstract class DocumentBuilder
     abstract public function documentType(): DteType;
 
     /**
+     * Set the IndMntNeto indicator for boletas (types 39/41).
+     *
+     * @param  int  $indicator  0=gross (IVA included), 1=net (without IVA), 2=gross with explicit net
+     * @see knowledge/documentation/formato_boleta_electronica.md Section 3.1
+     */
+    public function withNetAmountIndicator(int $indicator): static
+    {
+        if (!in_array($indicator, [0, 1, 2], true)) {
+            throw new InvalidArgumentException('IndMntNeto must be 0, 1, or 2.');
+        }
+
+        $this->indMntNeto = $indicator;
+
+        return $this;
+    }
+
+    /**
+     * Return the current IndMntNeto indicator value.
+     */
+    public function netAmountIndicator(): ?int
+    {
+        return $this->indMntNeto;
+    }
+
+    /**
      * Add a detail line to the document.
      */
     abstract public function addItem(Item $item): static;
-
-    /**
-     * Return the document detail lines.
-     *
-     * @return list<Item>
-     */
-    public function items(): array
-    {
-        return $this->items;
-    }
 
     /**
      * Return all calculated document totals.
@@ -161,6 +191,14 @@ abstract class DocumentBuilder
     public function receiver(): ?ReceiverData
     {
         return $this->receiver;
+    }
+
+    /**
+     * Return the existing document model instance being retried.
+     */
+    public function dte(): ?SiiDte
+    {
+        return $this->dte;
     }
 
     /**
@@ -269,30 +307,11 @@ abstract class DocumentBuilder
      */
     public function create(mixed $sync = false): SiiDte
     {
-        $this->validate();
-
         $this->events->dispatch(new DteCreating($this));
 
-        // Persist this using a transaction. If ANYTHING fails, bail out.
         $dte = SiiDte::query()
             ->getConnection()
-            ->transaction(function () use ($sync): SiiDte {
-                $dte = $this->persist();
-
-                // Here we will check if the user wants to compile the DTE immediately or send
-                // it to a queue. When doing receipts, the developer should push the command
-                // immediately so it becomes ready to print as a PDF file, otherwise wait.
-                if (value($sync, $dte, $this)) {
-                    $this->artisan->call('dte:compile', ['dte_id' => $dte]);
-                } else {
-                    $this->artisan
-                        ->queue('dte:compile', ['dte_id' => $dte->getKey()])
-                        ->onConnection($this->config->get('dte.queue.dte.connection'))
-                        ->onQueue($this->config->get('dte.queue.dte.name'));
-                }
-
-                return $dte;
-            });
+            ->transaction(fn() => $this->pipeline->handle($this, $sync));
 
         $this->events->dispatch(new DteCreated($dte));
 
@@ -313,46 +332,15 @@ abstract class DocumentBuilder
             throw new LogicException('Cannot update a document builder that has not been hydrated.');
         }
 
-        $this->validate();
-
-        return $this->dte->getConnection()->transaction(function () use ($sync): SiiDte {
-            $dte = $this->dte;
-
-            // Recalculate the aggregates and reset the previous processing state.
-            $dte->forceFill(array_merge($this->attributes(), [
-                'status' => DteStatus::Pending,
-                'repairs' => null,
-                'acknowledged_at' => null,
-                'accepted_at' => null,
-                'rejected_at' => null,
-            ]))->save();
-
-            // Replace the raw input payload and drop any compiled XML or SII response.
-            $payload = $dte->payload()->updateOrCreate([], [
-                'data' => $this->payloadData(),
-                'xml' => null,
-                'sii_response' => null,
-            ]);
-
-            $dte->setRelation('payload', $payload);
-
-            if (value($sync, $dte, $this)) {
-                $this->artisan->call('dte:compile', ['dte_id' => $dte]);
-            } else {
-                $this->artisan
-                    ->queue('dte:compile', ['dte_id' => $dte->getKey()])
-                    ->onConnection($this->config->get('dte.queue.dte.connection'))
-                    ->onQueue($this->config->get('dte.queue.dte.name'));
-            }
-
-            return $dte;
-        });
+        return $this->dte
+            ->getConnection()
+            ->transaction(fn() => $this->pipeline->handle($this, $sync, true));
     }
 
     /**
      * Validate the common document input.
      */
-    protected function validate(): void
+    public function validate(): void
     {
         $this->issuer();
         $this->receiverRut();
@@ -397,25 +385,11 @@ abstract class DocumentBuilder
     }
 
     /**
-     * Persist both records inside the active transaction.
-     */
-    protected function persist(): SiiDte
-    {
-        $dte = SiiDte::create($this->attributes());
-
-        $payload = $dte->payload()->create(['data' => $this->payloadData()]);
-
-        $dte->setRelation('payload', $payload);
-
-        return $dte;
-    }
-
-    /**
      * Return initial document model attributes.
      *
      * @return array<string, mixed>
      */
-    protected function attributes(): array
+    public function attributes(): array
     {
         $totals = $this->calculatedTotals();
 
@@ -529,7 +503,7 @@ abstract class DocumentBuilder
      *
      * @return array<string, mixed>
      */
-    protected function payloadData(): array
+    public function payloadData(): array
     {
         return array_merge([
             'document_type' => $this->documentType()->value,
@@ -541,6 +515,7 @@ abstract class DocumentBuilder
             'global_modifiers' => $this->globalModifiers(),
             'taxes' => $this->aggregateTaxes(),
             'totals' => $this->calculatedTotals(),
+            'ind_mnt_neto' => $this->indMntNeto,
         ], $this->additionalData());
     }
 

@@ -22,7 +22,7 @@ class SendTestingIecv
      */
     public function handle(TestSetData $data, Closure $next): TestSetData
     {
-        $this->gateway->upload(
+        $data->iecvTrackId = $this->gateway->upload(
             $data->rut,
             $data->senderRut ?? $data->rut,
             $data->iecvXml,

@@ -4,12 +4,13 @@ namespace Laragear\Dte\Actions\CreateEnvelope\Pipes;
 
 use Closure;
 use Illuminate\Contracts\Config\Repository;
-use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Support\DateFactory;
 use Laragear\Dte\Actions\CreateEnvelope\Assembly;
 use Laragear\Dte\Enums\DteStatus;
 use Laragear\Dte\Enums\SiiRut;
 use Laragear\Dte\Support\XmlDomFactory;
+use Laragear\Rut\Rut;
 use LogicException;
 use RuntimeException;
 use UnexpectedValueException;
@@ -30,7 +31,7 @@ class BuildCaratulaHeader
     }
 
     /**
-     * Stream the envelope and Caratula opening elements.
+     * Hande the incoming DTE Envelope Assembly.
      *
      * @param  Closure(Assembly): Assembly  $next
      */
@@ -53,9 +54,10 @@ class BuildCaratulaHeader
      */
     protected function validateDocuments(Assembly $assembly): void
     {
-        $envelope = $assembly->envelope;
-        $assembly->expectedDocuments = $envelope->dtes()
-            ->when($assembly->targetReceiverRut, fn($q, $rut) => $q->where('receiver_num', $rut->num))
+        $assembly->expectedDocuments = $assembly->envelope->dtes()
+            ->when($assembly->targetReceiverRut, static function (EloquentBuilder $query, Rut $rut): void {
+                $query->where('receiver_num', $rut->num);
+            })
             ->count();
 
         if ($assembly->expectedDocuments < 1) {
@@ -80,8 +82,10 @@ class BuildCaratulaHeader
 
         return $envelope
             ->dtes()
-            ->when($assembly->targetReceiverRut, fn($q, $rut) => $q->where('receiver_num', $rut->num))
-            ->where(static function (Builder $query) use ($envelope): void {
+            ->when($assembly->targetReceiverRut, function (EloquentBuilder $query, Rut $rut) {
+                return $query->where('receiver_num', $rut->num);
+            })
+            ->where(static function (EloquentBuilder $query) use ($envelope): void {
                 $query
                     ->where('issuer_num', '!=', $envelope->issuer_rut->num)
                     ->orWhere('issuer_vd', '!=', $envelope->issuer_rut->vd)

@@ -4,8 +4,8 @@ namespace Tests\Performance;
 
 use Illuminate\Support\Benchmark;
 use Laragear\Dte\Caf\Folio;
-use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\TestCase;
 
 /**
  * Pinpoint performance tests for the Folio range-list internals.
@@ -25,7 +25,7 @@ class FolioPerformanceTest extends TestCase
         $folio->annulRange(5000, 6000);  // 1001 annulled
         $folio->annulRange(50000, 51000); // 1001 annulled
 
-        $result = Benchmark::measure(fn (): int => $folio->remaining());
+        $result = Benchmark::measure(fn(): int => $folio->remaining());
 
         static::assertSame(100000 - 3003, $folio->remaining());
         static::assertLessThan(10, $result, 'remaining() took '.$result.'ms');
@@ -36,7 +36,7 @@ class FolioPerformanceTest extends TestCase
         $folio = new Folio(from: 1, to: 100000, current: 2, annuled: []);
         $folio->annulRange(2, 99999); // Almost everything annulled
 
-        $result = Benchmark::measure(fn (): ?int => $folio->next());
+        $result = Benchmark::measure(fn(): ?int => $folio->next());
 
         static::assertSame(100000, $folio->current - 1);
         static::assertLessThan(1, $result, 'next() took '.$result.'ms');

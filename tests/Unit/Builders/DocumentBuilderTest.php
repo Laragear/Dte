@@ -478,7 +478,7 @@ class DocumentBuilderTest extends DatabaseTestCase
             'Company')); // Missing address and commune
         $builder->addItem(BuilderFixture::item());
         $this->expectException(LogicException::class);
-        $this->expectExceptionMessage('B2B documents require a receiver with a business activity, address, and commune.');
+        $this->expectExceptionMessageIs('B2B documents require a receiver with a business activity, address, and commune.');
         $builder->create();
     }
 
@@ -499,7 +499,7 @@ class DocumentBuilderTest extends DatabaseTestCase
         $builder->receivedBy(BuilderFixture::receiver());
         $builder->addItem(BuilderFixture::item());
         $this->expectException(LogicException::class);
-        $this->expectExceptionMessage('The maximum number of Acteco tags allowed is 4.');
+        $this->expectExceptionMessageIs('The maximum number of Acteco tags allowed is 4.');
         $builder->create();
     }
 
@@ -523,5 +523,46 @@ class DocumentBuilderTest extends DatabaseTestCase
 
         static::assertNotNull($dte->payload->data['receiver']);
         static::assertSame('Customer Company LLC', $dte->payload->data['receiver']['legal_name']);
+    }
+
+    public function test_update_throws_when_not_hydrated(): void
+    {
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessageIs('Cannot update a document builder that has not been hydrated.');
+
+        $this->app->make(InvoiceBuilder::class)->update();
+    }
+
+    public function test_with_net_amount_indicator_sets_the_indicator(): void
+    {
+        $builder = $this->app->make(InvoiceBuilder::class);
+        $builder->withNetAmountIndicator(1);
+
+        static::assertSame(1, $builder->netAmountIndicator());
+    }
+
+    public function test_with_net_amount_indicator_throws_on_invalid_value(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageIs('IndMntNeto must be 0, 1, or 2.');
+
+        $this->app->make(InvoiceBuilder::class)->withNetAmountIndicator(3);
+    }
+
+    public function test_net_amount_indicator_defaults_to_null(): void
+    {
+        $builder = $this->app->make(InvoiceBuilder::class);
+
+        static::assertNull($builder->netAmountIndicator());
+    }
+
+    public function test_items_returns_added_items(): void
+    {
+        $builder = $this->app->make(InvoiceBuilder::class);
+
+        $item = BuilderFixture::item();
+        $builder->addItem($item);
+
+        static::assertSame([$item], $builder->items());
     }
 }

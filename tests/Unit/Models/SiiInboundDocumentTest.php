@@ -26,16 +26,16 @@ class SiiInboundDocumentTest extends TestCase
         $rut = new Rut('12345678', '5');
         $cert = new DigitalCertificate('fake', 'fake');
 
-        Claim::shouldReceive('accept')
+        Claim::expects('accept')
             ->once()
             ->with($doc, $rut, 'Santiago', $cert, null)
             ->andReturn('accepted_xml');
 
-        Claim::shouldReceive('reject')
+        Claim::expects('reject')
             ->once()
             ->with($doc, 'Bad amount');
 
-        Claim::shouldReceive('rejectGoods')
+        Claim::expects('rejectGoods')
             ->once()
             ->with($doc, 'Missing items');
 

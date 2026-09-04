@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\Contracts\Config\Repository;
 use Laragear\Dte\Actions\CreateEnvelope\CreateEnvelope;
 use Laragear\Dte\Certification\Simulation\SimulationData;
+use Laragear\Dte\Certification\TestingSet\TestSetData;
 use Laragear\Dte\Configuration\ConfigurationManager;
 use Laragear\Dte\Enums\DteType;
 use Laragear\Dte\Models\SiiDteEnvelope;
@@ -26,7 +27,7 @@ class CompileEnvelope
     /**
      * Handle the incoming simulation data.
      */
-    public function handle(SimulationData $data, Closure $next): SimulationData
+    public function handle(SimulationData|TestSetData $data, Closure $next): SimulationData|TestSetData
     {
         $dynamicIssuer = $this->manager->getIssuer($data->rut);
 

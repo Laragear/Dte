@@ -15,6 +15,7 @@ class DteEnvironmentTest extends TestCase
             [
                 'Local' => 'local',
                 'Testing' => 'testing',
+                'Certification' => 'certification',
                 'Production' => 'production',
             ],
             array_column(DteEnvironment::cases(), 'value', 'name'),
@@ -30,7 +31,31 @@ class DteEnvironmentTest extends TestCase
         static::assertNull(DteEnvironment::Testing->soapBaseUrl());
         static::assertNull(DteEnvironment::Testing->restBaseUrl());
 
+        static::assertSame(SiiEndpoints::SOAP_CERTIFICATION, DteEnvironment::Certification->soapBaseUrl());
+        static::assertSame(SiiEndpoints::REST_CERTIFICATION, DteEnvironment::Certification->restBaseUrl());
+
         static::assertSame(SiiEndpoints::SOAP_PRODUCTION, DteEnvironment::Production->soapBaseUrl());
         static::assertSame(SiiEndpoints::REST_PRODUCTION, DteEnvironment::Production->restBaseUrl());
+    }
+
+    public function test_environment_helpers(): void
+    {
+        static::assertTrue(DteEnvironment::Local->isLocal());
+        static::assertFalse(DteEnvironment::Local->isTesting());
+        static::assertFalse(DteEnvironment::Local->isProduction());
+        static::assertTrue(DteEnvironment::Local->allowsCertification());
+        static::assertTrue(DteEnvironment::Local->allowsFakeAssets());
+
+        static::assertFalse(DteEnvironment::Testing->isLocal());
+        static::assertTrue(DteEnvironment::Testing->isTesting());
+        static::assertFalse(DteEnvironment::Testing->isProduction());
+        static::assertFalse(DteEnvironment::Testing->allowsCertification());
+        static::assertTrue(DteEnvironment::Testing->allowsFakeAssets());
+
+        static::assertFalse(DteEnvironment::Production->isLocal());
+        static::assertFalse(DteEnvironment::Production->isTesting());
+        static::assertTrue(DteEnvironment::Production->isProduction());
+        static::assertFalse(DteEnvironment::Production->allowsCertification());
+        static::assertFalse(DteEnvironment::Production->allowsFakeAssets());
     }
 }

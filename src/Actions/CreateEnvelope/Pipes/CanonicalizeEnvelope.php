@@ -25,7 +25,7 @@ class CanonicalizeEnvelope
     }
 
     /**
-     * Canonicalize the streamed envelope into a signable document.
+     * Hande the incoming DTE Envelope Assembly.
      *
      * @param  Closure(Assembly): Assembly  $next
      *

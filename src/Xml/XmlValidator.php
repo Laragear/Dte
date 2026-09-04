@@ -66,7 +66,7 @@ class XmlValidator
     protected function parse(string $xml): DOMDocument
     {
         $document = $this->xml->document();
-        $previous = $this->libxml->use_internal_errors(true);
+        $previous = $this->libxml->useInternalErrors(true);
 
         try {
             $loaded = $document->loadXML($xml, LIBXML_NONET);
@@ -75,8 +75,8 @@ class XmlValidator
                 throw new RuntimeException('Invalid DTE XML: the document is malformed or empty.');
             }
         } finally {
-            $this->libxml->clear_errors();
-            $this->libxml->use_internal_errors($previous);
+            $this->libxml->clearErrors();
+            $this->libxml->useInternalErrors($previous);
         }
 
         return $document;
@@ -84,8 +84,6 @@ class XmlValidator
 
     /**
      * Verify the XMLDSig signature embedded in the document.
-     *
-     * @throws RuntimeException If the signature is missing or invalid.
      */
     protected function validateSignature(DOMDocument $document): bool
     {

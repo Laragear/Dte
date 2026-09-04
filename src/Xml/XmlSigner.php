@@ -3,10 +3,12 @@
 namespace Laragear\Dte\Xml;
 
 use DOMElement;
+use DOMNode;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
-use Laragear\Dte\Certificate\DigitalCertificate;
+use Laragear\Dte\Certificate\DigitalCertificate as Cert;
+use Laragear\Dte\Support\CertificateParser;
 use Laragear\Dte\Support\LibxmlProxy;
 use Laragear\Dte\Support\OpenSslProxy;
 use Laragear\Dte\Support\XmlDomFactory;
@@ -26,6 +28,7 @@ class XmlSigner
         protected OpenSslProxy $openSsl,
         protected LibxmlProxy $libxml,
         protected XmlDomFactory $xml,
+        protected CertificateParser $certificateParser,
     ) {
         //
     }
@@ -35,25 +38,33 @@ class XmlSigner
      *
      * @param  array<string>  $targetIds
      */
-    public function signString(string $xml, DigitalCertificate $certificate, array $targetIds = []): string
+    public function signString(string $xml, Cert $certificate, array $targetIds = []): string
     {
         $doc = $this->xml->document();
-        $previous = $this->libxml->use_internal_errors(true);
-        $doc->loadXML($xml, LIBXML_NONET);
-        $this->libxml->clear_errors();
-        $this->libxml->use_internal_errors($previous);
 
-        if ($targetIds === []) {
-            $root = $doc->documentElement
-                ?? throw new RuntimeException('Cannot sign: XML document has no root element.');
-            $this->sign($root, $certificate);
-        } else {
-            $xpath = $this->xml->xpath($doc);
-            foreach ($targetIds as $id) {
-                $target = $xpath->query("//*[@ID=\"$id\"]")->item(0)
-                    ?? throw new RuntimeException("Cannot sign: XML document has no element with ID '$id'.");
-                $this->sign($target, $certificate);
+        $previous = $this->libxml->useInternalErrors(true);
+
+        $doc->loadXML($xml, LIBXML_NONET);
+
+        $this->libxml->clearErrors();
+        $this->libxml->useInternalErrors($previous);
+
+        try {
+            if ($targetIds === []) {
+                $root = $doc->documentElement
+                    ?? throw new RuntimeException('Cannot sign: XML document has no root element.');
+                $this->sign($root, $certificate);
+            } else {
+                $xpath = $this->xml->xpath($doc);
+                foreach ($targetIds as $id) {
+                    $target = $xpath->query("//*[@ID=\"$id\"]")->item(0)
+                        ?? throw new RuntimeException("Cannot sign: XML document has no element with ID '$id'.");
+
+                    $this->sign($target, $certificate);
+                }
             }
+        } finally {
+            $this->libxml->clearErrors();
         }
 
         return $doc->saveXML();
@@ -62,7 +73,7 @@ class XmlSigner
     /**
      * Apply the SII XMLDSig signature beside the referenced element.
      */
-    public function sign(DOMElement $target, DigitalCertificate $certificate): DOMElement
+    public function sign(DOMElement $target, Cert $certificate): DOMNode|false
     {
         if ($target->parentNode === null) {
             throw new InvalidArgumentException('The XML signature target must be attached to a document.');
@@ -76,19 +87,47 @@ class XmlSigner
 
         $digest = $this->computeDigest($target);
         $signedInfoXml = $this->buildSignedInfoXml($id, $digest);
-        $pem = $this->openSsl->readPkcs12String($certificate->pkcs12, $certificate->password);
-
-        $signatureValue = $this->computeSignatureValue($signedInfoXml, $pem['pkey']);
-        [$modulus, $exponent] = $this->extractRsaComponents($pem['pkey']);
-        $x509b64 = $this->parseX509($pem['cert']);
-        $signatureXml = $this->buildSignatureXml($signedInfoXml, $signatureValue, $modulus, $exponent, $x509b64);
-
-        $sigDoc = $this->xml->document();
-        $sigDoc->loadXML($signatureXml);
-        $sigNode = $target->ownerDocument->importNode($sigDoc->documentElement, true);
+        $sigNode = $this->injectSignature($certificate, $signedInfoXml, $target);
         $target->parentNode->appendChild($sigNode);
 
         return $sigNode;
+    }
+
+    /**
+     * Sign the root element using an enveloped signature (URI="").
+     *
+     * @see https://www4c.sii.cl/bolcoreinternetui/api/openapi.yaml (getToken step)
+     * @see https://www.sii.cl/factura_electronica/factura_mercado/autenticacion.pdf
+     */
+    public function signRoot(DOMElement $root, Cert $certificate): DOMNode|false
+    {
+        $digest = $this->computeDigest($root);
+
+        // This is used for the SII seed token auth flow (CrSeed → GetTokenFromSeed),
+        // which requires a different XMLDSig format than DTE documents:
+        // - Uses Reference URI="" instead of URI="#{id}"
+        // - The root element does not need an ID attribute
+        $signedInfoXml = $this->buildEnvelopedSignedInfoXml($digest);
+
+        $sigNode = $this->injectSignature($certificate, $signedInfoXml, $root);
+
+        $root->appendChild($sigNode);
+
+        return $sigNode;
+    }
+
+    /**
+     * Build the SignedInfo XML string for an enveloped signature (URI="").
+     */
+    protected function buildEnvelopedSignedInfoXml(string $digest): string
+    {
+        // This format is required by the SII seed token auth flow, where the entire
+        // document is signed without referencing a specific element by ID.
+        return str_replace(
+            '{$digest}',
+            $digest,
+            $this->file->get(__DIR__.'/stubs/enveloped_signedinfo.stub')
+        );
     }
 
     /**
@@ -154,16 +193,22 @@ class XmlSigner
         );
     }
 
-    protected function parseX509(string $certificate): string
+    /**
+     * Creates the signature using the certificate and injects it into the node.
+     */
+    protected function injectSignature(Cert $certificate, string $signedInfoXml, DOMElement $root): DOMNode|false
     {
-        $lines = explode("\n", trim($certificate));
-        $b64 = '';
-        foreach ($lines as $line) {
-            if (strpos($line, '-----') === false) {
-                $b64 .= trim($line);
-            }
-        }
+        $pem = $this->openSsl->readPkcs12String($certificate->pkcs12, $certificate->password);
 
-        return $b64;
+        $signatureValue = $this->computeSignatureValue($signedInfoXml, $pem['pkey']);
+        [$modulus, $exponent] = $this->extractRsaComponents($pem['pkey']);
+        $x509b64 = $this->certificateParser->parse($pem['cert']);
+        $signatureXml = $this->buildSignatureXml($signedInfoXml, $signatureValue, $modulus, $exponent, $x509b64);
+
+        $sigDoc = $this->xml->document();
+        $sigDoc->loadXML($signatureXml);
+
+        return $root->ownerDocument->importNode($sigDoc->documentElement, true);
     }
+
 }

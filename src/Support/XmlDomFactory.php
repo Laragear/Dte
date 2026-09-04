@@ -38,13 +38,13 @@ class XmlDomFactory
      */
     public function simpleXml(string $xml, int $options = LIBXML_NONET): SimpleXMLElement
     {
-        $previous = $this->libxml->use_internal_errors(true);
+        $previous = $this->libxml->useInternalErrors(true);
 
         try {
             return new SimpleXMLElement($xml, $options);
         } finally {
-            $this->libxml->clear_errors();
-            $this->libxml->use_internal_errors($previous);
+            $this->libxml->clearErrors();
+            $this->libxml->useInternalErrors($previous);
         }
     }
 

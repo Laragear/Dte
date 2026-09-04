@@ -20,6 +20,7 @@ class TestSetData
         public int $resolutionNumber = 0,
         public ?Rut $senderRut = null,
         public ?string $iecvXml = null,
+        public ?string $iecvTrackId = null,
         public ?SiiDteEnvelope $envelope = null,
     ) {
         //

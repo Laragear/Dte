@@ -126,6 +126,36 @@ class FolioTest extends TestCase
         static::assertSame(6, $folio->remaining());
     }
 
+    public function test_is_exhausted_when_no_remaining_folios(): void
+    {
+        static::assertFalse((new Folio(1, 10, 1))->isExhausted());
+        static::assertFalse((new Folio(1, 10, 1, [[1, 5]]))->isExhausted());
+
+        static::assertTrue((new Folio(1, 10, 10, [[1, 10]]))->isExhausted());
+        static::assertTrue((new Folio(1, 10, 11, []))->isExhausted());
+    }
+
+    public function test_is_not_exhausted_when_folios_remain(): void
+    {
+        static::assertTrue((new Folio(1, 10, 1))->isNotExhausted());
+        static::assertTrue((new Folio(1, 10, 1, [[1, 5]]))->isNotExhausted());
+
+        static::assertFalse((new Folio(1, 10, 10, [[1, 10]]))->isNotExhausted());
+    }
+
+    public function test_is_not_annuled(): void
+    {
+        $folio = new Folio(1, 100, 1);
+        $folio->annul(5, 10);
+
+        static::assertTrue($folio->isNotAnnuled(1));
+        static::assertTrue($folio->isNotAnnuled(4));
+        static::assertTrue($folio->isNotAnnuled(11));
+
+        static::assertFalse($folio->isNotAnnuled(5));
+        static::assertFalse($folio->isNotAnnuled(10));
+    }
+
     public function test_first_and_last_folios(): void
     {
         $folio = new Folio(1, 10, 1);

@@ -5,12 +5,10 @@ namespace Laragear\Dte\Environment;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Foundation\Application;
 use Laragear\Dte\Enums\DteEnvironment as DteEnv;
-use LogicException;
 use function is_string;
 
-final class EnvironmentResolver
+class EnvironmentResolver
 {
-
     /**
      * The resolved DTE environment.
      */
@@ -35,38 +33,43 @@ final class EnvironmentResolver
     }
 
     /**
+     * Dynamically override the environment.
+     *
+     * @return $this
+     */
+    public function setEnvironment(DteEnv|string|null $environment): static
+    {
+        $this->config->set('dte.environment', $environment instanceof DteEnv ? $environment->value : $environment);
+        $this->flush();
+
+        return $this;
+    }
+
+    /**
      * Resolves the current environment.
      */
     protected function getCurrentEnvironment(): DteEnv
     {
-        $dteEnvironment = $this->parse($this->config->get('dte.environment'))
-            ?? $this->parse($this->app->environment())
-            ?? DteEnv::DEFAULT;
+        $raw = $this->config->get('dte.environment') ?? $this->app->environment();
 
-        if ($this->isEnvironmentMismatch($dteEnvironment)) {
-            throw new LogicException('APP_ENV and DTE_ENV must both be production or both be non-production.');
-        }
-
-        return $dteEnvironment;
+        return match ($raw) {
+            'production', DteEnv::Production => DteEnv::Production,
+            'testing', DteEnv::Testing => DteEnv::Testing,
+            'certification', DteEnv::Certification => DteEnv::Certification,
+            default => DteEnv::Local,
+        };
     }
 
     /**
-     * Determine if the application environment and DTE environment mismatch regarding production status.
+     * Flush the memoized resolved environment.
      *
-     * Checks whether one is in production while the other is not.
+     * @return $this
      */
-    protected function isEnvironmentMismatch(DteEnv $dteEnvironment): bool
-    {
-        // If the library environment is production, then the app should also be production
-        return $this->app->environment(DteEnv::Production->value) !== ($dteEnvironment === DteEnv::Production);
-    }
-
-    /**
-     * Parse a supported environment value.
-     */
-    public function flush(): void
+    public function flush(): static
     {
         unset($this->resolved);
+
+        return $this;
     }
 
     /**

@@ -5,6 +5,7 @@ namespace Tests\Unit\Certification\Simulation\Pipes;
 use Laragear\Dte\Certification\Simulation\Pipes\GenerateSimulationDtes;
 use Laragear\Dte\Certification\Simulation\Simulation;
 use Laragear\Dte\Certification\Simulation\SimulationData;
+use Laragear\Dte\Models\SiiDte;
 use Laragear\MetaTesting\Pipeline\InteractsWithPipelines;
 use Laragear\Rut\Rut;
 use Tests\DatabaseTestCase;
@@ -47,6 +48,33 @@ class GenerateSimulationDtesTest extends DatabaseTestCase
 
                 $data->dtes->each(function ($dte) {
                     static::assertContains($dte->document_type->value, [39, 41]);
+                });
+
+                return true;
+            });
+    }
+
+    public function test_skips_generation_when_dtes_already_provided(): void
+    {
+        $existingDtes = SiiDte::factory()
+            ->count(7)
+            ->create(['issuer_rut' => new Rut(76_123_456, 0)]);
+
+        $data = new SimulationData(
+            new Rut(76_123_456, 0),
+            dtes: $existingDtes,
+        );
+
+        $this
+            ->pipeline(Simulation::class)
+            ->isolatePipe(GenerateSimulationDtes::class)
+            ->send($data)
+            ->assertPassable(function (SimulationData $data) use ($existingDtes) {
+                static::assertCount(7, $data->dtes);
+                $this->assertDatabaseCount('sii_dtes', 7);
+
+                $data->dtes->each(function ($dte) {
+                    static::assertEquals('76123456-0', $dte->issuer_rut->formatBasic());
                 });
 
                 return true;

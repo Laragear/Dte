@@ -1,12 +1,14 @@
 ---
-name: laragear-dte-pdf
-description: "Use this skill to generate PDF from documents. Skip when handling PDF from any other type of resource, or printing receipts.".
+name: laragear-dte-backup
+description: "Use this skill to store DTE documents (XML) on storage as required legally by SII. Don't use this to handle PDF, modify XML manually, or the documents are already backed up elsewhere".
 license: MIT
 metadata:
   author: laragear
 ---
 
-# Laragear Dte PDF
+# Laragear Dte Backup
+
+SII requires the business to backup XML documents up to 6 years. 
 
 To generate a PDF from a DTE, prefer option A. Option B should be preferred only when the user explicitly requires it.
 

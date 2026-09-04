@@ -16,11 +16,4 @@ class TokenTest extends TestCase
         static::assertGreaterThan(new DateTimeImmutable, $token->expiresAt);
     }
 
-    public function test_checks_if_valid_at_given_date(): void
-    {
-        $token = new Token('foo', new DateTimeImmutable('+1 hour'));
-
-        static::assertTrue($token->isValidAt(new DateTimeImmutable('+30 minutes')));
-        static::assertFalse($token->isValidAt(new DateTimeImmutable('+2 hours')));
-    }
 }

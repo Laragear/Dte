@@ -78,11 +78,42 @@ class SiiCafTest extends DatabaseTestCase
         );
     }
 
+    public function test_where_depleted_scope_filters_correctly(): void
+    {
+        SiiCaf::factory()->create([
+            'rut' => '33.333.333-3',
+            'document_type' => DteType::Invoice,
+            'folio_from' => 1,
+            'folio_to' => 10,
+            'depleted_at' => now(),
+        ]);
+
+        static::assertTrue(SiiCaf::query()->whereDepleted()->exists());
+        static::assertSame(1, SiiCaf::query()->whereDepleted()->count());
+        static::assertTrue(SiiCaf::query()->whereNotDepleted()->exists());
+        static::assertSame(1, SiiCaf::query()->whereNotDepleted()->count());
+    }
+
     public function test_throws_when_setting_invalid_folio_type(): void
     {
         $caf = SiiCaf::factory()->make();
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('The given value is not a Folio instance.');
+        $this->expectExceptionMessageIs('The given value is not a Folio instance.');
         $caf->folios = 'invalid';
+    }
+
+    public function test_annuls_all_folios_marks_caf_as_depleted(): void
+    {
+        $caf = SiiCaf::factory()->create([
+            'rut' => '55.555.555-5',
+            'document_type' => DteType::Invoice,
+            'folio_from' => 1,
+            'folio_to' => 10,
+            'folio_current' => 1,
+        ]);
+
+        $caf->annulFolios([1, [2, 10]], 'All folios are invalid.');
+
+        static::assertNotNull($caf->depleted_at);
     }
 }

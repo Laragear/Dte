@@ -20,7 +20,7 @@ class InitializeEnvelope
     }
 
     /**
-     * Prepare a pending envelope and its temporary file.
+     * Hande the incoming DTE Envelope Assembly.
      *
      * @param  Closure(Assembly): Assembly  $next
      */

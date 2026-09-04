@@ -2,12 +2,17 @@
 
 namespace Laragear\Dte\Events;
 
+use Illuminate\Broadcasting\InteractsWithSockets;
+use Illuminate\Foundation\Events\Dispatchable;
+use Illuminate\Queue\SerializesModels;
 use Laragear\Dte\Models\SiiDte;
 
 class DteCompiling
 {
+    use Dispatchable, InteractsWithSockets, SerializesModels;
+
     /**
-     * Create a new Compiling Dte instance.
+     * Create a new event instance.
      */
     public function __construct(public SiiDte $dte)
     {

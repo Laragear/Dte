@@ -2,9 +2,6 @@
 
 namespace Laragear\Dte\Support;
 
-/**
- * Proxy for PHP stream functions to allow mocking in testing.
- */
 class StreamProxy
 {
     /**

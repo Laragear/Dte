@@ -10,21 +10,10 @@ use Laragear\Dte\Xml\XmlSigner;
 use Laragear\Rut\Rut;
 use RuntimeException;
 
-/**
- * Performs the raw SII REST authentication flow (seed → sign → token
- * exchange) for the Boleta REST services, without any caching.
- *
- * Pure transport: the TokenAuthenticator calls this and caches the result.
- * This class is deliberately separate from BoletaRestGateway so the
- * authenticator never depends on a gateway that depends on the authenticator.
- */
 class RestAuthGateway
 {
-    /**
-     * The XML declaration parameters for the signed token request.
-     */
+    // The XML declaration parameters for the signed token request.
     protected const string XML_VERSION = '1.0';
-
     protected const string XML_ENCODING = 'UTF-8';
 
     /**
@@ -52,7 +41,9 @@ class RestAuthGateway
         }
 
         // 1. Get Seed
-        $seedResponse = $this->http->get($authUrl.'/boleta.electronica.semilla');
+        $seedResponse = $this->http
+            ->withOptions($this->tlsOptions())
+            ->get($authUrl.'/boleta.electronica.semilla');
 
         if ($seedResponse->failed()) {
             throw new RuntimeException('Failed to get seed from SII.');
@@ -93,7 +84,9 @@ class RestAuthGateway
         );
 
         // 3. POST /boleta.electronica.token
-        $tokenResponse = $this->http->withBody($tokenXmlString, 'application/xml')
+        $tokenResponse = $this->http
+            ->withBody($tokenXmlString, 'application/xml')
+            ->withOptions($this->tlsOptions())
             ->post($authUrl.'/boleta.electronica.token');
 
         if ($tokenResponse->failed()) {
@@ -109,5 +102,22 @@ class RestAuthGateway
         }
 
         return $token;
+    }
+
+    /**
+     * Return HTTP client options that enforce TLS 1.2+ connections.
+     *
+     * SII requires TLS 1.2 or higher for all API connections.
+     *
+     * @see knowledge/documentation/instructivo_emision.md Section 2 (TLS 1.2+)
+     */
+    protected function tlsOptions(): array
+    {
+        return [
+            'verify' => true,
+            'curl' => [
+                CURLOPT_SSLVERSION => CURL_SSLVERSION_TLSv1_2,
+            ],
+        ];
     }
 }

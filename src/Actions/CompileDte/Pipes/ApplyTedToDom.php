@@ -10,7 +10,7 @@ use RuntimeException;
 class ApplyTedToDom
 {
     /**
-     * Insert the generated TED before the signature timestamp.
+     * Handle the incoming DTE compilation.
      *
      * @param  Closure(Compilation): Compilation  $next
      */

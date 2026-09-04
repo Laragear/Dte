@@ -26,7 +26,7 @@ class ApplyEnvelopeSignature
     }
 
     /**
-     * Sign the complete SetDTE using the sender certificate.
+     * Hande the incoming DTE Envelope Assembly.
      *
      * @param  Closure(Assembly): Assembly  $next
      */
@@ -43,6 +43,7 @@ class ApplyEnvelopeSignature
         $this->signer->sign($this->target($assembly->requireDocument()), $certificate);
 
         $xml = $assembly->requireDocument()->saveXML();
+
         if ($xml !== false) {
             $this->validator->verifySignature($xml);
         }
@@ -57,8 +58,10 @@ class ApplyEnvelopeSignature
     {
         $target = $document->getElementsByTagName('SetDTE')->item(0);
 
-        return $target instanceof DOMElement
-            ? $target
-            : throw new RuntimeException('The envelope XML does not contain a SetDTE element to sign.');
+        if ($target instanceof DOMElement) {
+            return $target;
+        }
+
+        throw new RuntimeException('The envelope XML does not contain a SetDTE element to sign.');
     }
 }

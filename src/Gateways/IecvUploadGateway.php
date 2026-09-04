@@ -12,9 +12,6 @@ use Laragear\Rut\Rut;
 use RuntimeException;
 use function sprintf;
 
-/**
- * Uploads IECV XMLs to the SII (Only for certification environments).
- */
 class IecvUploadGateway
 {
     /**
@@ -107,6 +104,13 @@ class IecvUploadGateway
             ->withCookies([SiiEndpoints::TOKEN_COOKIE => $token], parse_url($baseUrl, PHP_URL_HOST))
             ->withHeaders([SiiEndpoints::USER_AGENT_HEADER => SiiEndpoints::USER_AGENT])
             ->timeout(60)
-            ->asMultipart();
+            ->asMultipart()
+            ->withOptions([
+                'verify' => true,
+                'curl' => [
+                    // Enforces TLS 1.2+ as required by SII for all connections.
+                    CURLOPT_SSLVERSION => CURL_SSLVERSION_TLSv1_2,
+                ],
+            ]);
     }
 }

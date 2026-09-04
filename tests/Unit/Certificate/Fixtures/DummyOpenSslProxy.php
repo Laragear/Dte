@@ -14,7 +14,6 @@ class DummyOpenSslProxy extends OpenSslProxy
     public function __construct(
         protected int $validFrom,
         protected int $validUntil,
-        protected bool $matches = true,
         protected array $extraCertificates = [],
     ) {
         //
@@ -37,21 +36,13 @@ class DummyOpenSslProxy extends OpenSslProxy
     /**
      * Return dummy X.509 validity metadata.
      *
-     * @return array{validFrom_time_t: int, validTo_time_t: int}
+     * @return array{valid_from: int, valid_to: int}
      */
     public function parseX509(string $certificate): array
     {
         return [
-            'validFrom_time_t' => $this->validFrom,
-            'validTo_time_t' => $this->validUntil,
+            'valid_from' => $this->validFrom,
+            'valid_to' => $this->validUntil,
         ];
-    }
-
-    /**
-     * Return whether the dummy private key matches.
-     */
-    public function privateKeyMatches(string $certificate, string $privateKey): bool
-    {
-        return $this->matches;
     }
 }

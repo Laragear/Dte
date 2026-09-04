@@ -2,7 +2,7 @@
 
 namespace Laragear\Dte;
 
-final class SiiEndpoints
+final readonly class SiiEndpoints
 {
     public const string SOAP_CERTIFICATION = 'https://maullin.sii.cl';
 
@@ -11,6 +11,19 @@ final class SiiEndpoints
     public const string REST_CERTIFICATION = 'https://apicert.sii.cl/recursos/v1';
 
     public const string REST_PRODUCTION = 'https://api.sii.cl/recursos/v1';
+
+    /**
+     * REST Upload endpoints (separate from auth/query endpoints).
+     *
+     * SII uses dedicated servers for boleta uploads:
+     * - Certification: pangal.sii.cl
+     * - Production: rahue.sii.cl
+     *
+     * @see https://www4c.sii.cl/bolcoreinternetui/api/openapi.yaml servers section
+     */
+    public const string REST_UPLOAD_CERTIFICATION = 'https://pangal.sii.cl/recursos/v1';
+
+    public const string REST_UPLOAD_PRODUCTION = 'https://rahue.sii.cl/recursos/v1';
 
     /**
      * Default user agent to use with contacting SII endpoints.

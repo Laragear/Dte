@@ -97,21 +97,21 @@ class BoletaRestGatewayTest extends DatabaseTestCase
         $envelope = $this->makeEnvelope();
 
         HttpFacade::fake([
-            'https://api.sii.cl/recursos/v1/boleta.electronica.semilla' => HttpFacade::response(
+            'https://apicert.sii.cl/recursos/v1/boleta.electronica.semilla' => HttpFacade::response(
                 '<RESPUESTA><RESP_BODY><SEMILLA>030530912644</SEMILLA></RESP_BODY></RESPUESTA>',
                 200,
             ),
-            'https://api.sii.cl/recursos/v1/boleta.electronica.token' => HttpFacade::response(
+            'https://apicert.sii.cl/recursos/v1/boleta.electronica.token' => HttpFacade::response(
                 '<RESPUESTATOKEN><TOKEN>P7VQKYLDNHJGP</TOKEN></RESPUESTATOKEN>',
                 200,
             ),
-            'https://api.sii.cl/recursos/v1/boleta.electronica.envio' => HttpFacade::response(
+            'https://pangal.sii.cl/recursos/v1/boleta.electronica.envio' => HttpFacade::response(
                 ['trackid' => 1014, 'estado' => 'REC', 'codigo' => 0],
                 200,
             ),
         ]);
 
-        $gateway = $this->makeGateway(DteEnvironment::Production);
+        $gateway = $this->makeGateway(DteEnvironment::Certification);
         $trackId = $gateway->upload($envelope, '<EnvioBoleta>...</EnvioBoleta>');
 
         static::assertSame('1014', $trackId);
@@ -130,7 +130,7 @@ class BoletaRestGatewayTest extends DatabaseTestCase
                 '<RESPUESTATOKEN><TOKEN>TOKEN_PROD</TOKEN></RESPUESTATOKEN>',
                 200,
             ),
-            'https://api.sii.cl/recursos/v1/boleta.electronica.envio' => HttpFacade::response(
+            'https://rahue.sii.cl/recursos/v1/boleta.electronica.envio' => HttpFacade::response(
                 ['trackid' => 9999, 'estado' => 'REC', 'codigo' => 0],
                 200,
             ),
@@ -155,7 +155,7 @@ class BoletaRestGatewayTest extends DatabaseTestCase
                 '<RESPUESTATOKEN><TOKEN>P7VQKYLDNHJGP</TOKEN></RESPUESTATOKEN>',
                 200,
             ),
-            'https://api.sii.cl/recursos/v1/boleta.electronica.envio' => HttpFacade::response(
+            'https://rahue.sii.cl/recursos/v1/boleta.electronica.envio' => HttpFacade::response(
                 ['trackid' => 111, 'estado' => 'REC', 'codigo' => 0],
                 200,
             ),
@@ -165,7 +165,7 @@ class BoletaRestGatewayTest extends DatabaseTestCase
         $gateway->upload($envelope, '<EnvioBoleta/>');
 
         HttpFacade::assertSent(function (Request $request) use ($envelope): bool {
-            if ($request->url() === 'https://api.sii.cl/recursos/v1/boleta.electronica.envio') {
+            if ($request->url() === 'https://rahue.sii.cl/recursos/v1/boleta.electronica.envio') {
                 static::assertStringContainsString($envelope->issuer_rut->num, $request->body());
                 static::assertStringContainsString($envelope->sender_rut->num, $request->body());
             }
@@ -187,7 +187,7 @@ class BoletaRestGatewayTest extends DatabaseTestCase
                 '<RESPUESTATOKEN><TOKEN>P7VQKYLDNHJGP</TOKEN></RESPUESTATOKEN>',
                 200,
             ),
-            'https://api.sii.cl/recursos/v1/boleta.electronica.envio' => HttpFacade::response(
+            'https://rahue.sii.cl/recursos/v1/boleta.electronica.envio' => HttpFacade::response(
                 ['trackid' => 111, 'estado' => 'REC', 'codigo' => 0],
                 200,
             ),
@@ -305,7 +305,7 @@ class BoletaRestGatewayTest extends DatabaseTestCase
                 '<RESPUESTATOKEN><TOKEN>P7VQKYLDNHJGP</TOKEN></RESPUESTATOKEN>',
                 200,
             ),
-            'https://api.sii.cl/recursos/v1/boleta.electronica.envio' => HttpFacade::response(null, 401),
+            'https://rahue.sii.cl/recursos/v1/boleta.electronica.envio' => HttpFacade::response(null, 401),
         ]);
 
         $gateway = $this->makeGateway();
@@ -329,7 +329,7 @@ class BoletaRestGatewayTest extends DatabaseTestCase
                 '<RESPUESTATOKEN><TOKEN>P7VQKYLDNHJGP</TOKEN></RESPUESTATOKEN>',
                 200,
             ),
-            'https://api.sii.cl/recursos/v1/boleta.electronica.envio' => HttpFacade::response(null, 500),
+            'https://rahue.sii.cl/recursos/v1/boleta.electronica.envio' => HttpFacade::response(null, 500),
         ]);
 
         $gateway = $this->makeGateway();
@@ -353,7 +353,7 @@ class BoletaRestGatewayTest extends DatabaseTestCase
                 '<RESPUESTATOKEN><TOKEN>P7VQKYLDNHJGP</TOKEN></RESPUESTATOKEN>',
                 200,
             ),
-            'https://api.sii.cl/recursos/v1/boleta.electronica.envio' => HttpFacade::response(
+            'https://rahue.sii.cl/recursos/v1/boleta.electronica.envio' => HttpFacade::response(
                 ['estado' => 'REC', 'codigo' => 0], // no trackid
                 200,
             ),
@@ -414,7 +414,8 @@ class BoletaRestGatewayTest extends DatabaseTestCase
         $gateway = $this->makeGateway();
         $status = $gateway->trackStatus($envelope);
 
-        static::assertEquals(['trackid' => 12345, 'estado' => 'EPR'], $status);
+        static::assertSame('EPR', $status->status);
+        static::assertSame(['trackid' => 12345, 'estado' => 'EPR'], $status->raw);
     }
 
     public function test_gets_document_status(): void
@@ -513,9 +514,9 @@ class BoletaRestGatewayTest extends DatabaseTestCase
         $cacheKey = 'dte|rest_token|business:'.$issuer->formatRaw();
 
         $cache = Mockery::mock(CacheRepository::class);
-        $cache->shouldReceive('get')->with($cacheKey)->once()->andReturn(new Token('CACHED',
+        $cache->expects('get')->with($cacheKey)->once()->andReturn(new Token('CACHED',
             new DateTimeImmutable('+1 hour')));
-        $cache->shouldReceive('touch')->with($cacheKey, 3600)->once();
+        $cache->expects('touch')->with($cacheKey, 3600)->once();
 
         $this->instance(CacheRepository::class, $cache);
 
@@ -629,8 +630,8 @@ class BoletaRestGatewayTest extends DatabaseTestCase
         $gateway = $this->makeGateway(DteEnvironment::Local);
         $envelope = SiiDteEnvelope::factory()->create();
         $response = $gateway->trackStatus($envelope);
-        static::assertSame('REC', $response['estado']);
-        static::assertSame('Faked status', $response['glosa']);
+        static::assertSame('REC', $response->status);
+        static::assertSame('Faked status', $response->raw['glosa']);
     }
 
     public function test_returns_early_without_base_url_on_document_status(): void

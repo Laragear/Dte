@@ -3,6 +3,7 @@
 namespace Tests\Unit\Actions\CreateEnvelope\Pipes;
 
 use DOMDocument;
+use DOMException;
 use InvalidArgumentException;
 use Laragear\Dte\Actions\CreateEnvelope\Assembly;
 use Laragear\Dte\Actions\CreateEnvelope\CreateEnvelope;
@@ -68,10 +69,9 @@ class EmbedDteNodesTest extends DatabaseTestCase
         $assembly = $this->makeAssemblyWithDtes(1);
 
         $document = Mockery::mock(DOMDocument::class);
-        $document->expects('loadXml')->andReturnFalse();
+        $document->expects('loadXml')->andThrow(new DOMException('Invalid State Error'));
 
         $this->mock(XmlDomFactory::class)->expects('document')->andReturn($document);
-
 
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessageIs('The model XML payload is malformed.');

@@ -3,8 +3,8 @@
 namespace Laragear\Dte\Facades;
 
 use Illuminate\Support\Facades\Facade;
+use Laragear\Dte\Actions\Aec\CompileAec;
 use Laragear\Dte\Builder;
-use Laragear\Dte\Builders\AecBuilder;
 use Laragear\Dte\Builders\AecCessionBuilder;
 use Laragear\Dte\Builders\CreditNoteBuilder;
 use Laragear\Dte\Builders\DebitNoteBuilder;
@@ -24,7 +24,7 @@ use Laragear\Dte\Models\SiiDte;
  * @method static DispatchGuideBuilder dispatchGuide()
  * @method static PurchaseInvoiceBuilder purchaseInvoice()
  * @method static InvoiceLiquidationBuilder invoiceLiquidation()
- * @method static AecBuilder aec()
+ * @method static CompileAec aec()
  * @method static AecCessionBuilder cede(SiiDte $dte)
  * @method static DocumentBuilder retry(SiiDte $dte)
  *

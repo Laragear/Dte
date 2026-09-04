@@ -25,8 +25,10 @@ class Pdf417Generator
      */
     public function generate(string $ted): string
     {
+        $data = 'data:image/png;base64,';
+
         try {
-            return 'data:image/png;base64,'.base64_encode(
+            return $data.base64_encode(
                     (string) $this->renderer->render($this->encoder->encode($ted))->encode('png', 100)
                 );
         } catch (Throwable $e) {

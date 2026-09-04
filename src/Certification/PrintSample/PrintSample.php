@@ -13,14 +13,7 @@ class PrintSample extends Pipeline
      * @var array
      */
     protected $pipes = [
+        Pipes\EnsureDteExist::class,
         Pipes\GeneratePdfs::class,
     ];
-
-    /**
-     * Executes the print sample step for certification using the given RUT.
-     */
-    public function forRut(Rut $rut): PrintSampleData
-    {
-        return $this->send(new PrintSampleData($rut))->thenReturn();
-    }
 }

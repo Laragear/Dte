@@ -2,23 +2,21 @@
 
 declare(strict_types=1);
 
-use Laragear\Dte\Enums\DteEnvironment;
-
 return [
     /*
      |--------------------------------------------------------------------------
      | Operational Environment
      |--------------------------------------------------------------------------
      |
-     | This library works on "local" development by default. Everything works as
-     | intended but no DTE is sent to SII. Select "certification" to start your
-     | app certification process, and "production" for real no-fake operation.
+     | By default, the library automatically inherits the application environment
+     | (APP_ENV). Non-testing and non-production environments default to "local"
+     | environment. Set this only if you need an explicit environment override.
      |
-     | Options: 'local', 'testing', 'certification', 'production'.
+     | Options: 'local', 'testing', 'certification', 'production', or null.
      |
      */
 
-    'environment' => env('DTE_ENV', env('APP_ENV', DteEnvironment::DEFAULT->value)),
+    'environment' => env('DTE_ENV'),
 
     /*
      |--------------------------------------------------------------------------
@@ -33,6 +31,22 @@ return [
 
     'taxes' => [
         'iva_rate' => env('DTE_IVA_RATE', 19),
+    ],
+
+    /*
+     |--------------------------------------------------------------------------
+     | XSD Schema Validation
+     |--------------------------------------------------------------------------
+     |
+     | You can enable XSD schema validation against official SII schemas before
+     | being signed and sent. This catches structural errors early but latency
+     | is added. Enable this when you require to modify the DTE XML directly.
+     |
+     */
+
+    'validation' => [
+        'xsd_enabled' => env('DTE_XSD_VALIDATION', false),
+        'xsd_path' => resource_path('xsd'),
     ],
 
     /*
@@ -84,6 +98,11 @@ return [
         // Maximum number of times a DTE can be structurally released and
         // repacked into a new envelope before it is permanently rejected.
         'max_retries' => 3,
+
+        // Maximum backoff in seconds. While local queue drivers support backoff
+        // relatively far, some drivers do not, like AWS SQS/SNS which support
+        // only a maximum of 15 minutes. Adjust to your app infrastructure.
+        'max_backoff' => 60 * 15,
     ],
 
     /*

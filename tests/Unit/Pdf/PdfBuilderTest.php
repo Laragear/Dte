@@ -44,12 +44,12 @@ class PdfBuilderTest extends DatabaseTestCase
 
         $this->mock(LibxmlProxy::class, static function (MockInterface $mock): void {
             $mock
-                ->expects('use_internal_errors')
+                ->expects('useInternalErrors')
                 ->with(true)
                 ->zeroOrMoreTimes()
                 ->andReturnUsing('libxml_use_internal_errors');
-            $mock->expects('clear_errors')->zeroOrMoreTimes()->andReturnUsing('libxml_clear_errors');
-            $mock->expects('use_internal_errors')->zeroOrMoreTimes()->andReturnUsing('libxml_use_internal_errors');
+            $mock->expects('clearErrors')->zeroOrMoreTimes()->andReturnUsing('libxml_clear_errors');
+            $mock->expects('useInternalErrors')->zeroOrMoreTimes()->andReturnUsing('libxml_use_internal_errors');
         });
 
         $this->dte = SiiDte::factory()
@@ -215,14 +215,13 @@ class PdfBuilderTest extends DatabaseTestCase
     public function test_binary_returns_content_from_real_spatie_builder(): void
     {
         $mock = Mockery::mock(SpatiePdfBuilder::class)->makePartial();
-        $mock->shouldReceive('generatePdfContent')->andReturn('real-pdf-content');
+        $mock->expects('generatePdfContent')->andReturn('real-pdf-content');
 
         Pdf::swap($mock);
 
-        Pdf::shouldReceive('view')->andReturn($mock);
-        $mock->shouldReceive('format')->andReturn($mock);
-        $mock->shouldReceive('name')->andReturn($mock);
-        $mock->shouldReceive('withBrowsershot')->andReturn($mock);
+        Pdf::expects('html')->andReturn($mock);
+        $mock->expects('driver')->andReturn($mock);
+        $mock->expects('format')->andReturn($mock);
 
         $this->barcode->allows('generate')->andReturn('data:image/png;base64,barcode');
 

@@ -17,7 +17,7 @@ readonly class IssuerData
         public string $address,
         public string $commune,
         public string $resolutionDate,
-        public int $resolutionNumber,
+        public int $resolutionNumber = 0,
         public ?string $city = null,
         public ?string $telephone = null,
         public ?string $email = null,

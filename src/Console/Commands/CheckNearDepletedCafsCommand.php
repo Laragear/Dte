@@ -17,7 +17,8 @@ class CheckNearDepletedCafsCommand extends Command
      *
      * @var string
      */
-    protected $signature = 'dte:check-cafs {--threshold= : The percentage threshold to consider a CAF as near depleted (defaults to config)}';
+    protected $signature = 'dte:check-cafs
+                            {--threshold= : The percentage threshold to consider a CAF as near depleted (defaults to config)}';
 
     /**
      * The console command description.
@@ -34,10 +35,10 @@ class CheckNearDepletedCafsCommand extends Command
         $threshold = (float) ($this->option('threshold') ?? $config->get('dte.caf.depletion_threshold', 10));
 
         SiiCaf::query()
-            ->where(function ($query) use ($date) {
+            ->where(static function ($query) use ($date): void {
                 $query->whereNull('expires_on')->orWhere('expires_on', '>', $date->now());
             })
-            ->chunk(100, function ($cafs) use ($threshold, $event, $date) {
+            ->chunk(100, static function ($cafs) use ($threshold, $event, $date): void {
                 foreach ($cafs as $caf) {
                     $total = $caf->folio_to - $caf->folio_from + 1;
                     $remaining = max(0, $caf->folio_to - $caf->folio_current + 1);

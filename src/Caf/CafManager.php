@@ -25,11 +25,8 @@ class CafManager
 {
     /**
      * Maximum number of CAFs to try in a single allocation before giving up.
-     *
-     * Each iteration consumes all remaining folios of one CAF, so more than these
-     * many consecutive depleted CAFs indicates a data integrity problem.
      */
-    public const int MAX_ALLOCATE_ATTEMPTS = 10;
+    public const int MAX_ALLOCATE_ATTEMPTS = 5;
 
     /**
      * Create a Caf Manager instance.
@@ -94,58 +91,28 @@ class CafManager
     {
         return SiiCaf::query()
             ->getConnection()
+            // Each iteration consumes all remaining folios of one CAF, so more than these
+            // many consecutive depleted CAFs indicates a data integrity problem. We need
+            // to use a transaction to retry, because "save()" can skip that model save.
             ->transaction(function () use ($issuer, $documentType, $callback): mixed {
-                $attempts = 0;
+                $caf = $this->availableCaf($issuer, $documentType);
 
-                while ($attempts < static::MAX_ALLOCATE_ATTEMPTS) {
-                    $caf = $this->availableCaf($issuer, $documentType);
+                $folio = $caf->folios->next();
 
-                    $folio = $caf->folios->next();
-
+                // If a valid folio was successfully pulled, execute the callback.
+                // Otherwise, the loop continues to look for the next valid CAF.
+                if ($folio !== null) {
                     $caf->save();
 
-                    // If a valid folio was successfully pulled, execute the callback.
-                    // Otherwise, the loop continues to look for the next valid CAF.
-                    if ($folio !== null) {
-                        return $callback($caf, $folio);
-                    }
-
-                    $attempts++;
+                    return $callback($caf, $folio);
                 }
 
+                $caf->markAsDepleted();
+
                 throw new DepletionException(
-                    'Unable to allocate a folio after '.static::MAX_ALLOCATE_ATTEMPTS.' attempts.',
+                    "Unable to allocate a folio issuer [$issuer] and document type [$documentType->value]."
                 );
-            });
-    }
-
-    /**
-     * Find the CAF covering the given folios and annul them.
-     */
-    public function annulFolios(Rut|string $issuer, DteType|int $documentType, string $reason, array $folios): SiiCaf
-    {
-        $issuer = Rut::parse($issuer);
-        $documentType = $documentType instanceof DteType ? $documentType : DteType::from($documentType);
-        $folios = Folio::normalize($folios);
-
-        if ($folios === []) {
-            throw new InvalidArgumentException('No folios given to annul.');
-        }
-
-        $caf = SiiCaf::query()
-            ->whereRut($issuer)
-            ->whereDocumentType($documentType)
-            ->where('folio_from', '<=', min($folios))
-            ->where('folio_to', '>=', max($folios))
-            ->firstOr(static function () use ($issuer, $documentType, $folios): never {
-                throw new CafNotFoundException(
-                    "No CAF covers the issuer [$issuer] and document type [$documentType->value] for the folios [".
-                    implode(', ', $folios)
-                    .'].',
-                );
-            });
-
-        return $caf->annulFolios($folios, $reason);
+            }, static::MAX_ALLOCATE_ATTEMPTS);
     }
 
     /**
@@ -162,6 +129,7 @@ class CafManager
             ->where(static function (Builder $query): void {
                 $query->whereNull('expires_on')->orWhereDate('expires_on', '>=', today('America/Santiago'));
             })
+            ->whereNotDepleted()
             ->orderBy('folio_from')
             ->lockForUpdate()
             ->firstOr([
@@ -181,5 +149,33 @@ class CafManager
                     "No CAF folios available for the issuer [$issuer] and document type [$documentType->value].",
                 );
             });
+    }
+
+    /**
+     * Find the CAF covering the given folios and annul them.
+     */
+    public function annulFolios(Rut|string $issuer, DteType|int $documentType, string $reason, array $folios): SiiCaf
+    {
+        $issuer = Rut::parse($issuer);
+        $documentType = $documentType instanceof DteType ? $documentType : DteType::from($documentType);
+        $folios = Folio::normalize($folios);
+
+        if ($folios === []) {
+            throw new InvalidArgumentException('No folios given to annul.');
+        }
+
+        return SiiCaf::query()
+            ->whereRut($issuer)
+            ->whereDocumentType($documentType)
+            ->where('folio_from', '<=', min($folios))
+            ->where('folio_to', '>=', max($folios))
+            ->firstOr(static function () use ($issuer, $documentType, $folios): never {
+                throw new CafNotFoundException(
+                    "No CAF covers the issuer [$issuer] and document type [$documentType->value] for the folios [".
+                    implode(', ', $folios)
+                    .'].',
+                );
+            })
+            ->annulFolios($folios, $reason);
     }
 }

@@ -3,10 +3,10 @@
 namespace Tests\Unit\Console\Commands;
 
 use Exception;
+use Laragear\Dte\Actions\InboundDte\ProcessInboundDte;
 use Laragear\Dte\Contracts\MailboxDriverInterface;
 use Laragear\Dte\Data\InboundEmailData;
 use Laragear\Dte\Mailbox\MailboxManager;
-use Laragear\Dte\Services\InboundDteProcessor;
 use Mockery\MockInterface;
 use Psr\Log\LoggerInterface;
 use Tests\TestCase;
@@ -36,10 +36,10 @@ class FetchInboundMailboxCommandTest extends TestCase
         $this->mock(MailboxManager::class)->expects('driver')->andReturn($driver);
 
         $this->mock(
-            InboundDteProcessor::class,
+            ProcessInboundDte::class,
             static function (MockInterface $mock) use ($email1, $email2): void {
-                $mock->expects('process')->with($email1);
-                $mock->expects('process')->with($email2);
+                $mock->expects('handle')->with($email1);
+                $mock->expects('handle')->with($email2);
             },
         );
 
@@ -71,9 +71,9 @@ class FetchInboundMailboxCommandTest extends TestCase
         $this->mock(MailboxManager::class)->expects('driver')->andReturn($driver);
 
         $this->mock(
-            InboundDteProcessor::class,
+            ProcessInboundDte::class,
             static function (MockInterface $mock) use ($allowed): void {
-                $mock->expects('process')->with($allowed)->once();
+                $mock->expects('handle')->with($allowed)->once();
             },
         );
 
@@ -118,10 +118,10 @@ class FetchInboundMailboxCommandTest extends TestCase
         $this->mock(MailboxManager::class)->expects('driver')->andReturn($driver);
 
         $this->mock(
-            InboundDteProcessor::class,
+            ProcessInboundDte::class,
             static function (MockInterface $mock) use ($email1, $email2): void {
-                $mock->expects('process')->with($email1)->andThrow(new Exception('Parse Error'));
-                $mock->expects('process')->with($email2)->once();
+                $mock->expects('handle')->with($email1)->andThrow(new Exception('Parse Error'));
+                $mock->expects('handle')->with($email2)->once();
             },
         );
 

@@ -17,6 +17,7 @@ use Laragear\Dte\Xml\XmlValidator;
 use Laragear\Rut\Rut;
 use Mockery;
 use RuntimeException;
+use Spatie\TemporaryDirectory\TemporaryDirectory;
 use Tests\TestCase;
 use Tests\Unit\Certificate\Fixtures\CertificateFixture;
 
@@ -88,9 +89,11 @@ class XmlSignerTest extends TestCase
         $this->expectExceptionMessageIs('Unable to extract the certificate RSA public key.');
 
         $proxyMock = Mockery::mock(OpenSslProxy::class, [
+            $this->app->make(TemporaryDirectory::class),
             $this->app->make(Filesystem::class),
             $this->app->make(Factory::class),
         ])->makePartial();
+
         $proxyMock->expects('privateKeyDetails')->andReturnNull();
         $this->app->instance(OpenSslProxy::class, $proxyMock);
 
@@ -220,7 +223,7 @@ class XmlSignerTest extends TestCase
         $this->withCertificate(function ($certificate) {
             $signer = $this->app->make(XmlSigner::class);
             $this->expectException(RuntimeException::class);
-            $this->expectExceptionMessage('Cannot sign: XML document has no root element.');
+            $this->expectExceptionMessageIs('Cannot sign: XML document has no root element.');
             $signer->signString('<?xml version="1.0"?>', $certificate);
         });
     }
@@ -230,7 +233,7 @@ class XmlSignerTest extends TestCase
         $this->withCertificate(function ($certificate) {
             $signer = $this->app->make(XmlSigner::class);
             $this->expectException(RuntimeException::class);
-            $this->expectExceptionMessage("Cannot sign: XML document has no element with ID 'does-not-exist'.");
+            $this->expectExceptionMessageIs("Cannot sign: XML document has no element with ID 'does-not-exist'.");
             $signer->signString('<root ID="root"></root>', $certificate, ['does-not-exist']);
         });
     }

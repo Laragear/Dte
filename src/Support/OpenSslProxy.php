@@ -10,6 +10,7 @@ use OpenSSLCertificate;
 use OpenSSLCertificateSigningRequest;
 use RuntimeException;
 use SensitiveParameter;
+use Spatie\TemporaryDirectory\TemporaryDirectory;
 use Throwable;
 use function array_shift;
 use function array_values;
@@ -23,18 +24,14 @@ use function openssl_pkey_new;
 use function openssl_x509_check_private_key;
 use function preg_match;
 use function preg_match_all;
-use function sys_get_temp_dir;
-use function uniqid;
 
-/**
- * @internal
- */
 class OpenSslProxy
 {
     /**
      * Create a new OpenSSL Proxy instance.
      */
     public function __construct(
+        protected TemporaryDirectory $temporary,
         protected Filesystem $file,
         protected Factory $process,
     ) {
@@ -118,7 +115,7 @@ class OpenSslProxy
      */
     protected function readLegacyPkcs12String(string $contents, string $password): array
     {
-        $path = sys_get_temp_dir().DIRECTORY_SEPARATOR.'pkcs12_'.uniqid();
+        $path = $this->temporary->create()->path('pkcs12.pfx');
 
         if (!$this->file->put($path, $contents)) {
             throw new RuntimeException('Unable to create a temporary file for the PKCS#12 certificate.');
@@ -192,7 +189,7 @@ class OpenSslProxy
     /**
      * Parse validity metadata from an X.509 certificate.
      *
-     * @return array{validFrom_time_t: int, validTo_time_t: int}
+     * @return array{valid_from: int, valid_to: int}
      */
     public function parseX509(string $certificate): array
     {
@@ -211,25 +208,18 @@ class OpenSslProxy
         }
 
         return [
-            'validFrom_time_t' => $metadata['validFrom_time_t'],
-            'validTo_time_t' => $metadata['validTo_time_t'],
+            'valid_from' => $metadata['validFrom_time_t'],
+            'valid_to' => $metadata['validTo_time_t'],
         ];
     }
 
     /**
-     * Determine whether a private key belongs to an X.509 certificate.
-     */
-    public function privateKeyMatches(string $certificate, string $privateKey): bool
-    {
-        try {
-            return openssl_x509_check_private_key($certificate, $privateKey);
-        } catch (Throwable $e) {
-            throw new RuntimeException('Unable to check if the private key matches the certificate.', previous: $e);
-        }
-    }
-
-    /**
      * Sign data with the given private key using SHA1.
+     *
+     * The signature is base64-encoded and wrapped at 76 characters per line
+     * as required by RFC 2045 and the SII XMLDSig specification.
+     *
+     * @see knowledge/documentation/ejemplo_xml/F60T33-ejemplo.xml (FRMT signature format)
      */
     public function sign(string $data, string $privateKey): string
     {
@@ -245,7 +235,8 @@ class OpenSslProxy
             throw new RuntimeException('Failed to sign data with private key.');
         }
 
-        return base64_encode($signature);
+        // Wrap at 76 characters per line (RFC 2045 / SII requirement)
+        return chunk_split(base64_encode($signature), 76, "\n");
     }
 
     /**

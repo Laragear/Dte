@@ -38,7 +38,7 @@ class MakeFakeCertificateCommand extends Command
     {
         $rut = $this->rut($configManager);
         $name = $this->option('disk') ?: $config->get('dte.certificate.disk') ?: 'local';
-        $path = $this->option('path') ?: $config->get('dte.certificate.path') ?: 'certificate.p12';
+        $path = $this->option('path') ?: $config->get('dte.certificate.path') ?: 'dte/certificate.p12';
         $password = $this->option('password') ?: $config->get('dte.certificate.password') ?: 'secret';
 
         $this->info("Generating dummy certificate for {$name} ({$rut->format()})...");
@@ -58,9 +58,14 @@ class MakeFakeCertificateCommand extends Command
             'countryName' => 'CL',
             'stateOrProvinceName' => 'RM',
             'localityName' => 'Santiago',
-            'organizationName' => $name,
-            'commonName' => $name,
+            'organizationName' => $configManager->hasIssuerResolver()
+                ? $configManager->getIssuer($rut)->legalName
+                : $config->get('app.name'),
+            'commonName' => 'LARAVEL DEVELOPMENT FAKE CERTIFICATE',
             'serialNumber' => $rut->formatBasic(),
+            'emailAddress' => $configManager->hasIssuerResolver()
+                ? ($configManager->getIssuer($rut)->email ?: $config->get('mail.from.address'))
+                : $config->get('mail.from.address')
         ];
 
         $csr = $openSsl->csrNew($dn, $key);
@@ -71,7 +76,7 @@ class MakeFakeCertificateCommand extends Command
             return self::FAILURE;
         }
 
-        $cert = $openSsl->csrSign($csr, null, $key, 365 * 2);
+        $cert = $openSsl->csrSign($csr, null, $key, 365 * 3);
 
         if ($cert === false) {
             $this->error('Failed to sign certificate.');

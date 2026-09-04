@@ -3,7 +3,7 @@
 namespace Laragear\Dte;
 
 use Illuminate\Contracts\Container\Container;
-use Laragear\Dte\Builders\AecBuilder;
+use Laragear\Dte\Actions\Aec\CompileAec;
 use Laragear\Dte\Builders\AecCessionBuilder;
 use Laragear\Dte\Builders\CreditNoteBuilder;
 use Laragear\Dte\Builders\DebitNoteBuilder;
@@ -87,9 +87,9 @@ class Builder
     /**
      * Create an AEC builder.
      */
-    public function aec(): AecBuilder
+    public function aec(): CompileAec
     {
-        return $this->app->make(AecBuilder::class);
+        return $this->app->make(CompileAec::class);
     }
 
     /**

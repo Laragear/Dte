@@ -4,8 +4,8 @@ namespace Laragear\Dte\Console\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Contracts\Config\Repository;
+use Laragear\Dte\Actions\InboundDte\ProcessInboundDte;
 use Laragear\Dte\Mailbox\MailboxManager;
-use Laragear\Dte\Services\InboundDteProcessor;
 use Psr\Log\LoggerInterface;
 use Throwable;
 
@@ -31,7 +31,7 @@ class FetchInboundMailboxCommand extends Command
     public function handle(
         LoggerInterface $logger,
         MailboxManager $mailbox,
-        InboundDteProcessor $processor,
+        ProcessInboundDte $processor,
         Repository $config
     ): int {
         $driverName = $this->option('driver');
@@ -56,8 +56,8 @@ class FetchInboundMailboxCommand extends Command
                     continue;
                 }
 
-                // The processor already uses transactions for database-level
-                $processor->process($email);
+                // The pipeline already uses transactions for database-level
+                $processor->handle($email);
                 // Only mark as read if the entire transaction succeeds.
                 $driver->markAsRead($email);
 

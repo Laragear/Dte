@@ -26,11 +26,9 @@ class Folio
     /**
      * Normalizes folio arguments (integers and `[from, to]` ranges) into a flat list of concrete folio numbers.
      *
-     * Ranges spanning more than `MAX_EXPANDABLE_FOLIOS` folios are refused, to avoid
-     * unbounded in-memory expansion.
+     * Ranges spanning more than `MAX_EXPANDABLE_FOLIOS` folios are refused, to avoid unbounded in-memory expansion.
      *
      * @param  array<int|array{int, int}>  $folios
-     *
      * @return array<int>
      */
     public static function normalize(array $folios): array
@@ -65,7 +63,7 @@ class Folio
      *
      * @return array{int, int}
      */
-    private static function range(array $range): array
+    protected static function range(array $range): array
     {
         if (count($range) !== 2 || !is_numeric($range[0]) || !is_numeric($range[1])) {
             throw new InvalidArgumentException('Folio ranges must be a pair of numbers, like [from, to].');
@@ -84,7 +82,7 @@ class Folio
      *
      * @return array<int, array{int, int}>
      */
-    private function mergeAll(array $folios): array
+    protected function mergeAll(array $folios): array
     {
         $merged = [];
 
@@ -108,7 +106,7 @@ class Folio
      *
      * @return array<int, array{int, int}>
      */
-    private function insertRange(array $ranges, int $from, int $to): array
+    protected function insertRange(array $ranges, int $from, int $to): array
     {
         if ($ranges === []) {
             return [[$from, $to]];
@@ -151,7 +149,7 @@ class Folio
     /**
      * Merges a `[from, to]` range into the current annulment list, keeping it sorted and non-overlapping.
      */
-    private function mergeRange(int $from, int $to): void
+    protected function mergeRange(int $from, int $to): void
     {
         $this->annuled = $this->insertRange($this->annuled, $from, $to);
     }
@@ -159,7 +157,7 @@ class Folio
     /**
      * Removes a `[from, to]` range from the current annulment list, splitting partial overlaps.
      */
-    private function subtractRange(int $from, int $to): void
+    protected function subtractRange(int $from, int $to): void
     {
         $result = [];
 
@@ -194,7 +192,7 @@ class Folio
      *
      * @return array{int, int}|null
      */
-    private function rangeContaining(int $folio): ?array
+    protected function rangeContaining(int $folio): ?array
     {
         $low = 0;
         $high = count($this->annuled) - 1;
@@ -379,6 +377,22 @@ class Folio
         }
 
         return max(0, $total - $annuled);
+    }
+
+    /**
+     * Checks if the folio has been exhausted.
+     */
+    public function isExhausted(): bool
+    {
+        return $this->remaining() === 0;
+    }
+
+    /**
+     * Checks if the folio has not been exhausted.
+     */
+    public function isNotExhausted(): bool
+    {
+        return !$this->isExhausted();
     }
 
     /**

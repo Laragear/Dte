@@ -18,7 +18,7 @@ class FireDteCompiledEvent
     }
 
     /**
-     * Fire the compiling event.
+     * Handle the incoming DTE compilation.
      *
      * @param  Closure(Compilation): Compilation  $next
      */

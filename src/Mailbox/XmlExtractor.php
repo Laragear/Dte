@@ -72,7 +72,7 @@ class XmlExtractor
     /**
      * Pulls the XML declaration onward out of a larger text blob.
      */
-    private function extractXmlFromText(string $text): string
+    protected function extractXmlFromText(string $text): string
     {
         $start = strpos($text, '<?xml');
 

@@ -3,6 +3,7 @@
 namespace Laragear\Dte\Gateways;
 
 use Illuminate\Http\Client\Factory as Http;
+use Laragear\Dte\Data\TrackStatus;
 use Laragear\Dte\Environment\EnvironmentResolver;
 use Laragear\Dte\Gateways\Exceptions\TokenInvalidException;
 use Laragear\Dte\Models\SiiDte;
@@ -12,12 +13,6 @@ use Laragear\Dte\Support\TokenAuthenticator;
 use Laragear\Rut\Rut;
 use RuntimeException;
 
-/**
- * Transport for the SII Boleta REST API (upload, track and document status).
- *
- * Token fetching and caching are owned by the TokenAuthenticator; on a 401
- * the refresh-and-retry loop asks it to refresh the REST token and retries.
- */
 class BoletaRestGateway
 {
     /**
@@ -39,8 +34,6 @@ class BoletaRestGateway
 
     /**
      * Get an authentication token string for the given issuer RUT.
-     *
-     * Delegates to the TokenAuthenticator which handles cache read + SII auth.
      */
     public function getToken(Rut $issuerRut, ?string $authUrl = null): string
     {
@@ -50,6 +43,9 @@ class BoletaRestGateway
             return 'fake-token';
         }
 
+        // Delegates to the TokenAuthenticator which handles cache read + SII auth.
+        // Token fetching and caching are owned by the TokenAuthenticator; on a 401
+        // the refresh-and-retry loop asks it to refresh the REST token and retries.
         return $this->authenticator->restToken($issuerRut, $authUrl);
     }
 
@@ -64,28 +60,38 @@ class BoletaRestGateway
             return 'fake-track-id-'.$envelope->getKey();
         }
 
+        // SII uses dedicated servers for uploads (pangal/rahue vs apicert/api).
+        $uploadUrl = $this->environment->resolve()->restUploadBaseUrl();
+
         $issuer = $envelope->issuer_rut;
 
         return $this->authenticator->retryRestWithFreshToken(function () use (
             $envelope,
             $signedXml,
             $authUrl,
+            $uploadUrl,
             $issuer
         ): string {
             $token = $this->authenticator->restToken($issuer, $authUrl);
             $sender = $envelope->sender_rut;
 
-            // 4. POST /boleta.electronica.envio
-            $uploadResponse = $this->http->baseUrl($authUrl)
-                ->withCookies([SiiEndpoints::TOKEN_COOKIE => $token], parse_url($authUrl, PHP_URL_HOST))
+            /**
+             * We do a POST to /boleta.electronica.envio (dedicated upload server).
+             * Uses multipart/form-data with file attachment as required by SII.
+             *
+             * @see https://www4c.sii.cl/bolcoreinternetui/api/openapi.yaml (EnvioPost schema)
+             */
+            $uploadResponse = $this->http->baseUrl($uploadUrl)
+                ->withCookies([SiiEndpoints::TOKEN_COOKIE => $token], parse_url($uploadUrl, PHP_URL_HOST))
                 ->withHeaders([SiiEndpoints::USER_AGENT_HEADER => SiiEndpoints::USER_AGENT])
                 ->timeout(60)
+                ->withOptions($this->tlsOptions())
+                ->attach('archivo', $signedXml, 'envio.xml', ['Content-Type' => 'application/xml'])
                 ->post('/boleta.electronica.envio', [
                     'rutSender' => $sender->num,
                     'dvSender' => $sender->vd,
                     'rutCompany' => $issuer->num,
                     'dvCompany' => $issuer->vd,
-                    'archivo' => base64_encode($signedXml),
                 ]);
 
             if ($uploadResponse->unauthorized()) {
@@ -108,24 +114,32 @@ class BoletaRestGateway
 
     /**
      * Queries the SII REST API for the status of an envelope track ID.
+     *
+     * @see https://www4c.sii.cl/bolcoreinternetui/api/openapi.yaml (X-Retry-After header)
      */
-    public function trackStatus(SiiDteEnvelope $envelope, ?string $authUrl = null): array
+    public function trackStatus(SiiDteEnvelope $envelope, ?string $authUrl = null): TrackStatus
     {
         $authUrl ??= $this->environment->resolve()->restBaseUrl();
 
+        // Returns a TrackStatus DTO that includes the X-Retry-After header value for respecting SII rate limits.
         if ($authUrl === null) {
-            return static::FAKE_TRACK_STATUS;
+            return new TrackStatus(status: 'REC', raw: static::FAKE_TRACK_STATUS);
         }
 
         $issuer = $envelope->issuer_rut;
 
-        return $this->authenticator->retryRestWithFreshToken(function () use ($envelope, $authUrl, $issuer): array {
+        return $this->authenticator->retryRestWithFreshToken(function () use (
+            $envelope,
+            $authUrl,
+            $issuer
+        ): TrackStatus {
             $token = $this->authenticator->restToken($issuer, $authUrl);
 
             $response = $this->http->baseUrl($authUrl)
                 ->withCookies([SiiEndpoints::TOKEN_COOKIE => $token], parse_url($authUrl, PHP_URL_HOST))
                 ->withHeaders([SiiEndpoints::USER_AGENT_HEADER => SiiEndpoints::USER_AGENT])
                 ->timeout(30)
+                ->withOptions($this->tlsOptions())
                 ->get(sprintf('/boleta.electronica.envio/%s-%s-%s', $issuer->num, $issuer->vd, $envelope->track_id));
 
             if ($response->unauthorized()) {
@@ -136,7 +150,10 @@ class BoletaRestGateway
                 throw new RuntimeException('SII Status Query failed with status '.$response->status().'.');
             }
 
-            return $response->json() ?? [];
+            // X-Retry-After header specifies seconds to wait before next poll.
+            $retryAfter = (int) ($response->header('X-Retry-After') ?? 10);
+
+            return TrackStatus::fromResponse($response->json() ?? [], $retryAfter);
         }, $issuer);
     }
 
@@ -172,6 +189,7 @@ class BoletaRestGateway
                 ->withCookies([SiiEndpoints::TOKEN_COOKIE => $token], parse_url($authUrl, PHP_URL_HOST))
                 ->withHeaders([SiiEndpoints::USER_AGENT_HEADER => SiiEndpoints::USER_AGENT])
                 ->timeout(30)
+                ->withOptions($this->tlsOptions())
                 ->get(sprintf(
                     '/boleta.electronica/%s-%s-%s-%s/estado',
                     $issuer->num,
@@ -194,5 +212,21 @@ class BoletaRestGateway
 
             return $response->json() ?? [];
         }, $issuer);
+    }
+
+    /**
+     * Return HTTP client options that enforce TLS 1.2+ connections.
+     *
+     * @see knowledge/documentation/instructivo_emision.md Section 2 (TLS 1.2+)
+     */
+    protected function tlsOptions(): array
+    {
+        return [
+            'verify' => true,
+            'curl' => [
+                // SII requires TLS 1.2 or higher for all API connections.
+                CURLOPT_SSLVERSION => CURL_SSLVERSION_TLSv1_2,
+            ],
+        ];
     }
 }

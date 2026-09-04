@@ -26,7 +26,7 @@ class BuildXml
     }
 
     /**
-     * Render the unsigned DTE document from the builder payload.
+     * Handle the incoming DTE compilation.
      *
      * @param  Closure(Compilation): Compilation  $next
      */
@@ -141,6 +141,10 @@ class BuildXml
         $this->appendPaymentTerms($writer, $data['payment'] ?? null);
         $this->optionalElement($writer, 'IndTraslado', $data['ind_traslado'] ?? null);
         $this->optionalElement($writer, 'TipoDespacho', $data['tipo_despacho'] ?? null);
+
+        // IndMntNeto is used for boletas (types 39/41) to indicate pricing format.
+        // @see knowledge/documentation/formato_boleta_electronica.md Section 3.1
+        $this->optionalElement($writer, 'IndMntNeto', $data['ind_mnt_neto'] ?? null);
 
         $writer->endElement(); // IdDoc
     }

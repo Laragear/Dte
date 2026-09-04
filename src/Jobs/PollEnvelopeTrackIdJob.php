@@ -12,6 +12,7 @@ use Illuminate\Queue\Attributes\Timeout;
 use Illuminate\Queue\Attributes\Tries;
 use Illuminate\Support\DateFactory;
 use Illuminate\Support\Str;
+use Laragear\Dte\Data\TrackStatus;
 use Laragear\Dte\Enums\DteStatus;
 use Laragear\Dte\Enums\EnvelopeStatus;
 use Laragear\Dte\Events\DteAccepted;
@@ -89,26 +90,27 @@ class PollEnvelopeTrackIdJob implements ShouldQueue
 
     /**
      * Processes the SII boleta track ID status response.
+     *
+     * @see https://www4c.sii.cl/bolcoreinternetui/api/openapi.yaml (X-Retry-After header)
      */
     protected function processBoletaTrackIdStatus(
-        array $status,
+        TrackStatus $status,
         Dispatcher $event,
         ConfigRepository $config,
         LoggerInterface $log,
         DateFactory $date,
     ): void {
-        $estado = $status['estado'] ?? null;
-
-        if ($estado === 'EPR') {
-            $this->handleBoletaAccepted($event, $config, $date, $status);
-        } elseif (in_array($estado, ['RCH', 'RCO', 'VOF', 'RFR', 'RPT', 'REC'], true)) {
+        if ($status->isProcessed()) {
+            $this->handleBoletaAccepted($event, $config, $date, $status->raw);
+        } elseif ($status->isRejected()) {
             $this->handleRejected($event, $config, $date);
-        } elseif (in_array($estado, ['CRT', 'FOK', 'PRD', 'SOK'], true)) {
-            $this->handleProcessing($config, $date);
+        } elseif ($status->isProcessing()) {
+            // Use X-Retry-After header value for the delay (SII rate limiting).
+            $this->handleProcessing($config, $date, $status->retryAfter);
         } else {
             $log->warning(
                 "Unknown SII boleta track ID status received for track ID {$this->envelope->track_id}: ".
-                json_encode($status)
+                json_encode($status->raw)
             );
         }
     }
@@ -372,18 +374,23 @@ class PollEnvelopeTrackIdJob implements ShouldQueue
     }
 
     /**
-     * Handles the processing envelope status by resetting the polling timer and
-     * re-querying SII after the mandated minimum delay for this envelope size.
+     * Handles the processing envelope status by resetting after the mandated minimum delay for this envelope size.
+     *
+     * @param  int  $retryAfter  Seconds to wait before next poll (from X-Retry-After header for boletas)
      */
-    protected function handleProcessing(ConfigRepository $config, DateFactory $date): void
+    protected function handleProcessing(ConfigRepository $config, DateFactory $date, int $retryAfter = 0): void
     {
         // Touch resets updated_at, preventing Cron from re-polling during the holding period.
         $this->envelope->touch();
 
-        // Re-query SII after the mandatory floor (2 or 6 minutes) plus any configured
-        // offset, so every subsequent poll respects the SII size-based minimum.
-        self::dispatch($this->envelope)->delay($date->now()->addSeconds($this->effectiveDelay($config,
-            $this->envelopeSizeBytes())));
+        // Use X-Retry-After header value if provided (boleta REST API), otherwise use
+        // the configured floor based on envelope size (SOAP API).
+        $delay = $retryAfter > 0
+            ? $retryAfter
+            : $this->effectiveDelay($config, $this->envelopeSizeBytes());
+
+        // Re-query SII after the delay.
+        static::dispatch($this->envelope)->delay($date->now()->addSeconds($delay));
     }
 
     /**
@@ -405,11 +412,7 @@ class PollEnvelopeTrackIdJob implements ShouldQueue
     }
 
     /**
-     * Returns the size in bytes of the uploaded envelope XML. When the payload is
-     * not available, assumes the larger (30 KB) bucket so the delay is never
-     * shorter than SII actually requires.
-     *
-     * @return int
+     * Returns the size in bytes of the uploaded envelope XML.
      */
     protected function envelopeSizeBytes(): int
     {
@@ -417,10 +420,10 @@ class PollEnvelopeTrackIdJob implements ShouldQueue
             return strlen($this->envelope->payload->xml);
         }
 
-        // Conservative: default to the >= 30 KB bucket (360s floor).
+        // When the payload is not available, assumes the larger (30 KB) bucket, so the
+        // delay is never shorter than SII actually requires.
         return 30 * 1024;
     }
-
 
     /**
      * Checks if the XML response contains a rejected status code.
@@ -470,6 +473,7 @@ class PollEnvelopeTrackIdJob implements ShouldQueue
                 'accepted_at' => $now,
                 'updated_at' => $now,
             ]);
+
             $dte->syncOriginal();
 
             $event->dispatch(new DteAccepted($dte));

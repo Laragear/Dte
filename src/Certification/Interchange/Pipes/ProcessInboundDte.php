@@ -3,10 +3,10 @@
 namespace Laragear\Dte\Certification\Interchange\Pipes;
 
 use Closure;
+use Laragear\Dte\Actions\InboundDte\ProcessInboundDte as ProcessInboundDtePipeline;
 use Laragear\Dte\Certification\Interchange\InterchangeData;
 use Laragear\Dte\Models\SiiInboundDocument;
 use Laragear\Dte\Models\SiiInterchangeLog;
-use Laragear\Dte\Services\InboundDteProcessor;
 
 class ProcessInboundDte
 {
@@ -14,7 +14,7 @@ class ProcessInboundDte
      * Create a new pipe instance.
      */
     public function __construct(
-        protected InboundDteProcessor $processor,
+        protected ProcessInboundDtePipeline $pipeline,
     ) {
         //
     }
@@ -24,7 +24,7 @@ class ProcessInboundDte
      */
     public function handle(InterchangeData $data, Closure $next): InterchangeData
     {
-        $this->processor->process($data->emailData);
+        $this->pipeline->handle($data->emailData);
 
         $log = SiiInterchangeLog::where('message_id', $data->emailData->messageId)->first();
 

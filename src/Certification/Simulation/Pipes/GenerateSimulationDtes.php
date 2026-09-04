@@ -26,6 +26,10 @@ class GenerateSimulationDtes
      */
     public function handle(SimulationData $data, Closure $next): SimulationData
     {
+        if ($data->dtes->isNotEmpty()) {
+            return $next($data);
+        }
+
         $quantity = $data->quantity;
 
         $typeLabels = [

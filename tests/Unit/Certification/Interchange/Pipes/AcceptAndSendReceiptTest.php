@@ -71,7 +71,9 @@ class AcceptAndSendReceiptTest extends TestCase
             inboundDocument: SiiInboundDocument::factory()->make(),
         );
 
-        $this->mock(CertificateResolver::class)->expects('resolve')->once()->andReturnNull();
+        $this->mock(CertificateResolver::class, static function (MockInterface $mock): void {
+            $mock->expects('resolve')->once()->andReturnNull();
+        })->makePartial();
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessageIs('Could not resolve digital certificate for 76123456-0.');

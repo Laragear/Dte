@@ -53,7 +53,7 @@ class TokenRepositoryTest extends TestCase
         $this->app->make('config')->set('dte.soap.token_ttl', 7200);
 
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('SOAP token TTL must not exceed 3600 seconds (SII token lifetime). Got: 7200');
+        $this->expectExceptionMessageIs('SOAP token TTL must not exceed 3600 seconds (SII token lifetime). Got: 7200');
 
         $this->makeRepository()->ttl(TokenType::Soap);
     }
@@ -63,7 +63,7 @@ class TokenRepositoryTest extends TestCase
         $this->app->make('config')->set('dte.soap.token_ttl', 7200);
 
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('REST token TTL must not exceed 3600 seconds (SII token lifetime). Got: 7200');
+        $this->expectExceptionMessageIs('REST token TTL must not exceed 3600 seconds (SII token lifetime). Got: 7200');
 
         $this->makeRepository()->ttl(TokenType::Rest);
     }

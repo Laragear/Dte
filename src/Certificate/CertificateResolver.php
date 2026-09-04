@@ -3,12 +3,15 @@
 namespace Laragear\Dte\Certificate;
 
 use Closure;
+use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Container\Container;
+use Illuminate\Contracts\Filesystem\Factory;
 use Laragear\Dte\Contracts\Certifiable;
 use Laragear\Dte\Contracts\CertificateResolverInterface;
 use Laragear\Rut\Rut;
 use RuntimeException;
 use UnexpectedValueException;
+use function app;
 
 class CertificateResolver implements CertificateResolverInterface
 {
@@ -73,8 +76,29 @@ class CertificateResolver implements CertificateResolverInterface
      */
     public static function resolveUsing(Closure $callback): void
     {
-        app()->afterResolving(CertificateResolverInterface::class, static function (self $resolver) use ($callback) {
-            $resolver->setResolver($callback);
-        });
+        app()->afterResolving(
+            CertificateResolverInterface::class,
+            static function (self $resolver) use ($callback): void {
+                $resolver->setResolver($callback);
+            }
+        );
+    }
+
+    /**
+     * Registers a default certificate resolved for local disk and library config.
+     */
+    public static function resolveUsingDefaults(): void
+    {
+        app()->afterResolving(
+            CertificateResolverInterface::class,
+            static function (self $resolver): void {
+                $resolver->setResolver(static function (Repository $conf, Factory $storage): DigitalCertificate {
+                    return new DigitalCertificate(
+                        $storage->disk($conf->get('dte.certificate.disk'))->path($conf->get('dte.certificate.path')),
+                        $conf->get('dte.certificate.password')
+                    );
+                });
+            }
+        );
     }
 }

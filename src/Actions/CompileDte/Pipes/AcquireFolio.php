@@ -21,7 +21,7 @@ class AcquireFolio
     }
 
     /**
-     * Allocate the next authorized folio or halt until a CAF is available.
+     * Handle the incoming DTE compilation.
      *
      * @param  Closure(Compilation): Compilation  $next
      */

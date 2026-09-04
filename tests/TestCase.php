@@ -9,7 +9,6 @@ use Laragear\Rut\RutServiceProvider;
 use Orchestra\Testbench\TestCase as BaseTestCase;
 use Override;
 use Spatie\LaravelPdf\PdfServiceProvider;
-
 use function file_get_contents;
 
 class TestCase extends BaseTestCase

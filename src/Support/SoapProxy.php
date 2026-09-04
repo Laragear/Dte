@@ -30,19 +30,9 @@ class SoapProxy
     }
 
     /**
-     * Set the options used to build the SOAP client.
-     *
-     * @param  array<string, mixed>  $options
-     */
-    public function withOptions(array $options): static
-    {
-        $this->options = $options;
-
-        return $this;
-    }
-
-    /**
      * Build the configured SOAP client.
+     *
+     * @see https://www.sii.cl/factura_electronica/factura_mercado/instructivo_emision.pdf
      */
     public function build(): SoapClient
     {
@@ -52,6 +42,14 @@ class SoapProxy
             'exceptions' => true,
             // SII WSDL files can be very huge, so we will cache these on disk when available.
             'cache_wsdl' => WSDL_CACHE_DISK,
+            // Enforce TLS 1.2+ as required by SII specification and all SOAP connections.
+            'stream_context' => stream_context_create([
+                'ssl' => [
+                    'crypto_method' => STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT | STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT,
+                    'verify_peer' => true,
+                    'verify_peer_name' => true,
+                ],
+            ]),
         ]);
 
         return new SoapClient($this->wsdl, $options);

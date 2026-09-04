@@ -144,7 +144,7 @@ class CafManagerTest extends DatabaseTestCase
     {
         $manager = clone $this->app->make(CafManager::class);
 
-        $caf1 = SiiCaf::factory()->create([
+        $caf1 = SiiCaf::factory()->depleted()->create([
             'document_type' => DteType::Invoice,
             'folio_from' => 10,
             'folio_to' => 10,
@@ -164,8 +164,10 @@ class CafManagerTest extends DatabaseTestCase
         ]);
 
         $called = false;
+
         $manager->allocate($caf1->rut, DteType::Invoice, function ($caf, $folio) use (&$called) {
             static::assertSame(11, $folio);
+
             $called = true;
         });
 
@@ -192,7 +194,7 @@ class CafManagerTest extends DatabaseTestCase
 
         $this->expectException(DepletionException::class);
         $this->expectExceptionMessageIs(
-            'Unable to allocate a folio after '.CafManager::MAX_ALLOCATE_ATTEMPTS.' attempts.',
+            'Unable to allocate a folio issuer [76.123.456-7] and document type [33].',
         );
 
         $this->allocate($this->app->make(CafManager::class), $issuer);

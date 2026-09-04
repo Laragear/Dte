@@ -36,7 +36,19 @@ class CafParser
     /**
      * Parse and validate an SII CAF XML document.
      *
-     * @return array{issuer_rut: string, document_type: DteType, folio_from: int, folio_to: int, folio_current: int, authorized_on: DateTimeImmutable, xml: string, public_key_modulus: string, public_key_exponent: string, private_key: string, signature: string}
+     * @return array{
+     *     issuer_rut: string,
+     *     document_type: DteType,
+     *     folio_from: int,
+     *     folio_to: int,
+     *     folio_current: int,
+     *     authorized_on: DateTimeImmutable,
+     *     xml: string,
+     *     public_key_modulus: string,
+     *     public_key_exponent: string,
+     *     private_key: string,
+     *     signature: string
+     * }
      */
     public function parse(string $xml): array
     {
@@ -96,7 +108,7 @@ class CafParser
         $nodes = $caf->xpath($path);
         $value = $nodes === false || !isset($nodes[0]) ? '' : trim((string) $nodes[0]);
 
-        if ($value === '') {
+        if (!$value) {
             throw new InvalidArgumentException("The CAF element [$path] is missing.");
         }
 

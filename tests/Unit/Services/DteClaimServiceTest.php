@@ -76,7 +76,7 @@ class DteClaimServiceTest extends DatabaseTestCase
         $service->reject($document, 'reason');
     }
 
-    public function test_sad_path_accept_timeout_or_error(): void
+    public function test_accept_timeout_or_error(): void
     {
         $document = SiiInboundDocument::factory()->create();
         $signer = Rut::parse('1-9');

@@ -24,11 +24,11 @@ class DowngradeOrphanedDocuments
     }
 
     /**
-     * Handle the given context.
+     * Hande the incoming Cuadratura.
      *
-     * @param  Closure(CuadraturaContext):CuadraturaContext  $next
+     * @param  Closure(CuadraturaContext): CuadraturaContext  $next
      */
-    public function handle(CuadraturaContext $context, Closure $next): mixed
+    public function handle(CuadraturaContext $context, Closure $next): CuadraturaContext
     {
         if ($context->parsingContext->type === RcvType::Purchases) {
             $this->downgradeInbounds($context);
@@ -79,6 +79,7 @@ class DowngradeOrphanedDocuments
     protected function downgradeQuery(Builder $query, CuadraturaContext $context, string|int $targetStatus): void
     {
         $context->metrics['orphans'] += $query->clone()->count();
+
         $query->update(['status' => $targetStatus]);
     }
 }

@@ -30,4 +30,17 @@ class SiiCafFactory extends DteFactory
             'xml' => '<AUTORIZACION/>',
         ];
     }
+
+    /**
+     * Create a "depleted" CAF.
+     */
+    public function depleted(): static
+    {
+        return $this->state(function (array $attributes): array {
+            return [
+                'folio_current' => $attributes['folio_to'],
+                'depleted_at' => $this->faker->dateTime(),
+            ];
+        });
+    }
 }

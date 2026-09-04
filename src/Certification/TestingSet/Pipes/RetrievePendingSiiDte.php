@@ -4,6 +4,7 @@ namespace Laragear\Dte\Certification\TestingSet\Pipes;
 
 use Closure;
 use Illuminate\Console\ManuallyFailedException;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Laragear\Dte\Certification\TestingSet\TestSetData;
 use Laragear\Dte\Models\SiiDte;
 
@@ -14,11 +15,15 @@ class RetrievePendingSiiDte
      */
     public function handle(TestSetData $data, Closure $next): TestSetData
     {
+        if ($data->dtes->isNotEmpty()) {
+            return $next($data);
+        }
+
         $data->dtes = SiiDte::where([
             'issuer_num' => $data->rut->num,
             'issuer_vd' => $data->rut->vd,
         ])
-            ->when(!empty($data->dteIds), function ($query) use ($data) {
+            ->when(!empty($data->dteIds), static function (EloquentBuilder $query) use ($data): void {
                 $query->whereIn('id', $data->dteIds);
             })
             ->get();

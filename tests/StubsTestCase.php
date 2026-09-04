@@ -6,7 +6,6 @@ use Generator;
 use Illuminate\Support\Arr;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase as PHPUnitTestCase;
-
 use Symfony\Component\Finder\Finder;
 use function file_get_contents;
 use function hash;
@@ -16,7 +15,7 @@ class StubsTestCase extends PHPUnitTestCase
 {
     public function test_has_checksum_file(): void
     {
-        static::assertFileExists(TestCase::STUBS . '/checksums.json');
+        static::assertFileExists(TestCase::STUBS.'/checksums.json');
     }
 
     /**
@@ -24,7 +23,7 @@ class StubsTestCase extends PHPUnitTestCase
      */
     public static function providesFilesInStubsDirectory(): iterable
     {
-        foreach(new Finder()->in(TestCase::STUBS)->files() as $file) {
+        foreach (new Finder()->in(TestCase::STUBS)->files() as $file) {
             if ($file->getFilename() !== 'checksums.json') {
                 yield [$file->getFilename()];
             }

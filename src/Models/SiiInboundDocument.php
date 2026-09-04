@@ -16,10 +16,10 @@ use Laragear\Dte\Certificate\DigitalCertificate;
 use Laragear\Dte\Database\Factories\SiiInboundDocumentFactory;
 use Laragear\Dte\Enums\DteType;
 use Laragear\Dte\Enums\InboundDteStatus;
-use Laragear\Dte\Models\Attributes\RutAttribute;
 use Laragear\Dte\Models\Concerns\HasDocumentType;
 use Laragear\Dte\Models\Concerns\HasSiiStatus;
 use Laragear\Dte\Services\DteClaimService;
+use Laragear\Rut\Eloquent\RutAttribute;
 use Laragear\Rut\Rut;
 
 /**
@@ -130,7 +130,7 @@ class SiiInboundDocument extends Model
      */
     protected function issuerRut(): Attribute
     {
-        return RutAttribute::make('issuer');
+        return RutAttribute::for('issuer');
     }
 
     /**
@@ -138,7 +138,7 @@ class SiiInboundDocument extends Model
      */
     protected function receiverRut(): Attribute
     {
-        return RutAttribute::make('receiver');
+        return RutAttribute::for('receiver');
     }
 
     /*

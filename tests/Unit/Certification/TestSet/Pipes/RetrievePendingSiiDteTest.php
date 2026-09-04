@@ -99,4 +99,20 @@ class RetrievePendingSiiDteTest extends DatabaseTestCase
         static::assertTrue($result->dtes->contains('id', $dte3->id));
         static::assertFalse($result->dtes->contains('id', $dte2->id));
     }
+
+    public function test_skips_query_when_dtes_are_pre_loaded(): void
+    {
+        $dtes = SiiDte::factory(2)->create(['issuer_num' => 76123456, 'issuer_vd' => '0']);
+
+        $data = new TestSetData(new Rut(76123456, '0'), dtes: $dtes);
+
+        $pipe = new RetrievePendingSiiDte;
+        $result = $pipe->handle($data, function ($data) {
+            return $data;
+        });
+
+        static::assertCount(2, $result->dtes);
+        static::assertTrue($result->dtes->contains('id', $dtes[0]->id));
+        static::assertTrue($result->dtes->contains('id', $dtes[1]->id));
+    }
 }

@@ -3,6 +3,7 @@
 namespace Laragear\Dte\Certification\TestingSet;
 
 use Illuminate\Pipeline\Pipeline;
+use Laragear\Dte\Certification\Pipes\EnsureDtesCompiled;
 use Laragear\Dte\Certification\Simulation\Pipes\CompileEnvelope;
 
 class TestSetEnvelope extends Pipeline
@@ -13,6 +14,7 @@ class TestSetEnvelope extends Pipeline
      * @var array
      */
     protected $pipes = [
+        EnsureDtesCompiled::class,
         Pipes\RetrievePendingSiiDte::class,
         CompileEnvelope::class, // Reuse the pipeline from the simulation
         Pipes\SendTestingEnvelope::class,

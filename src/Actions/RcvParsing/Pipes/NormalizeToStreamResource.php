@@ -26,11 +26,11 @@ class NormalizeToStreamResource
     }
 
     /**
-     * Handle the given context.
+     * Handle the incoming RCV Parsing.
      *
      * @param  Closure(ParsingContext):ParsingContext  $next
      */
-    public function handle(ParsingContext $context, Closure $next): mixed
+    public function handle(ParsingContext $context, Closure $next): ParsingContext
     {
         $context->stream = $this->resolveStream($context->source);
 
@@ -75,9 +75,11 @@ class NormalizeToStreamResource
     protected function streamFromString(string $payload): mixed
     {
         $stream = $this->stream->fopen('php://temp', 'r+');
+
         if ($stream === false) {
             return false;
         }
+
         $this->stream->fwrite($stream, $payload);
         $this->stream->fseek($stream, 0);
 

@@ -5,17 +5,10 @@ namespace Laragear\Dte\Gateways;
 use Laragear\Dte\Environment\EnvironmentResolver;
 use Laragear\Dte\Gateways\Exceptions\TokenInvalidException;
 use Laragear\Dte\Models\SiiInboundDocument;
-use Laragear\Dte\Support\SoapProxy;
 use Laragear\Dte\Support\TokenAuthenticator;
 use RuntimeException;
-use SoapHeader;
-use function in_array;
 use function sprintf;
 
-/**
- * Sends commercial claims (Reclamo al Contenido / Reclamo Falta de Mercadería)
- * for received vendor invoices via the SII ReclamoWebservice (Ley 20.956).
- */
 class ReclamoWebserviceGateway
 {
     /**
@@ -33,10 +26,13 @@ class ReclamoWebserviceGateway
      */
     public const string ACTION_ACCEPT = 'ACD';
 
+    /**
+     * Create a new Reclamo Webservice Gateway instance.
+     */
     public function __construct(
         protected TokenAuthenticator $authenticator,
         protected EnvironmentResolver $environment,
-        protected SoapProxy $soapProxy,
+        protected SoapClientFactory $soapClientFactory,
     ) {
         //
     }
@@ -82,12 +78,7 @@ class ReclamoWebserviceGateway
 
             $wsdlUrl = $baseUrl.'/DTEWS/ReclamoRecibos.asmx?WSDL';
 
-            $client = $this->soapProxy
-                ->withWsdl($wsdlUrl)
-                ->build();
-
-            $header = new SoapHeader('http://www.sii.cl/ws/', 'Token', $token->value);
-            $client->__setSoapHeaders($header);
+            $client = $this->soapClientFactory->createAuthenticatedClient($wsdlUrl, $token);
 
             $result = $client->__soapCall('ReclamoDoc', [
                 [
@@ -103,7 +94,7 @@ class ReclamoWebserviceGateway
             $status = (string) ($result->ReclamoDocResult->status ?? '-1');
 
             // SII signals an inactive/invalid token with 001/002/003: refresh and retry.
-            if (in_array($status, ['001', '002', '003'], true)) {
+            if (TokenStatus::isNotValid($status)) {
                 throw new TokenInvalidException('SII Reclamo WS rejected the authentication token.');
             }
 

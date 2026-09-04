@@ -2,12 +2,16 @@
 
 namespace Tests\Unit\Certificate;
 
+use Illuminate\Contracts\Config\Repository;
+use Illuminate\Contracts\Filesystem\Factory;
+use Illuminate\Contracts\Filesystem\Filesystem;
 use Laragear\Dte\Certificate\CertificateResolver;
 use Laragear\Dte\Certificate\DigitalCertificate;
 use Laragear\Dte\Contracts\Certifiable;
 use Laragear\Dte\Contracts\CertificateResolverInterface;
 use Laragear\Rut\Rut;
 use Mockery;
+use Mockery\MockInterface;
 use RuntimeException;
 use Tests\DatabaseTestCase;
 use UnexpectedValueException;
@@ -47,6 +51,31 @@ class CertificateResolverTest extends DatabaseTestCase
         static::assertSame($expected, $resolver->resolve($rut));
     }
 
+    public function test_resolves_using_default_configuration(): void
+    {
+        $this->mock(Repository::class, static function (MockInterface $mock): void {
+            $mock->expects('get')->with('dte.certificate.disk')->andReturn('test-disk');
+            $mock->expects('get')->with('dte.certificate.path')->andReturn('test-path');
+            $mock->expects('get')->with('dte.certificate.password')->andReturn('test-password');
+        });
+
+        $this->mock(Factory::class, static function (MockInterface $mock): void {
+            $storage = Mockery::mock(Filesystem::class);
+            $storage->expects('path')->with('test-path')->andReturn('test-certificate');
+
+            $mock->expects('disk')->andReturn($storage);
+        });
+
+        CertificateResolver::resolveUsingDefaults();
+
+        $resolver = $this->app->make(CertificateResolverInterface::class);
+
+        $certificate = $resolver->resolve(Rut::parse('76.123.456-0'));
+
+        static::assertSame('test-certificate', $certificate->pkcs12);
+        static::assertSame('test-password', $certificate->password);
+    }
+
     public function test_returns_null_when_callback_returns_null()
     {
         $rut = Rut::parse('76.123.456-0');
@@ -74,13 +103,23 @@ class CertificateResolverTest extends DatabaseTestCase
         $resolver->resolve($rut);
     }
 
-    public function test_throws_when_no_callback_registered()
+    public function test_registers_default_certificate_resolver()
     {
-        $rut = Rut::parse('76.123.456-0');
+        $this->mock(Repository::class, static function (MockInterface $mock): void {
+            $mock->expects('get')->with('dte.certificate.disk')->andReturn('test-disk');
+            $mock->expects('get')->with('dte.certificate.path')->andReturn('test-path');
+            $mock->expects('get')->with('dte.certificate.password')->andReturn('test-password');
+        });
+
+        $this->mock(Factory::class, static function (MockInterface $mock): void {
+            $storage = Mockery::mock(Filesystem::class);
+            $storage->expects('path')->with('test-path')->andReturn('test-certificate');
+
+            $mock->expects('disk')->andReturn($storage);
+        });
 
         $resolver = $this->app->make(CertificateResolverInterface::class);
 
-        $this->expectException(RuntimeException::class);
-        $resolver->resolve($rut);
+        $resolver->resolve(Rut::parse('76.123.456-0'));
     }
 }

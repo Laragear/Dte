@@ -32,7 +32,7 @@ class FetchInterchangeXml
      */
     public function handle(InterchangeData $data, Closure $next): InterchangeData
     {
-        $data->source === 'file'
+        ($data->source === 'file' || $data->xmlContent || $data->filePath)
             ? $this->handleFileInterchangeXml($data)
             : $this->handleEmailInterchangeXml($data);
 
@@ -57,10 +57,10 @@ class FetchInterchangeXml
         }
 
         $data->emailData = InboundEmailData::make(
-            messageId: 'manual-file-'.$this->date->now()->getTimestamp(),
-            sender: 'sii_dte_intercambio@sii.cl',
-            subject: 'Intercambio SII (Manual File)',
-            xmlAttachment: $content,
+            'manual-file-'.$this->date->now()->getTimestamp(),
+            'sii_dte_intercambio@sii.cl',
+            'Intercambio SII (Manual File)',
+            $content,
         );
     }
 
@@ -84,7 +84,7 @@ class FetchInterchangeXml
         $emails = $this->mailbox->driver()->unread();
 
         foreach ($emails as $email) {
-            // On certification, we require to set the emails from the official certification mailbox as read.
+            // On certification, we require setting the emails from the official certification mailbox as read.
             if (Str::of($email->sender)->lower()->contains('sii_dte_intercambio@sii.cl')) {
                 // Mark it as read to prevent fetching it again
                 $this->mailbox->driver()->markAsRead($email);

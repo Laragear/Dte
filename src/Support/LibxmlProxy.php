@@ -2,12 +2,27 @@
 
 namespace Laragear\Dte\Support;
 
+use LibXMLError;
+use function libxml_clear_errors;
+use function libxml_get_errors;
+use function libxml_use_internal_errors;
+
 class LibxmlProxy
 {
     /**
+     * Retrieve array of errors.
+     *
+     * @return LibXMLError[]
+     */
+    public function getErrors(): array
+    {
+        return libxml_get_errors();
+    }
+
+    /**
      * Disable libxml errors and allow user to fetch error information as needed.
      */
-    public function use_internal_errors(?bool $use_errors = null): bool
+    public function useInternalErrors(?bool $use_errors = null): bool
     {
         return libxml_use_internal_errors($use_errors);
     }
@@ -15,7 +30,7 @@ class LibxmlProxy
     /**
      * Clear the libxml error buffer.
      */
-    public function clear_errors(): void
+    public function clearErrors(): void
     {
         libxml_clear_errors();
     }

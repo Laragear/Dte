@@ -2,11 +2,15 @@
 
 namespace Tests\Unit\Models\Concerns;
 
+use DOMDocument;
 use InvalidArgumentException;
+use Laragear\Dte\Support\XmlDomFactory;
 use LogicException;
+use Mockery;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 use Tests\Unit\Models\Concerns\Fixtures\DummyXmlPayloadModel;
+use Throwable;
 
 class HasXmlPayloadTest extends TestCase
 {
@@ -63,8 +67,27 @@ class HasXmlPayloadTest extends TestCase
         $model = new DummyXmlPayloadModel;
 
         $this->expectException(LogicException::class);
-        $this->expectExceptionMessageIs('The model does not contain an XML payload.');
+        $this->expectExceptionMessageIs('The model XML payload is malformed.');
 
-        $model->toDomDocument();
+        try {
+            $model->toDomDocument();
+        } catch (Throwable $e) {
+            static::assertSame('The model does not contain an XML payload.', $e->getPrevious()->getMessage());
+
+            throw $e;
+        }
+    }
+
+    public function test_throws_when_load_xml_returns_false_without_throwing(): void
+    {
+        $document = Mockery::mock(DOMDocument::class);
+        $document->expects('loadXml')->andReturnFalse();
+
+        $this->mock(XmlDomFactory::class)->expects('document')->andReturn($document);
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageIs('The model XML payload is malformed.');
+
+        $this->model('<test>')->toDomDocument();
     }
 }

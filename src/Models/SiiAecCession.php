@@ -17,7 +17,6 @@ use Laragear\Rut\HasRut;
 /**
  * Tracks an electronic invoice-credit cession registered with the SII.
  * ---
- *
  * @see  SiiAecCessionFactory
  * @link database/migrations/2026_01_01_000009_create_sii_aec_cessions_table.php
  * ---

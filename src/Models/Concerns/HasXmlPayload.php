@@ -10,6 +10,7 @@ use SimpleXMLElement;
 use Throwable;
 use function app;
 use function is_string;
+use const LIBXML_NONET;
 
 trait HasXmlPayload
 {
@@ -26,7 +27,13 @@ trait HasXmlPayload
     {
         $document = $this->xmlDomFactory()->document();
 
-        if (@$document->loadXML($this->xmlPayload(), LIBXML_NONET) === false) {
+        try {
+            $loaded = $document->loadXML($this->xmlPayload(), LIBXML_NONET);
+        } catch (Throwable $e) {
+            throw new InvalidArgumentException('The model XML payload is malformed.', previous: $e);
+        }
+
+        if ($loaded === false) {
             throw new InvalidArgumentException('The model XML payload is malformed.');
         }
 

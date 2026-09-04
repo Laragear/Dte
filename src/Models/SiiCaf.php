@@ -17,11 +17,13 @@ use Laragear\Dte\Caf\Folio;
 use Laragear\Dte\Casts\AsFolio;
 use Laragear\Dte\Database\Factories\SiiCafFactory;
 use Laragear\Dte\Enums\DteType;
+use Laragear\Dte\Events\CafDepleted;
 use Laragear\Dte\Events\CafFoliosAnnuled;
 use Laragear\Dte\Events\CafFoliosRestored;
 use Laragear\Dte\Models\Concerns\HasDocumentType;
 use Laragear\Rut\HasRut;
 use Laragear\Rut\Rut;
+use function value;
 
 /**
  * Stores an authorized SII folio range and its CAF XML.
@@ -51,11 +53,14 @@ use Laragear\Rut\Rut;
  * @property Carbon|null $expires_on
  * @property string $xml
  * @property Folio $folios
+ * @property Carbon|null $depleted_at
  * ---
  * @property-read Carbon $created_at
  * @property-read Carbon $updated_at
  * ---
  * @method Builder<static>|static collidesWith(Rut|string $rut, DteType|int $documentType, int $folioFrom, int $folioTo)
+ * @method Builder<static>|static whereDepleted()
+ * @method Builder<static>|static whereNotDepleted()
  */
 #[UseFactory(SiiCafFactory::class)]
 #[Fillable(
@@ -91,6 +96,7 @@ class SiiCaf extends Model
         'expires_on' => 'date',
         'folios' => AsFolio::class,
         'folio_annuled' => 'array',
+        'depleted_at' => 'datetime',
     ];
 
     /*
@@ -139,6 +145,54 @@ class SiiCaf extends Model
 
     /*
      |--------------------------------------------------------------------------
+     | Local Scopes
+     |--------------------------------------------------------------------------
+     */
+
+    /**
+     * Filter the CAF by those completely depleted as "whereDepleted".
+     */
+    protected function scopeWhereDepleted(Builder $builder): Builder
+    {
+        return $builder->whereNotNull('depleted_at');
+    }
+
+    /**
+     * Filter the CAF by those not depleted as "whereNotDepleted".
+     */
+    protected function scopeWhereNotDepleted(Builder $builder): Builder
+    {
+        return $builder->whereNull('depleted_at');
+    }
+
+    /*
+     |--------------------------------------------------------------------------
+     | Helpers
+     |--------------------------------------------------------------------------
+     */
+
+    /**
+     * Marks the CAF as depleted.
+     */
+    public function markAsDepleted(mixed $save = true): void
+    {
+        $this->depleted_at = $this->freshTimestamp();
+
+        value($save, $this) && $this->save();
+    }
+
+    /**
+     * Marks the CAF as not depleted.
+     */
+    public function markAsNotDepleted(mixed $save = true): void
+    {
+        $this->depleted_at = null;
+
+        value($save, $this) && $this->save();
+    }
+
+    /*
+     |--------------------------------------------------------------------------
      | Folio annulment
      |--------------------------------------------------------------------------
      */
@@ -147,35 +201,44 @@ class SiiCaf extends Model
      * Annul one or more folios, or ranges of folios, inside a locked transaction.
      *
      * @param  array<int|array{int, int}>  $folios
+     * @return $this
      */
     public function annulFolios(array $folios, string $reason = '', bool $validateAllocated = true): static
     {
         $folios = Folio::normalize($folios);
 
         return $this->getConnection()->transaction(function () use ($folios, $reason, $validateAllocated): static {
-            $locked = $this->newQuery()->lockForUpdate()->findOrFail($this->getKey());
+            $this->refreshForUpdate();
 
             foreach ($folios as $folio) {
-                if ($locked->folios->isNotInRange($folio)) {
+                if ($this->folios->isNotInRange($folio)) {
                     throw new FolioOutOfRangeException("The folio [$folio] is out of the CAF range.");
                 }
 
-                if ($validateAllocated && $locked->folios->isNotAllocatable($folio)) {
+                if ($validateAllocated && $this->folios->isNotAllocatable($folio)) {
                     throw new FolioAlreadyAllocatedException("The folio [$folio] was already allocated.");
                 }
 
-                if ($locked->folios->isAnnuled($folio)) {
+                if ($this->folios->isAnnuled($folio)) {
                     throw new FolioAlreadyAnnuledException("The folio [$folio] was already annulled.");
                 }
             }
 
-            $locked->folios->annul(...$folios);
-            $locked->save();
+            $this->folios->annul(...$folios);
 
-            $this->getConnection()
-                ->afterCommit(fn(): mixed => CafFoliosAnnuled::dispatch($locked, $folios));
+            if ($this->folios->isNotExhausted()) {
+                $this->markAsNotDepleted();
+            } else {
+                $this->markAsDepleted();
+            }
 
-            return $this->syncFolios($locked);
+            $this->getConnection()->afterCommit(function () use ($folios): void {
+                CafFoliosAnnuled::dispatch($this, $folios);
+
+                CafDepleted::dispatchIf($this->folios->isExhausted(), $this->rut, $this->document_type);
+            });
+
+            return $this->syncFolios($this);
         });
     }
 
@@ -183,19 +246,22 @@ class SiiCaf extends Model
      * Restore one or more annulled folios locally, no SII report.
      *
      * @param  array<int|array{int, int}>  $folios
+     * @return $this
      */
     public function restoreFolios(array $folios): static
     {
         return $this->getConnection()->transaction(function () use ($folios): static {
-            $locked = $this->newQuery()->lockForUpdate()->findOrFail($this->getKey());
+            $this->refreshForUpdate();
 
-            $locked->folios->restore(...$folios);
-            $locked->save();
+            $this->folios->restore(...$folios);
 
-            $this->getConnection()
-                ->afterCommit(fn(): mixed => CafFoliosRestored::dispatch($locked, $folios));
+            $this->save();
 
-            return $this->syncFolios($locked);
+            $this->getConnection()->afterCommit(function () use ($folios): void {
+                CafFoliosRestored::dispatch($this, $folios);
+            });
+
+            return $this->syncFolios($this);
         });
     }
 

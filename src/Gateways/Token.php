@@ -3,10 +3,9 @@
 namespace Laragear\Dte\Gateways;
 
 use DateTimeImmutable;
-use DateTimeInterface;
 use Illuminate\Support\DateFactory;
 
-final readonly class Token
+class Token
 {
     /**
      * Create a new Token instance.
@@ -42,13 +41,5 @@ final readonly class Token
         return new self(
             $token, app(DateFactory::class)->now('America/Santiago')->addSeconds($ttlSeconds)->toDateTimeImmutable()
         );
-    }
-
-    /**
-     * Determine whether the token is valid at the given time.
-     */
-    public function isValidAt(DateTimeInterface $date): bool
-    {
-        return $date < $this->expiresAt;
     }
 }

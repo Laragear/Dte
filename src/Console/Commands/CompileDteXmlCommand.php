@@ -29,6 +29,7 @@ class CompileDteXmlCommand extends Command
     {
         $dte = $this->argument('dte_id');
 
+        // If the DTE was passed as a model, we will keep it, otherwise we will find it.
         if (!$dte instanceof SiiDte) {
             $dte = SiiDte::findOrFail($dte);
         }

@@ -7,7 +7,6 @@ use DOMDocument;
 use DOMXPath;
 use InvalidArgumentException;
 use Laragear\Dte\Builders\CommercialReceiptBuilder;
-use Laragear\Dte\Builders\XmlResponseBuilder;
 use Laragear\Dte\Certificate\DigitalCertificate;
 use Laragear\Dte\Enums\DteType;
 use Laragear\Dte\Models\SiiInboundDocument;
@@ -15,7 +14,6 @@ use Laragear\Dte\Support\XmlDomFactory;
 use Laragear\Rut\Facades\Generator;
 use Tests\TestCase;
 use Tests\Unit\Certificate\Fixtures\CertificateFixture;
-use function str_replace;
 
 class ComplianceBuildersTest extends TestCase
 {
@@ -40,48 +38,6 @@ class ComplianceBuildersTest extends TestCase
         $this->fixture->delete();
 
         parent::tearDown();
-    }
-
-    public function test_builds_a_schema_valid_signed_formato_ic_response(): void
-    {
-        $xml = $this->app->make(XmlResponseBuilder::class)->forDocument(
-            $this->dte,
-            $this->dte->receiver_rut,
-            10,
-            20,
-            0,
-            'ACEPTADO OK',
-            $this->certificate,
-            new DateTimeImmutable('2026-08-13 12:00:00'),
-        );
-        $document = $this->xml($xml);
-
-        static::assertTrue($document->schemaValidateSource($this->responseSchema()));
-        static::assertSame('33', $this->value($document, '//sii:ResultadoDTE/sii:TipoDTE'));
-        static::assertSame('ACEPTADO OK', $this->value($document, '//sii:EstadoDTEGlosa'));
-        static::assertSame(1, $this->xpath($document)->query('//ds:Signature')?->length);
-    }
-
-    public function test_builds_a_schema_valid_signed_formato_ic_response_with_reason_code(): void
-    {
-        $xml = $this->app->make(XmlResponseBuilder::class)->forDocument(
-            $this->dte,
-            $this->dte->receiver_rut,
-            10,
-            20,
-            2,
-            'RECHAZADO',
-            $this->certificate,
-            new DateTimeImmutable('2026-08-13 12:00:00'),
-            -1,
-        );
-        $document = $this->xml($xml);
-
-        static::assertTrue($document->schemaValidateSource($this->responseSchema()));
-        static::assertSame('33', $this->value($document, '//sii:ResultadoDTE/sii:TipoDTE'));
-        static::assertSame('RECHAZADO', $this->value($document, '//sii:EstadoDTEGlosa'));
-        static::assertSame('-1', $this->value($document, '//sii:CodRchDsc'));
-        static::assertSame(1, $this->xpath($document)->query('//ds:Signature')?->length);
     }
 
     public function test_builds_a_schema_valid_signed_commercial_receipt(): void
@@ -147,15 +103,4 @@ class ComplianceBuildersTest extends TestCase
         return $this->xpath($document)->query($query)?->item(0)?->textContent ?? '';
     }
 
-    protected function responseSchema(): string
-    {
-        $schema = static::getStub('RespuestaEnvioDTE_v10.xsd');
-
-        // We require setting the absolute path of the schemas for the XSD so it can validate.
-        return (string) str_replace(
-            ['SiiTypes_v10.xsd', 'xmldsignature_v10.xsd'],
-            [static::STUBS.'/SiiTypes_v10.xsd', static::STUBS.'/xmldsignature_v10.xsd'],
-            $schema ?: '',
-        );
-    }
 }

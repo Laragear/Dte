@@ -15,25 +15,21 @@ use Laragear\Dte\Models\Concerns\HasXmlPayload;
 /**
  * Stores builder input and signed XML outside the DTE ledger.
  * ---
- *
  * @see  SiiDtePayloadFactory
  * @link database/migrations/2026_01_01_000003_create_sii_dte_payloads_table.php
  * ---
- *
  * @method static SiiDtePayloadFactory factory(callable|array|int|null $count = null, callable|array $state = [])
  * @method Builder<static>|static newQuery()
  * @method static Builder<static>|static query()
- *                                               ---
- *
+ * ---
  * @property-read int $id
  * ---
  * @property array<string, mixed> $data
  * @property string|null $xml
- *                            ---
+ * ---
  * @property-read Carbon $created_at
  * @property-read Carbon $updated_at
  * ---
- *
  * @method Builder<static> whereHasRepairs()
  * @method Builder<static> whereDoesntHaveRepairs()
  */

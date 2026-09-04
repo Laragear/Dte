@@ -20,13 +20,6 @@ use function in_array;
 class PackDtesService
 {
     /**
-     * Maximum delay (in seconds) a queued job may use. 900s = 15 minutes, which
-     * is the hard ceiling for AWS-based queue backends (SQS/SNS), preventing
-     * oversized batch delays from producing an invalid dispatch.
-     */
-    protected const int MAX_QUEUE_DELAY_SECONDS = 900;
-
-    /**
      * Create a new Pack DTEs Service instance.
      */
     public function __construct(
@@ -49,14 +42,14 @@ class PackDtesService
             return 0;
         }
 
-        $grouped = $this->groupByIssuerAndReceiver($dtes);
         $envelopesCreated = 0;
         $delayCounter = 0;
         $maxDocuments = $this->config->get('dte.envelopes.max_documents', 20);
         $maxHoldingMinutes = $this->config->get('dte.envelopes.max_holding_minutes', 30);
 
-        foreach ($grouped as $group) {
+        foreach ($this->groupByIssuerAndReceiver($dtes) as $group) {
             $oldest = $group->first();
+
             $holdingMinutes = $this->date->now()->diffInMinutes($oldest->updated_at);
 
             if ($group->count() >= $maxDocuments || $holdingMinutes >= $maxHoldingMinutes) {
@@ -98,7 +91,7 @@ class PackDtesService
      * Returns a Collection of DTE grouped by issuer + receiver.
      *
      * @param  EloquentCollection<int, SiiDte>  $dtes
-     * @return Collection<string, EloquentCollection<int, SiiDte>>
+     * @return Collection<string, Collection<int, SiiDte>>
      */
     protected function groupByIssuerAndReceiver(EloquentCollection $dtes): Collection
     {
@@ -148,7 +141,7 @@ class PackDtesService
     protected function dispatchEnvelope(SiiDteEnvelope $envelope, int $delayCounter): void
     {
         $backoffSeconds = $this->config->get('dte.envelopes.backoff_seconds', 60);
-        $delay = min(self::MAX_QUEUE_DELAY_SECONDS, $delayCounter * $backoffSeconds);
+        $delay = min($this->config->get('dte.envelopes.max_backoff'), $delayCounter * $backoffSeconds);
 
         $this->artisan
             ->queue('dte:process-envelope', ['envelope_id' => $envelope->getKey()])

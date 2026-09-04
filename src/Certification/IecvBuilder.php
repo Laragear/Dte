@@ -5,6 +5,7 @@ namespace Laragear\Dte\Certification;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\DateFactory;
+use Laragear\Dte\Enums\IecvType;
 use Laragear\Dte\Models\SiiDte;
 use Laragear\Dte\Support\XmlDomFactory;
 use Laragear\Rut\Rut;
@@ -83,7 +84,7 @@ class IecvBuilder
         $writer->startElement('LibroCompraVenta');
         $writer->writeAttribute('xmlns', XmlDomFactory::XML_NAMESPACE);
         $writer->writeAttribute('xmlns:xsi', 'http://www.w3.org/2001/XMLSchema-instance');
-        $writer->writeAttribute('xsi:schemaLocation', 'http://www.sii.cl/SiiDte LibroCV_v10.xsd');
+        $writer->writeAttribute('xsi:schemaLocation', XmlDomFactory::XML_NAMESPACE.' LibroCV_v10.xsd');
         $writer->writeAttribute('version', '1.0');
 
         $writer->startElement('EnvioLibro');
@@ -121,7 +122,7 @@ class IecvBuilder
         $writer->writeElement('TipoOperacion', $type->value);
         $writer->writeElement('TipoLibro', 'ESPECIAL');
         $writer->writeElement('TipoEnvio', 'TOTAL');
-        $writer->writeElement('FolioNotificacion', '1');
+        $writer->writeElement('FolioNotificacion', IecvType::Purchases === $type ? '2' : '1');
         $writer->endElement();
     }
 
@@ -163,9 +164,7 @@ class IecvBuilder
 
         $totalIvaAmount = $regularDtes->sum('amount_taxes');
 
-        if ($totalIvaAmount > 0) {
-            $writer->writeElement('TotMntIVA', (string) $totalIvaAmount);
-        }
+        $writer->writeElement('TotMntIVA', (string) $totalIvaAmount);
 
         if ($commonIvaDtes->isNotEmpty()) {
             $this->appendResumenIvaUsoComun($writer, $commonIvaDtes, $options);
@@ -226,7 +225,9 @@ class IecvBuilder
             $writer->startElement('Detalle');
             $writer->writeElement('TpoDoc', (string) $dte->document_type->value);
             $writer->writeElement('NroDoc', (string) $dte->folio);
-            $writer->writeElement('TasaImp', '19.00');
+            $writer->writeElement('TasaImp', $dte->amount_taxes > 0
+            ? (string) number_format((float) config('dte.taxes.iva_rate', 19), 2)
+            : '0.00');
             $writer->writeElement('FchDoc', $dte->issued_on->format('Y-m-d'));
 
             $this->appendDetalleRut($writer, $dte, $type);
@@ -264,7 +265,9 @@ class IecvBuilder
 
         if ($dte->iva_common_use && $dte->amount_taxes > 0) {
             $writer->writeElement('IVAUsoComun', (string) $dte->amount_taxes);
-        } elseif ($dte->amount_taxes > 0) {
+        }
+
+        if (! $dte->iva_common_use) {
             $writer->writeElement('MntIVA', (string) $dte->amount_taxes);
         }
 

@@ -29,8 +29,8 @@ class MakeFakeCertificateCommandTest extends TestCase
                 'Casa Matriz',
             );
 
-            $mock->expects('hasIssuerResolver')->andReturnTrue();
-            $mock->expects('getIssuer')->andReturn($issuer);
+            $mock->expects('hasIssuerResolver')->times(3)->andReturnTrue();
+            $mock->expects('getIssuer')->times(3)->andReturn($issuer);
         });
 
         $this
@@ -66,7 +66,8 @@ class MakeFakeCertificateCommandTest extends TestCase
         static::assertArrayHasKey('pkey', $certs);
 
         $certInfo = openssl_x509_parse($certs['cert']);
-        static::assertSame('local', $certInfo['subject']['O']);
+        static::assertSame($this->app->make('config')->get('app.name'), $certInfo['subject']['O']);
+        static::assertSame($this->app->make('config')->get('mail.from.address'), $certInfo['subject']['emailAddress']);
         static::assertSame('76123456-7', $certInfo['subject']['serialNumber']);
     }
 
@@ -77,11 +78,12 @@ class MakeFakeCertificateCommandTest extends TestCase
             $csr = openssl_csr_new(['commonName' => 'test'], $key);
             $cert = openssl_csr_sign($csr, null, $key, 1);
 
-            $mock->shouldReceive('pkeyNew')->andReturn($key)->byDefault();
-            $mock->shouldReceive('csrNew')->andReturn($csr)->byDefault();
-            $mock->shouldReceive('csrSign')->andReturn($cert)->byDefault();
+            $mock->expects('pkeyNew')->zeroOrMoreTimes()->andReturn($key)->byDefault();
+            $mock->expects('csrNew')->zeroOrMoreTimes()->andReturn($csr)->byDefault();
+            $mock->expects('csrSign')->zeroOrMoreTimes()->andReturn($cert)->byDefault();
             $mock
-                ->shouldReceive('pkcs12Export')
+                ->expects('pkcs12Export')
+                ->zeroOrMoreTimes()
                 ->andReturnUsing(function ($c, &$out, $k, $p) {
                     $out = 'fake_p12';
 
@@ -93,7 +95,7 @@ class MakeFakeCertificateCommandTest extends TestCase
 
     public function test_fails_when_csr_new_fails(): void
     {
-        $this->mockOpenSsl()->shouldReceive('csrNew')->andReturn(false);
+        $this->mockOpenSsl()->expects('csrNew')->andReturn(false);
 
         $this
             ->artisan('dte:make-fake-cert')
@@ -103,7 +105,7 @@ class MakeFakeCertificateCommandTest extends TestCase
 
     public function test_fails_when_csr_sign_fails(): void
     {
-        $this->mockOpenSsl()->shouldReceive('csrSign')->andReturn(false);
+        $this->mockOpenSsl()->expects('csrSign')->andReturn(false);
 
         $this
             ->artisan('dte:make-fake-cert')
@@ -113,7 +115,7 @@ class MakeFakeCertificateCommandTest extends TestCase
 
     public function test_fails_when_pkcs12_export_fails(): void
     {
-        $this->mockOpenSsl()->shouldReceive('pkcs12Export')->andReturn(false);
+        $this->mockOpenSsl()->expects('pkcs12Export')->andReturn(false);
 
         $this
             ->artisan('dte:make-fake-cert')
@@ -123,7 +125,7 @@ class MakeFakeCertificateCommandTest extends TestCase
 
     public function test_fails_when_pkey_new_fails(): void
     {
-        $this->mockOpenSsl()->shouldReceive('pkeyNew')->andReturn(false);
+        $this->mockOpenSsl()->expects('pkeyNew')->andReturn(false);
 
         $this
             ->artisan('dte:make-fake-cert')

@@ -162,7 +162,7 @@ class MakeFakeCafCommandTest extends DatabaseTestCase
 
     public function test_fails_when_openssl_fails(): void
     {
-        $this->mock(OpenSslProxy::class)->shouldReceive('pkeyNew')->andReturn(false);
+        $this->mock(OpenSslProxy::class)->expects('pkeyNew')->andReturn(false);
 
         $this
             ->artisan('dte:make-fake-caf')

@@ -2,6 +2,8 @@
 
 namespace Laragear\Dte\Certification;
 
+use Laragear\Dte\Enums\IecvProperty;
+
 readonly class IecvPropertyData
 {
     /**

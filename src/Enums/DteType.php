@@ -48,10 +48,21 @@ enum DteType: int
     }
 
     /**
-     * Check if the DTE Type is not a receipt.
+     * Returns the schema the document is bound to, or null if it not supported by it.
      */
-    public function isNotReceipt(): bool
+    public function schemaXsd(): ?string
     {
-        return !$this->isReceipt();
+        return match ($this) {
+            self::Invoice,
+            self::InvoiceExempt,
+            self::Receipt,
+            self::ExemptReceipt,
+            self::InvoiceLiquidation,
+            self::PurchaseInvoice,
+            self::DispatchGuide,
+            self::DebitNote,
+            self::CreditNote => 'DTE_v10.xsd',
+            default => null
+        };
     }
 }

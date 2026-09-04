@@ -3,7 +3,8 @@
 namespace Laragear\Dte\Certification;
 
 use Illuminate\Contracts\Container\Container;
-use Illuminate\Database\Schema\Builder;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Schema\Builder as SchemaBuilder;
 use Laragear\Dte\Certification\Interchange\Interchange;
 use Laragear\Dte\Certification\Interchange\InterchangeData;
 use Laragear\Dte\Certification\PrintSample\PrintSample;
@@ -14,6 +15,8 @@ use Laragear\Dte\Certification\TestingSet\TestSetData;
 use Laragear\Dte\Certification\TestingSet\TestSetEnvelope;
 use Laragear\Dte\Certification\TestingSet\TestSetPurchasesBook;
 use Laragear\Dte\Certification\TestingSet\TestSetSalesBook;
+use Laragear\Dte\Enums\DteType;
+use Laragear\Dte\Environment\EnvironmentResolver;
 use Laragear\Dte\Models\SiiAecCession;
 use Laragear\Dte\Models\SiiCaf;
 use Laragear\Dte\Models\SiiDte;
@@ -24,6 +27,7 @@ use Laragear\Dte\Models\SiiInboundDocument;
 use Laragear\Dte\Models\SiiInboundDocumentPayload;
 use Laragear\Dte\Models\SiiInterchangeLog;
 use Laragear\Rut\Rut;
+use LogicException;
 
 class CertificationManager
 {
@@ -37,11 +41,39 @@ class CertificationManager
     }
 
     /**
+     * Ensure certification operations are permitted in the current environment.
+     */
+    protected function ensureCertificationAllowed(): void
+    {
+        $environment = $this->app->make(EnvironmentResolver::class)->resolve();
+
+        if (!$environment->allowsCertification()) {
+            throw new LogicException(
+                "Certification operations are not permitted in the [{$environment->value}] environment."
+            );
+        }
+    }
+
+    /**
      * Executes the Test Set for Basic Set.
      */
-    public function basicTestSet(Rut|string $rut, array $dteIds = []): TestSetData
+    public function testSet(Rut|string $rut, array $dteIds = []): TestSetData
     {
-        $data = new TestSetData(is_string($rut) ? Rut::parse($rut) : $rut, $dteIds);
+        $this->ensureCertificationAllowed();
+
+        $data = new TestSetData(Rut::parse($rut), $dteIds);
+
+        return $this->app->make(TestSetEnvelope::class)->send($data)->thenReturn();
+    }
+
+    /**
+     * Executes the Test Set using pre-made DTEs provided by the end-user.
+     */
+    public function testSetUsing(Rut|string $rut, Collection $dtes): TestSetData
+    {
+        $this->ensureCertificationAllowed();
+
+        $data = new TestSetData(Rut::parse($rut), dtes: $dtes);
 
         return $this->app->make(TestSetEnvelope::class)->send($data)->thenReturn();
     }
@@ -51,7 +83,9 @@ class CertificationManager
      */
     public function purchaseInvoiceTestSet(Rut|string $rut, array $dteIds = []): TestSetData
     {
-        $data = new TestSetData(is_string($rut) ? Rut::parse($rut) : $rut, $dteIds);
+        $this->ensureCertificationAllowed();
+
+        $data = new TestSetData(Rut::parse($rut), $dteIds);
 
         return $this->app->make(TestSetEnvelope::class)->send($data)->thenReturn();
     }
@@ -61,7 +95,9 @@ class CertificationManager
      */
     public function salesBookTestSet(Rut|string $rut, array $dteIds = []): TestSetData
     {
-        $data = new TestSetData(is_string($rut) ? Rut::parse($rut) : $rut, $dteIds);
+        $this->ensureCertificationAllowed();
+
+        $data = new TestSetData(Rut::parse($rut), $dteIds);
 
         return $this->app->make(TestSetSalesBook::class)->send($data)->thenReturn();
     }
@@ -71,17 +107,36 @@ class CertificationManager
      */
     public function purchasesBookTestSet(Rut|string $rut, array $dteIds = []): TestSetData
     {
-        $data = new TestSetData(is_string($rut) ? Rut::parse($rut) : $rut, $dteIds);
+        $this->ensureCertificationAllowed();
+
+        $data = new TestSetData(Rut::parse($rut), $dteIds);
 
         return $this->app->make(TestSetPurchasesBook::class)->send($data)->thenReturn();
     }
 
     /**
      * Executes the Simulation (Send real recent documents).
+     *
+     * @param  int[]|DteType[]  $documentTypes
      */
     public function simulate(Rut|string $rut, int $quantity = 10, array $documentTypes = []): SimulationData
     {
-        $data = new SimulationData(is_string($rut) ? Rut::parse($rut) : $rut, $quantity, $documentTypes);
+        $this->ensureCertificationAllowed();
+
+        $data = new SimulationData(Rut::parse($rut), $quantity, $documentTypes);
+
+        return $this->app->make(Simulation::class)->send($data)->thenReturn();
+    }
+
+    /**
+     * Executes a simulation using pre-made DTEs provided by the end-user,
+     * bypassing Faker-based generation to better represent real data and cadence.
+     */
+    public function simulateUsing(Rut|string $rut, Collection $dtes): SimulationData
+    {
+        $this->ensureCertificationAllowed();
+
+        $data = new SimulationData(Rut::parse($rut), dtes: $dtes);
 
         return $this->app->make(Simulation::class)->send($data)->thenReturn();
     }
@@ -97,6 +152,8 @@ class CertificationManager
         Rut|string|null $signerRut = null,
         ?string $location = null,
     ): InterchangeData {
+        $this->ensureCertificationAllowed();
+
         $data = new InterchangeData(
             Rut::parse($rut),
             $source,
@@ -111,10 +168,14 @@ class CertificationManager
 
     /**
      * Executes the Test Print (Send PDF417 samples).
+     *
+     * @param  int[]  $dteIds
      */
-    public function printSample(Rut|string $rut, int $hours = 24): PrintSampleData
+    public function printSample(Rut|string $rut, array $dteIds = []): PrintSampleData
     {
-        $data = new PrintSampleData(is_string($rut) ? Rut::parse($rut) : $rut, $hours);
+        $this->ensureCertificationAllowed();
+
+        $data = new PrintSampleData(is_string($rut) ? Rut::parse($rut) : $rut, $dteIds);
 
         return $this->app->make(PrintSample::class)->send($data)->thenReturn();
     }
@@ -125,7 +186,9 @@ class CertificationManager
      */
     public function purgeDatabase(): void
     {
-        $this->app->make(Builder::class)->disableForeignKeyConstraints();
+        $this->ensureCertificationAllowed();
+
+        $this->app->make(SchemaBuilder::class)->disableForeignKeyConstraints();
 
         try {
             SiiAecCession::truncate();
@@ -138,7 +201,7 @@ class CertificationManager
             SiiDte::truncate();
             SiiCaf::truncate();
         } finally {
-            $this->app->make(Builder::class)->enableForeignKeyConstraints();
+            $this->app->make(SchemaBuilder::class)->enableForeignKeyConstraints();
         }
     }
 }
