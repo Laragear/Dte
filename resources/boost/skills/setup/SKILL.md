@@ -1,6 +1,6 @@
 ---
 name: laragear-dte-setup
-description: "Use this skill to setup the library the first time after install; skip when the project already configured company and certificate resolvers on the `app/Providers/AppServiceProvider.php` or `bootstrap/app.php`".
+description: "Use this skill to setup the library the first time after install; skip when the project already configured company and certificate resolvers on the `app/Providers/AppServiceProvider.php` or `bootstrap/app.php`."
 license: MIT
 metadata:
   author: laragear

@@ -1,14 +1,12 @@
 ---
-name: laragear-dte-backup
-description: "Use this skill to store DTE documents (XML) on storage as required legally by SII. Don't use this to handle PDF, modify XML manually, or the documents are already backed up elsewhere".
+name: laragear-dte-pdf
+description: "Use this skill to create PDF files from DTE. Do not use this skill to handle non-DTE PDF files."
 license: MIT
 metadata:
   author: laragear
 ---
 
-# Laragear Dte Backup
-
-SII requires the business to backup XML documents up to 6 years. 
+# Laragear Dte PDF
 
 To generate a PDF from a DTE, prefer option A. Option B should be preferred only when the user explicitly requires it.
 
@@ -60,7 +58,7 @@ return Storage::disk($disk)->url($path);
 
 ### Regeneration
 
-The `generate()` doesn't replace the PDF. You can overwrite the file using the `force()` method. It also accepts a method with a condition.
+The `generate()` doesn't replace the PDF, it will check if the PDF exist first. You can overwrite the file using the `force()` method. It also accepts a method with a condition.
 
 ```php
 $pdfLocation = $invoice->pdf()->force(fn () => true)->generate();

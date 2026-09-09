@@ -1,6 +1,6 @@
 ---
 name: laragear-dte-build
-description: "Use this skill to create SII documents (DTE) inside business logic (buying, selling, etc). Don't use this skill for purchase history, commercial notifications, commercial acknowledgement".
+description: "Use this skill to create SII documents (DTE) inside business logic (buying, selling, etc). Don't use this skill for purchase history, commercial notifications, commercial acknowledgement."
 license: MIT
 metadata:
   author: laragear

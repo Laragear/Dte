@@ -1,6 +1,6 @@
 ---
 name: laragear-dte-certification
-description: "Use this skill to prepare the application to certification subsequent production (real) environment. Don't use this if the business does not have a real Digital Certificate".
+description: "Use this skill to prepare the application to certification subsequent production (real) environment. Don't use this if the business does not have a real Digital Certificate or is still on active development."
 license: MIT
 metadata:
   author: laragear
@@ -14,7 +14,7 @@ Once the business complies with _"Pre-Certificación"_, it will receive a `.txt`
 
 ## Prerequisites
 
-1. Truncate the tables: Delete all data from the tables to start with a fresh certification:
+1. Truncate the tables: Delete all data from the tables to start with a fresh certification process for the very first time.
 
 ```php
 use Laragear\Dte\Certification\CertificationManager;
@@ -31,4 +31,4 @@ public function start(CertificationManager $manager)
 
 ## Certification
 
-Follow the certification documentation `CERTIFICATION.md` at the root if this package.
+Follow the certification documentation `CERTIFICATION.md` at the root if this package. It's usually found in `vendor/laragear/dte/CERTIFICATION.md`.
