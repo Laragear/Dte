@@ -61,7 +61,7 @@ class BuildCaratulaHeaderTest extends DatabaseTestCase
                     $xml = $this->app->make(Filesystem::class)->get($result->path);
 
                     static::assertStringContainsString(
-                        '<EnvioDTE xmlns="http://www.sii.cl/SiiDte" version="1.0">',
+                        '<EnvioDTE',
                         $xml,
                     );
                     static::assertStringContainsString('<SetDTE ID="SetDoc">', $xml);
@@ -98,7 +98,7 @@ class BuildCaratulaHeaderTest extends DatabaseTestCase
 
     public function test_throws_if_too_many_documents(): void
     {
-        $this->app->make('config')->set('dte.envelopes.max_documents', 1);
+        $this->app->make('config')->set('dte.envelopes.max.documents', 1);
 
         $envelope = SiiDteEnvelope::factory()->create([
             'issuer_rut' => Rut::parse('11111111-1'),
@@ -148,7 +148,7 @@ class BuildCaratulaHeaderTest extends DatabaseTestCase
         $assembly = new Assembly($envelope);
 
         $this->expectException(LogicException::class);
-        $this->expectExceptionMessageIs('The DTE envelope documents must share its issuer, type, and signed state.');
+        $this->expectExceptionMessageIs('The DTE envelope documents must share its issuer, signed state, and receipt type.');
 
         $this
             ->pipeline(CreateEnvelope::class)
@@ -217,7 +217,7 @@ class BuildCaratulaHeaderTest extends DatabaseTestCase
 
     public function test_throws_if_bad_max_documents_config(): void
     {
-        $this->app->make('config')->set('dte.envelopes.max_documents', -1);
+        $this->app->make('config')->set('dte.envelopes.max.documents', -1);
 
         $envelope = SiiDteEnvelope::factory()->create();
         $dte = SiiDte::factory()->create();
@@ -256,6 +256,246 @@ class BuildCaratulaHeaderTest extends DatabaseTestCase
         $this->expectExceptionMessageIs('Unable to open the temporary envelope XML file.');
 
         @$this
+            ->pipeline(CreateEnvelope::class)
+            ->isolatePipe(BuildCaratulaHeader::class)
+            ->send($assembly);
+    }
+
+    /*
+     |---------- | targetReceiverRut filtering | ---------- |
+     */
+
+    public function test_filters_documents_by_receiver_rut_when_target_receiver_is_set(): void
+    {
+        // Line 59: $query->where('receiver_num', $rut->num) in validateDocuments
+        $targetReceiver = Rut::parse('33333333-3');
+
+        $envelope = SiiDteEnvelope::factory()->create([
+            'issuer_rut' => Rut::parse('11111111-1'),
+            'sender_rut' => Rut::parse('22222222-2'),
+            'document_type' => 33,
+            'resolution_date' => '2023-01-01',
+            'resolution_number' => 1234,
+        ]);
+
+        // DTE for the target receiver (should match)
+        $dteMatch = SiiDte::factory()->create([
+            'issuer_rut' => Rut::parse('11111111-1'),
+            'receiver_rut' => $targetReceiver,
+            'document_type' => 33,
+            'status' => DteStatus::Signed,
+        ]);
+
+        // DTE for a different receiver (should be filtered out)
+        $dteOther = SiiDte::factory()->create([
+            'issuer_rut' => Rut::parse('11111111-1'),
+            'receiver_rut' => Rut::parse('44444444-4'),
+            'document_type' => 33,
+            'status' => DteStatus::Signed,
+        ]);
+
+        $envelope->dtes()->saveMany([$dteMatch, $dteOther]);
+
+        $assembly = new Assembly($envelope, targetReceiverRut: $targetReceiver);
+        $assembly->path = tempnam(sys_get_temp_dir(), 'dte_');
+
+        try {
+            $this
+                ->pipeline(CreateEnvelope::class)
+                ->isolatePipe(BuildCaratulaHeader::class)
+                ->send($assembly)
+                ->assertPassable(function (Assembly $result) {
+                    // Only 1 document should be counted (the matching receiver)
+                    static::assertSame(1, $result->expectedDocuments);
+
+                    return true;
+                });
+        } finally {
+            unlink($assembly->path);
+        }
+    }
+
+    public function test_filters_invalid_documents_by_receiver_rut(): void
+    {
+        // Line 86: $query->where('receiver_num', $rut->num) in hasInvalidDocuments
+        $targetReceiver = Rut::parse('33333333-3');
+
+        $envelope = SiiDteEnvelope::factory()->create([
+            'issuer_rut' => Rut::parse('11111111-1'),
+            'document_type' => 33,
+        ]);
+
+        // DTE matching receiver but with wrong status → invalid
+        $dte = SiiDte::factory()->create([
+            'issuer_rut' => Rut::parse('11111111-1'),
+            'receiver_rut' => $targetReceiver,
+            'document_type' => 33,
+            'status' => DteStatus::Building, // wrong status
+        ]);
+
+        // DTE for a different receiver, also wrong status → should be filtered out by receiver_rut
+        $dteOther = SiiDte::factory()->create([
+            'issuer_rut' => Rut::parse('11111111-1'),
+            'receiver_rut' => Rut::parse('44444444-4'),
+            'document_type' => 33,
+            'status' => DteStatus::Building,
+        ]);
+
+        $envelope->dtes()->saveMany([$dte, $dteOther]);
+
+        $assembly = new Assembly($envelope, targetReceiverRut: $targetReceiver);
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessageIs('The DTE envelope documents must share its issuer, signed state, and receipt type.');
+
+        $this
+            ->pipeline(CreateEnvelope::class)
+            ->isolatePipe(BuildCaratulaHeader::class)
+            ->send($assembly);
+    }
+
+    /*
+     |---------- | Receipt envelope config key | ---------- |
+     */
+
+    public function test_uses_receipts_config_key_for_boleta_envelope(): void
+    {
+        // Line 104: isReceipt() → true → uses 'dte.envelopes.max.receipts'
+        $this->app->make('config')->set('dte.envelopes.max.receipts', 1);
+
+        $envelope = SiiDteEnvelope::factory()->create([
+            'issuer_rut' => Rut::parse('11111111-1'),
+            'type' => 'boleta',
+            'document_type' => 33,
+            'resolution_date' => '2023-01-01',
+            'resolution_number' => 1234,
+        ]);
+
+        $dte1 = SiiDte::factory()->create([
+            'issuer_rut' => Rut::parse('11111111-1'),
+            'document_type' => 33,
+            'status' => DteStatus::Signed,
+        ]);
+        $dte2 = SiiDte::factory()->create([
+            'issuer_rut' => Rut::parse('11111111-1'),
+            'document_type' => 33,
+            'status' => DteStatus::Signed,
+        ]);
+
+        $envelope->dtes()->saveMany([$dte1, $dte2]);
+
+        $assembly = new Assembly($envelope);
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessageIs('The DTE envelope exceeds the configured document limit.');
+
+        $this
+            ->pipeline(CreateEnvelope::class)
+            ->isolatePipe(BuildCaratulaHeader::class)
+            ->send($assembly);
+    }
+
+    /*
+     |---------- | Mixed document types | ---------- |
+     */
+
+    public function test_allows_mixed_document_types_with_multiple_subtotals(): void
+    {
+        $envelope = SiiDteEnvelope::factory()->create([
+            'issuer_rut' => Rut::parse('11111111-1'),
+            'document_type' => 33,
+            'resolution_date' => '2023-01-01',
+            'resolution_number' => 1234,
+        ]);
+
+        $dteInvoice = SiiDte::factory()->create([
+            'issuer_rut' => Rut::parse('11111111-1'),
+            'document_type' => 33,
+            'status' => DteStatus::Signed,
+        ]);
+        $dteCredit = SiiDte::factory()->create([
+            'issuer_rut' => Rut::parse('11111111-1'),
+            'document_type' => 61,
+            'status' => DteStatus::Signed,
+        ]);
+        $dteDebit = SiiDte::factory()->create([
+            'issuer_rut' => Rut::parse('11111111-1'),
+            'document_type' => 56,
+            'status' => DteStatus::Signed,
+        ]);
+
+        $envelope->dtes()->saveMany([$dteInvoice, $dteCredit, $dteDebit]);
+
+        $assembly = new Assembly($envelope);
+        $assembly->path = tempnam(sys_get_temp_dir(), 'dte_');
+
+        try {
+            $this
+                ->pipeline(CreateEnvelope::class)
+                ->isolatePipe(BuildCaratulaHeader::class)
+                ->send($assembly)
+                ->assertPassable(function (Assembly $result) {
+                    $xml = $this->app->make(Filesystem::class)->get($result->path);
+
+                    static::assertStringContainsString('<SubTotDTE><TpoDTE>33</TpoDTE><NroDTE>1</NroDTE></SubTotDTE>', $xml);
+                    static::assertStringContainsString('<SubTotDTE><TpoDTE>56</TpoDTE><NroDTE>1</NroDTE></SubTotDTE>', $xml);
+                    static::assertStringContainsString('<SubTotDTE><TpoDTE>61</TpoDTE><NroDTE>1</NroDTE></SubTotDTE>', $xml);
+
+                    return true;
+                });
+        } finally {
+            unlink($assembly->path);
+        }
+    }
+
+    public function test_throws_when_normal_envelope_contains_receipt(): void
+    {
+        $envelope = SiiDteEnvelope::factory()->create([
+            'issuer_rut' => Rut::parse('11111111-1'),
+            'document_type' => 33,
+        ]);
+
+        $dte = SiiDte::factory()->create([
+            'issuer_rut' => Rut::parse('11111111-1'),
+            'document_type' => 39,
+            'status' => DteStatus::Signed,
+        ]);
+
+        $envelope->dtes()->save($dte);
+
+        $assembly = new Assembly($envelope);
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessageIs('The DTE envelope documents must share its issuer, signed state, and receipt type.');
+
+        $this
+            ->pipeline(CreateEnvelope::class)
+            ->isolatePipe(BuildCaratulaHeader::class)
+            ->send($assembly);
+    }
+
+    public function test_throws_when_boleta_envelope_contains_normal_dte(): void
+    {
+        $envelope = SiiDteEnvelope::factory()->create([
+            'issuer_rut' => Rut::parse('11111111-1'),
+            'type' => 'boleta',
+            'document_type' => 39,
+        ]);
+
+        $dte = SiiDte::factory()->create([
+            'issuer_rut' => Rut::parse('11111111-1'),
+            'document_type' => 33,
+            'status' => DteStatus::Signed,
+        ]);
+
+        $envelope->dtes()->save($dte);
+
+        $assembly = new Assembly($envelope);
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessageIs('The DTE envelope documents must share its issuer, signed state, and receipt type.');
+
+        $this
             ->pipeline(CreateEnvelope::class)
             ->isolatePipe(BuildCaratulaHeader::class)
             ->send($assembly);

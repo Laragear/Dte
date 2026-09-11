@@ -47,7 +47,7 @@ class InvoiceBuilder extends DocumentBuilder
 
         $amount = $this->exemptAmountOverride() ?? $this->allItemsAmount();
 
-        return ['net' => 0, 'exempt' => $amount, 'tax' => 0, 'total' => $amount];
+        return ['net' => 0, 'exempt' => $amount, 'tax' => 0, 'total' => $amount, 'non_billable' => $this->nonBillableAmount];
     }
 
     /**

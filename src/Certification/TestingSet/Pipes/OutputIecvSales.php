@@ -11,13 +11,25 @@ use Illuminate\Support\DateFactory;
 use Laragear\Dte\Certificate\CertificateResolver;
 use Laragear\Dte\Certification\IecvBuilder;
 use Laragear\Dte\Certification\TestingSet\TestSetData;
+use Laragear\Dte\Enums\DteType;
 use Laragear\Dte\Enums\IecvType;
 use Laragear\Dte\Support\XmlDomFactory;
 use Laragear\Dte\Xml\XmlSigner;
+use Laragear\Dte\Xml\XsdValidator;
 use RuntimeException;
 
 class OutputIecvSales
 {
+    /**
+     * The DTE Types to add to the sales book type.
+     */
+    public const array SALES_BOOK_TYPES = [
+        DteType::Invoice,
+        DteType::InvoiceExempt,
+        DteType::DebitNote,
+        DteType::CreditNote,
+    ];
+
     /**
      * Create a new Output Iecv instance.
      */
@@ -29,6 +41,7 @@ class OutputIecvSales
         protected CertificateResolver $certificate,
         protected IecvBuilder $builder,
         protected XmlDomFactory $xml,
+        protected XsdValidator $xsd,
     ) {
         //
     }
@@ -39,7 +52,9 @@ class OutputIecvSales
             "No certificate was found for [$data->rut]."
         );
 
-        $document = $this->parseDocument($this->buildXml($data));
+        $unsignedXml = $this->buildXml($data);
+        $this->xsd->validate($unsignedXml, 'LibroCV_v10.xsd');
+        $document = $this->parseDocument($unsignedXml);
 
         $this->signer->sign($this->getEnvioLibroElement($document), $certificate);
 
@@ -82,14 +97,16 @@ class OutputIecvSales
      */
     protected function buildXml(TestSetData $data): string
     {
+        $filtered = $data->dtes->filter(fn($dte) => in_array($dte->document_type, self::SALES_BOOK_TYPES, true));
+
         return $this->builder->build(
-            $data->dtes,
+            $filtered,
             IecvType::Sales,
             $data->period,
             $data->resolutionDate,
             $data->resolutionNumber,
             $data->senderRut,
-            [], // properties
+            $data->properties,
         );
     }
 }

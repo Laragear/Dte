@@ -20,6 +20,7 @@ use Laragear\Dte\Models\Concerns\HasDocumentType;
 use Laragear\Dte\Models\Concerns\HasSiiStatus;
 use Laragear\Rut\Eloquent\RutAttribute;
 use Laragear\Rut\Rut;
+use function filled;
 
 /**
  * Tracks an outbound DTE envelope and its SII submission lifecycle.
@@ -48,6 +49,7 @@ use Laragear\Rut\Rut;
  * @property Carbon|null $uploaded_at
  * @property Carbon|null $accepted_at
  * @property Carbon|null $rejected_at
+ * @property Carbon|null $poll_at
  * ---
  * @property-read Carbon $created_at
  * @property-read Carbon $updated_at
@@ -66,6 +68,7 @@ use Laragear\Rut\Rut;
     'resolution_number',
     'status',
     'repairs',
+    'poll_at',
 )]
 class SiiDteEnvelope extends Model
 {
@@ -90,6 +93,7 @@ class SiiDteEnvelope extends Model
         'uploaded_at' => 'datetime',
         'accepted_at' => 'datetime',
         'rejected_at' => 'datetime',
+        'poll_at' => 'datetime',
     ];
 
     /*
@@ -214,12 +218,28 @@ class SiiDteEnvelope extends Model
      */
 
     /**
+     * Checks if the current envelope is a receipt.
+     */
+    public function isReceipt(): bool
+    {
+        return $this->attributes['type'] === 'boleta';
+    }
+
+    /**
+     * Checks if the current envelope is not a receipt but any other DTE type.
+     */
+    public function isNotReceipt(): bool
+    {
+        return !$this->isReceipt();
+    }
+
+    /**
      * Check if the envelope was accepted but contains SII repairs/rejections.
      */
     public function isAcceptedWithRepairs(): bool
     {
         return $this->status === EnvelopeStatus::Accepted
-            && !empty($this->repairs);
+            && filled($this->repairs);
     }
 
     /**

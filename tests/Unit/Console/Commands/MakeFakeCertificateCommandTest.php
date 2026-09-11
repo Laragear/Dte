@@ -35,7 +35,7 @@ class MakeFakeCertificateCommandTest extends TestCase
 
         $this
             ->artisan('dte:make-fake-cert')
-            ->expectsOutput('Generating dummy certificate for local (76.111.222-3)...')
+            ->expectsOutput('Generating dummy certificate for 76.111.222-3...')
             ->assertSuccessful();
     }
 
@@ -50,7 +50,7 @@ class MakeFakeCertificateCommandTest extends TestCase
                 '--path' => 'certificate.p12',
                 '--password' => 'test-pass',
             ])
-            ->expectsOutput('Generating dummy certificate for local (76.123.456-7)...')
+            ->expectsOutput('Generating dummy certificate for 76.123.456-7...')
             ->expectsOutput('Successfully created fake certificate at disk local: certificate.p12')
             ->expectsOutput('Password: test-pass')
             ->assertSuccessful();

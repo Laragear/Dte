@@ -67,7 +67,7 @@ class RejectExpiringPhantomInvoicesCommandTest extends DatabaseTestCase
                     return $args[0]['RutEmisor'] === $expiredDoc1->issuer_rut->num;
                 }))
                 ->andThrow(new RuntimeException('API Error'))
-                ->once();
+                ;
 
             $mock
                 ->expects('__soapCall')
@@ -75,7 +75,7 @@ class RejectExpiringPhantomInvoicesCommandTest extends DatabaseTestCase
                     return $args[0]['RutEmisor'] === $expiredDoc2->issuer_rut->num;
                 }))
                 ->andReturn((object) ['ReclamoDocResult' => (object) ['status' => 0]])
-                ->once();
+                ;
         });
 
         $this->mock(SoapProxy::class, static function (MockInterface $mock) use ($client): void {
@@ -134,14 +134,14 @@ class RejectExpiringPhantomInvoicesCommandTest extends DatabaseTestCase
         ]);
 
         $client = $this->mock(SoapClient::class, static function (MockInterface $mock) use ($expiredDoc): void {
-            $mock->expects('__setSoapHeaders')->once();
+            $mock->expects('__setSoapHeaders');
             $mock
                 ->expects('__soapCall')
                 ->with('ReclamoDoc', Mockery::on(function ($args) use ($expiredDoc) {
                     return $args[0]['RutEmisor'] === $expiredDoc->issuer_rut->num && $args[0]['AccionDoc'] === 'RCD';
                 }))
                 ->andReturn((object) ['ReclamoDocResult' => (object) ['status' => 0]])
-                ->once();
+                ;
         });
 
         $this->mock(SoapProxy::class, static function (MockInterface $mock) use ($client): void {

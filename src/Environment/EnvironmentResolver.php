@@ -5,7 +5,6 @@ namespace Laragear\Dte\Environment;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Foundation\Application;
 use Laragear\Dte\Enums\DteEnvironment as DteEnv;
-use function is_string;
 
 class EnvironmentResolver
 {
@@ -70,13 +69,5 @@ class EnvironmentResolver
         unset($this->resolved);
 
         return $this;
-    }
-
-    /**
-     * Parse a supported environment value.
-     */
-    protected function parse(mixed $environment): ?DteEnv
-    {
-        return is_string($environment) ? DteEnv::tryFrom($environment) : null;
     }
 }

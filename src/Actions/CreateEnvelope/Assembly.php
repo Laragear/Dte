@@ -59,6 +59,8 @@ class Assembly
     {
         $this->writer?->flush();
         $this->writer = null;
+        $this->document = null;
+        $this->path = null;
         $this->temporary?->delete();
     }
 }

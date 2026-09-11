@@ -32,4 +32,13 @@ class SiiDteEnvelopeTest extends TestCase
         static::assertTrue($envelope->isAcceptedWithRepairs());
         static::assertFalse($envelope->isNotAcceptedWithRepairs());
     }
+
+    public function test_is_not_receipt_when_type_is_documento(): void
+    {
+        $envelope = new SiiDteEnvelope;
+        $envelope->setAttribute('type', 'documento');
+
+        static::assertFalse($envelope->isReceipt());
+        static::assertTrue($envelope->isNotReceipt());
+    }
 }

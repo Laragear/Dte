@@ -52,9 +52,9 @@ class ApplyEnvelopeSignatureTest extends DatabaseTestCase
             ->andReturn($certificate);
 
         $signer = $this->mock(XmlSigner::class);
-        $this->mock(XmlValidator::class)->allows('verifySignature');
+        $this->mock(XmlValidator::class)->allows('verifySignatureDocument');
         $signer->expects('sign')
-            ->once()
+
             ->withArgs(function ($element, $cert) use ($certificate) {
                 return $element->nodeName === 'SetDTE' && $cert === $certificate;
             });
@@ -70,10 +70,10 @@ class ApplyEnvelopeSignatureTest extends DatabaseTestCase
     }
 
     /*
-    |--------------------------------------------------------------------------
-    | Angry paths
-    |--------------------------------------------------------------------------
-    */
+     |--------------------------------------------------------------------------
+     | Sad paths
+     |--------------------------------------------------------------------------
+     */
 
     public function test_throws_if_certificate_is_missing(): void
     {

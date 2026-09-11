@@ -68,12 +68,14 @@ class BuildXml
 
         $this->appendHeader($writer, $data, (int) $dte->folio);
         $this->appendItems($writer, $data['items']);
-        if (!empty($data['global_modifiers'])) {
+
+        if (isset($data['global_modifiers']) && $data['global_modifiers'] !== []) {
             $this->appendGlobalModifiers($writer, $data['global_modifiers']);
         }
+
         $this->appendReferences($writer, $data['references']);
 
-        if (!empty($data['transport'])) {
+        if (isset($data['transport']) && $data['transport'] !== []) {
             $this->appendTransport($writer, $data['transport']);
         }
 
@@ -268,6 +270,7 @@ class BuildXml
         }
 
         $writer->writeElement('MntTotal', (string) $totals['total']);
+        $this->positiveElement($writer, 'MontoNoFacturable', $totals['non_billable'] ?? 0);
 
         $writer->endElement(); // Totales
     }
@@ -284,6 +287,7 @@ class BuildXml
 
             $writer->writeElement('NroLinDet', (string) ($index + 1));
             $this->appendItemCode($writer, $item);
+            $this->positiveElement($writer, 'IndExe', $item['exempt'] ? 1 : 0);
             $this->appendItemValues($writer, $item);
 
             $writer->endElement(); // Detalle
@@ -320,7 +324,6 @@ class BuildXml
         $this->optionalElement($writer, 'UnmdItem', $item['unit']);
         $writer->writeElement('PrcItem', $this->decimal($item['unit_price']));
         $this->positiveElement($writer, 'DescuentoPct', (float) $item['discount_percentage']);
-        $this->positiveElement($writer, 'IndExe', $item['exempt'] ? 1 : 0);
 
         if (!empty($item['taxes'])) {
             foreach ($item['taxes'] as $taxCode => $amount) {
@@ -378,11 +381,11 @@ class BuildXml
             $writer->startElement('Referencia');
 
             $writer->writeElement('NroLinRef', (string) ($index + 1));
-            $writer->writeElement('TpoDocRef', (string) $reference['document_type']);
-            $writer->writeElement('FolioRef', (string) $reference['folio']);
-            $writer->writeElement('FchRef', $reference['date']);
-            $this->optionalElement($writer, 'CodRef', $reference['reference_code']);
-            $this->optionalElement($writer, 'RazonRef', $reference['reason']);
+            $writer->writeElement('TpoDocRef', $reference['document_type']);
+            $this->optionalElement($writer, 'FolioRef', (string) ($reference['folio'] ?? null));
+            $this->optionalElement($writer, 'FchRef', (string) ($reference['date'] ?? null));
+            $this->optionalElement($writer, 'CodRef', (string) ($reference['reference_code'] ?? null));
+            $this->optionalElement($writer, 'RazonRef', (string) ($reference['reason'] ?? null));
 
             $writer->endElement();
         }

@@ -5,6 +5,7 @@ namespace Laragear\Dte\Models;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\UseFactory;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -163,6 +164,22 @@ class SiiCaf extends Model
     protected function scopeWhereNotDepleted(Builder $builder): Builder
     {
         return $builder->whereNull('depleted_at');
+    }
+
+    /*
+     |--------------------------------------------------------------------------
+     | Attributes
+     |--------------------------------------------------------------------------
+     */
+
+    /**
+     * Access the `expired_at` attribute.
+     */
+    protected function expiredAt(): Attribute
+    {
+        return Attribute::get(static function (null $value, array $attributes): Carbon {
+            return Carbon::parse($attributes['authorized_on'], 'America/Santiago')->addMonthsNoOverflow(6);
+        });
     }
 
     /*

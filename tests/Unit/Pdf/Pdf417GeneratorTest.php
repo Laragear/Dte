@@ -21,14 +21,14 @@ class Pdf417GeneratorTest extends TestCase
         $data = new BarcodeData;
 
         $encoder = $this->mock(PDF417::class, static function (MockInterface $mock) use ($data): void {
-            $mock->expects('encode')->with('<TED>test</TED>')->once()->andReturn($data);
+            $mock->expects('encode')->with('<TED>test</TED>')->andReturn($data);
         });
 
         $renderer = $this->mock(ImageRenderer::class, static function (MockInterface $mock) use ($data, $image): void {
-            $mock->expects('render')->with($data)->once()->andReturn($image);
+            $mock->expects('render')->with($data)->andReturn($image);
         });
 
-        $image->expects('encode')->with('png', 100)->once()->andReturn('binary_png_data');
+        $image->expects('encode')->with('png', 100)->andReturn('binary_png_data');
 
         $generator = $this->app->make(Pdf417Generator::class, [
             'encoder' => $encoder,

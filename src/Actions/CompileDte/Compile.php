@@ -5,9 +5,6 @@ namespace Laragear\Dte\Actions\CompileDte;
 use Illuminate\Pipeline\Pipeline;
 use Laragear\Dte\Models\SiiDte;
 
-/**
- * @method Compilation thenReturn()
- */
 class Compile extends Pipeline
 {
     /**
@@ -19,20 +16,22 @@ class Compile extends Pipeline
         Pipes\FireDteCompilingEvent::class,
         Pipes\ValidateState::class,
         Pipes\AcquireFolio::class,
+        Pipes\FireDteBuildingEvent::class,
         Pipes\BuildXml::class,
-        Pipes\XsdValidation::class,
+        Pipes\FireDteBuiltEvent::class,
         Pipes\GenerateTed::class,
         Pipes\ApplyTedToDom::class,
         Pipes\CanonicalizeXml::class,
         Pipes\ApplyDigitalSignature::class,
+        Pipes\XsdValidation::class,
         Pipes\FireDteCompiledEvent::class,
     ];
 
     /**
      * Send the DTE being compiled.
      */
-    public function forDte(SiiDte $dte): Compilation
+    public function forDte(SiiDte $dte): SiiDte
     {
-        return $this->send(new Compilation($dte))->thenReturn();
+        return $this->send(new Compilation($dte))->thenReturn()->dte;
     }
 }

@@ -514,9 +514,9 @@ class BoletaRestGatewayTest extends DatabaseTestCase
         $cacheKey = 'dte|rest_token|business:'.$issuer->formatRaw();
 
         $cache = Mockery::mock(CacheRepository::class);
-        $cache->expects('get')->with($cacheKey)->once()->andReturn(new Token('CACHED',
+        $cache->expects('get')->with($cacheKey)->andReturn(new Token('CACHED',
             new DateTimeImmutable('+1 hour')));
-        $cache->expects('touch')->with($cacheKey, 3600)->once();
+        $cache->expects('touch')->with($cacheKey, 3600);
 
         $this->instance(CacheRepository::class, $cache);
 

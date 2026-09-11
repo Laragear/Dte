@@ -49,7 +49,7 @@ class GoogleWorkspaceDriverTest extends TestCase
         $usersMessages
             ->expects('listUsersMessages')
             ->with('me', ['q' => 'is:unread', 'maxResults' => 50])
-            ->once()
+
             ->andReturn($listResponse);
 
         $message = new Message;
@@ -81,7 +81,7 @@ class GoogleWorkspaceDriverTest extends TestCase
         $usersMessages
             ->expects('get')
             ->with('me', 'msg1', ['format' => 'full'])
-            ->once()
+
             ->andReturn($message);
 
         $driver = $this->makeDriver();
@@ -110,7 +110,7 @@ class GoogleWorkspaceDriverTest extends TestCase
         $usersMessages
             ->expects('listUsersMessages')
             ->with('me', ['q' => 'rfc822msgid:<msg1>', 'maxResults' => 1])
-            ->once()
+
             ->andReturn($listResponse);
 
         $usersMessages
@@ -118,7 +118,7 @@ class GoogleWorkspaceDriverTest extends TestCase
             ->withArgs(function ($userId, $messageId, ModifyMessageRequest $request) {
                 return $userId === 'me' && $messageId === 'msg1' && $request->getRemoveLabelIds() === ['UNREAD'];
             })
-            ->once();
+            ;
 
         $this->mock(Gmail::class, static function (MockInterface $mock) use ($usersMessages): void {
             $mock->users_messages = $usersMessages;
@@ -142,7 +142,7 @@ class GoogleWorkspaceDriverTest extends TestCase
 
         $usersMessages
             ->expects('listUsersMessages')
-            ->once()
+
             ->andReturn($listResponse);
 
         $driver = $this->makeDriver();
@@ -165,7 +165,7 @@ class GoogleWorkspaceDriverTest extends TestCase
 
         $usersMessages
             ->expects('listUsersMessages')
-            ->once()
+
             ->andReturn($listResponse);
 
         $message = new Message;
@@ -184,7 +184,7 @@ class GoogleWorkspaceDriverTest extends TestCase
         $payload->setParts([$part]);
         $message->setPayload($payload);
 
-        $usersMessages->expects('get')->once()->andReturn($message);
+        $usersMessages->expects('get')->andReturn($message);
 
         $driver = $this->makeDriver();
         $emails = iterator_to_array($driver->unread());
@@ -199,7 +199,7 @@ class GoogleWorkspaceDriverTest extends TestCase
         // It should not recall setup for gmail() or just use the mock if not mocked differently.
         // Actually, $driver->unread() calls $this->gmail() - which just uses the internal var.
         $listResponse->expects('getMessages')->andReturn([]);
-        $usersMessages->expects('listUsersMessages')->once()->andReturn($listResponse);
+        $usersMessages->expects('listUsersMessages')->andReturn($listResponse);
 
         $emails2 = iterator_to_array($driver->unread());
         static::assertEmpty($emails2);
@@ -217,7 +217,7 @@ class GoogleWorkspaceDriverTest extends TestCase
         $stubMessage = new Message;
         $stubMessage->setId('msg3');
         $listResponse->expects('getMessages')->andReturn([$stubMessage]);
-        $usersMessages->expects('listUsersMessages')->once()->andReturn($listResponse);
+        $usersMessages->expects('listUsersMessages')->andReturn($listResponse);
 
         $message = new Message;
         $message->setId('msg3');
@@ -227,7 +227,7 @@ class GoogleWorkspaceDriverTest extends TestCase
         $payload->setParts([$part]);
         $message->setPayload($payload);
 
-        $usersMessages->expects('get')->once()->andReturn($message);
+        $usersMessages->expects('get')->andReturn($message);
 
         $driver = $this->makeDriver();
         $emails = iterator_to_array($driver->unread());
@@ -246,7 +246,7 @@ class GoogleWorkspaceDriverTest extends TestCase
 
         $listResponse = Mockery::mock();
         $listResponse->expects('getMessages')->andReturn(null);
-        $usersMessages->expects('listUsersMessages')->once()->andReturn($listResponse);
+        $usersMessages->expects('listUsersMessages')->andReturn($listResponse);
 
         $driver = $this->makeDriver();
         $driver->markAsRead(new InboundEmailData('msg_null', '', '', ''));
@@ -256,9 +256,9 @@ class GoogleWorkspaceDriverTest extends TestCase
     {
         $this->mock(Client::class, static function (MockInterface $mock) {
             $mock->shouldIgnoreMissing();
-            $mock->expects('setClientId')->with('id')->once();
-            $mock->expects('setClientSecret')->with('secret')->once();
-            $mock->expects('refreshToken')->with('token')->once();
+            $mock->expects('setClientId')->with('id');
+            $mock->expects('setClientSecret')->with('secret');
+            $mock->expects('refreshToken')->with('token');
         });
 
         $this->app['config']->set('dte.mailbox.drivers.google', [

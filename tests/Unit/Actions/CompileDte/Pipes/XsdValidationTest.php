@@ -37,7 +37,7 @@ class XsdValidationTest extends TestCase
         $schema = $compilation->dte->document_type->schemaXsd();
 
         $this->mock(XsdValidator::class, static function (MockInterface $mock) use ($compilation, $schema): void {
-            $mock->expects('validate')->once()->with(
+            $mock->expects('validate')->with(
                 $compilation->document->saveXML(),
                 $schema
             );

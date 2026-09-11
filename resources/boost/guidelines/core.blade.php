@@ -1,7 +1,12 @@
 # Laragear Dte
 
-This package provides compliance with SII DTE (Documents Tributarios Electrónicos).
+This application uses "Laragear\Dte" library to provide compliance with SII DTE (Documents Tributarios Electrónicos).
 
-- This project uses `laragear/dte` to create SII legal documents: Invoices, Receipts, Debit Note, Credit Note, Dispatch Guides, etc. Create documents using the `Dte` facade, e.g. `Dte::invoice()->...`, `Dte::receipt()->...`.
-- Print PDF only when explicitly is required to. Always save them into the filesystem.
-- Only the user can move the Laragear Dte environment to `production` (real transactions to SII). Warn the user when changing the environment.
+## Scope
+
+Use the "Laragear\Dte" library only when SII compliance is required:
+
+- Creating DTE to register money ingress/egress, goods being transported, amending other DTE documents.
+- Managing CAF and Folios (annulment, upload, etc.)
+- Storing PDF from DTE
+- Certifying the application (only available in development or production environments)

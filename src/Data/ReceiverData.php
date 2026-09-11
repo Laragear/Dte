@@ -3,6 +3,7 @@
 namespace Laragear\Dte\Data;
 
 use Laragear\Rut\Rut;
+use function json_decode;
 
 readonly class ReceiverData
 {
@@ -34,5 +35,29 @@ readonly class ReceiverData
         ?string $city = null,
     ): static {
         return new static(Rut::parse($rut), $legalName, $businessActivity, $email, $address, $commune, $city);
+    }
+
+    /**
+     * Create a new instance from an array.
+     */
+    public static function fromArray(array $array): static
+    {
+        return static::make(
+            $array['rut'],
+            $array['legal_name'],
+            $array['business_activity'] ?? null,
+            $array['email'] ?? null,
+            $array['address'] ?? null,
+            $array['commune'] ?? null,
+            $array['city'] ?? null,
+        );
+    }
+
+    /**
+     * Create a new instance from a JSON string.
+     */
+    public static function fromJson(string $json): static
+    {
+        return static::fromArray(json_decode($json, true, 1));
     }
 }

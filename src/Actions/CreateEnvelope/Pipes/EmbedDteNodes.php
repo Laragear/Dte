@@ -48,6 +48,7 @@ class EmbedDteNodes
 
         $writer->endElement();
         $writer->endElement();
+
         $writer->endDocument();
 
         $writer->flush();
@@ -66,6 +67,7 @@ class EmbedDteNodes
             ->when($assembly->targetReceiverRut, static function (EloquentBuilder $query, Rut $rut) {
                 $query->where('sii_dtes.receiver_num', $rut->num);
             })
+            ->orderBy('sii_dtes.metadata->sort_order')
             ->orderBy('sii_dtes.id')
             ->cursor();
     }

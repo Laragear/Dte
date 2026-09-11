@@ -27,6 +27,7 @@ use Laragear\Dte\Models\SiiDteEnvelope;
 use Laragear\Dte\Support\TokenAuthenticator;
 use Laragear\Dte\Support\XmlDomFactory as Xml;
 use Psr\Log\LoggerInterface;
+use function blank;
 
 #[Backoff([30, 60, 120, 300, 600])]
 #[Tries(5)]
@@ -167,7 +168,7 @@ class PollEnvelopeTrackIdJob implements ShouldQueue
     protected function shouldNotPoll(): bool
     {
         return $this->envelope->status !== EnvelopeStatus::Uploaded
-            || empty($this->envelope->track_id);
+            || blank($this->envelope->track_id);
     }
 
     /**
@@ -380,14 +381,15 @@ class PollEnvelopeTrackIdJob implements ShouldQueue
      */
     protected function handleProcessing(ConfigRepository $config, DateFactory $date, int $retryAfter = 0): void
     {
-        // Touch resets updated_at, preventing Cron from re-polling during the holding period.
-        $this->envelope->touch();
-
         // Use X-Retry-After header value if provided (boleta REST API), otherwise use
         // the configured floor based on envelope size (SOAP API).
         $delay = $retryAfter > 0
             ? $retryAfter
             : $this->effectiveDelay($config, $this->envelopeSizeBytes());
+
+        // Prevent the cron from re-polling until the delay elapses.
+        $this->envelope->setAttribute('poll_at', $date->now()->addSeconds($delay));
+        $this->envelope->save();
 
         // Re-query SII after the delay.
         static::dispatch($this->envelope)->delay($date->now()->addSeconds($delay));

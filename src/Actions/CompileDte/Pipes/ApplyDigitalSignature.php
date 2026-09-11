@@ -75,5 +75,7 @@ class ApplyDigitalSignature
         $compilation->payload()->forceFill(['xml' => $xml])->save();
 
         $compilation->dte->transitionTo(DteStatus::Signed);
+
+        $compilation->document = null;
     }
 }

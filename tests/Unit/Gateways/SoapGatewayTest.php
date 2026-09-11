@@ -185,10 +185,10 @@ class SoapGatewayTest extends TestCase
 
         $this->mockSoapFlow(
             static function (SoapClient $client) use ($seedResponse): void {
-                $client->expects('getSeed')->once()->andReturn($seedResponse);
+                $client->expects('getSeed')->andReturn($seedResponse);
             },
             static function (SoapClient $client) use ($tokenResponse): void {
-                $client->expects('getToken')->once()->andReturn($tokenResponse);
+                $client->expects('getToken')->andReturn($tokenResponse);
             },
             $buildCalls
         );
@@ -227,10 +227,10 @@ class SoapGatewayTest extends TestCase
 
         $this->mockSoapFlow(
             static function (SoapClient $client) use ($seedResponse): void {
-                $client->expects('getSeed')->once()->andReturn($seedResponse);
+                $client->expects('getSeed')->andReturn($seedResponse);
             },
             static function (SoapClient $client) use ($tokenResponse, &$signedXml): void {
-                $client->expects('getToken')->once()->with(Mockery::on(
+                $client->expects('getToken')->with(Mockery::on(
                     static function ($xml) use (&$signedXml) {
                         $signedXml = $xml;
 
@@ -293,7 +293,7 @@ class SoapGatewayTest extends TestCase
                 );
             },
             static function (SoapClient $client) use ($tokenResponse): void {
-                $client->expects('getToken')->once()->andReturn($tokenResponse);
+                $client->expects('getToken')->andReturn($tokenResponse);
             }
         );
 
@@ -397,10 +397,10 @@ class SoapGatewayTest extends TestCase
             $this->makeAuthGateway();
             $this->mockSoapFlow(
                 static function (SoapClient $client) use ($seedResponse): void {
-                    $client->expects('getSeed')->once()->andReturn($seedResponse);
+                    $client->expects('getSeed')->andReturn($seedResponse);
                 },
                 static function (SoapClient $client) use ($tokenError): void {
-                    $client->expects('getToken')->once()->andReturn($tokenError);
+                    $client->expects('getToken')->andReturn($tokenError);
                 }
             );
             $this->mockOpenSsl();
@@ -442,7 +442,7 @@ class SoapGatewayTest extends TestCase
 
         $this->mockSoapFlow(
             static function (SoapClient $client) use ($seedResponse): void {
-                $client->expects('getSeed')->once()->andReturn($seedResponse);
+                $client->expects('getSeed')->andReturn($seedResponse);
             },
             static function (SoapClient $client) use ($tokenError, $tokenOk, &$tokenCalls): void {
                 $client->expects('getToken')->times(2)->andReturnUsing(
@@ -481,10 +481,10 @@ class SoapGatewayTest extends TestCase
 
         $this->mockSoapFlow(
             static function (SoapClient $client) use ($seedResponse): void {
-                $client->expects('getSeed')->once()->andReturn($seedResponse);
+                $client->expects('getSeed')->andReturn($seedResponse);
             },
             static function (SoapClient $client) use ($tokenError): void {
-                $client->expects('getToken')->once()->andReturn($tokenError);
+                $client->expects('getToken')->andReturn($tokenError);
             }
         );
 
@@ -553,7 +553,7 @@ class SoapGatewayTest extends TestCase
         $issuer = Rut::parse('76.123.456-7');
 
         $this->mock(CertificateResolverInterface::class, static function (MockInterface $mock) use ($issuer): void {
-            $mock->expects('resolve')->zeroOrMoreTimes()->with($issuer)->once()->andReturnNull();
+            $mock->expects('resolve')->zeroOrMoreTimes()->with($issuer)->andReturnNull();
         });
 
         $this->instance(EnvironmentResolver::class, $this->makeEnvironmentResolver(DteEnvironment::Production));
@@ -601,7 +601,7 @@ class SoapGatewayTest extends TestCase
 
         $this->mockSoapFlow(
             static function (SoapClient $client) use ($seedResponse): void {
-                $client->expects('getSeed')->once()->andReturn($seedResponse);
+                $client->expects('getSeed')->andReturn($seedResponse);
             },
             static function (SoapClient $client): void {
                 $client->expects('getToken')->never();
@@ -612,7 +612,7 @@ class SoapGatewayTest extends TestCase
             $mock->expects('readPkcs12String')
                 ->andReturn(['pkey' => 'private-key', 'cert' => 'certificate']);
             $mock->expects('sign')
-                ->once()
+
                 ->andThrow(new RuntimeException('Failed to sign data with private key.'));
         });
 
@@ -622,5 +622,369 @@ class SoapGatewayTest extends TestCase
         $this->expectExceptionMessageIs('Failed to sign data with private key.');
 
         $gateway->authenticate($issuer);
+    }
+
+    public function test_authenticate_throws_on_unexpected_seed_state(): void
+    {
+        $issuer = Rut::parse('76.123.456-7');
+
+        // -3 is CertificateRejected — valid SiiAuthState but not expected for seeds.
+        $seedUnexpected = '<SII:RESPUESTA xmlns:SII="http://www.sii.cl/SiiDte">'
+            .'<SII:RESP_HDR><SII:ESTADO>-3</SII:ESTADO></SII:RESP_HDR>'
+            .'</SII:RESPUESTA>';
+
+        $this->makeAuthGateway();
+
+        $this->mockSoapFlow(
+            static function (SoapClient $client) use ($seedUnexpected): void {
+                $client->expects('getSeed')->andReturn($seedUnexpected);
+            },
+            static function (SoapClient $client): void {
+                $client->expects('getToken')->never();
+            }
+        );
+
+        $this->mockOpenSsl();
+
+        $gateway = $this->app->make(SoapGateway::class);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessageIs("SII returned an unexpected seed state '-3'.");
+
+        $gateway->authenticate($issuer);
+    }
+
+    public function test_seed_backoff_succeeds_after_retries(): void
+    {
+        $issuer = Rut::parse('76.123.456-7');
+
+        $seedBackoff = '<SII:RESPUESTA xmlns:SII="http://www.sii.cl/SiiDte">'
+            .'<SII:RESP_HDR><SII:ESTADO>-2</SII:ESTADO></SII:RESP_HDR>'
+            .'</SII:RESPUESTA>';
+
+        $seedOk = '<SII:RESPUESTA xmlns:SII="http://www.sii.cl/SiiDte">'
+            .'<SII:RESP_HDR><SII:ESTADO>00</SII:ESTADO></SII:RESP_HDR>'
+            .'<SII:RESP_BODY><SEMILLA>000000001042</SEMILLA></SII:RESP_BODY>'
+            .'</SII:RESPUESTA>';
+
+        $tokenOk = '<SII:RESPUESTA xmlns:SII="http://www.sii.cl/SiiDte">'
+            .'<SII:RESP_HDR><SII:ESTADO>00</SII:ESTADO></SII:RESP_HDR>'
+            .'<SII:RESP_BODY><TOKEN>sii-token</TOKEN></SII:RESP_BODY>'
+            .'</SII:RESPUESTA>';
+
+        $seedCalls = 0;
+
+        $this->makeAuthGateway();
+
+        $this->mockSoapFlow(
+            static function (SoapClient $client) use ($seedBackoff, $seedOk, &$seedCalls): void {
+                $client->expects('getSeed')->times(3)->andReturnUsing(
+                    static function () use (&$seedCalls, $seedBackoff, $seedOk) {
+                        $seedCalls++;
+
+                        return $seedCalls === 3 ? $seedOk : $seedBackoff;
+                    }
+                );
+            },
+            static function (SoapClient $client) use ($tokenOk): void {
+                $client->expects('getToken')->andReturn($tokenOk);
+            }
+        );
+
+        $this->mockOpenSsl();
+
+        $gateway = $this->app->make(SoapGateway::class);
+
+        static::assertSame('sii-token', $gateway->authenticate($issuer));
+        static::assertSame(3, $seedCalls);
+    }
+
+    public function test_seed_backoff_breaks_on_non_database_error(): void
+    {
+        $issuer = Rut::parse('76.123.456-7');
+
+        $seedBackoff = '<SII:RESPUESTA xmlns:SII="http://www.sii.cl/SiiDte">'
+            .'<SII:RESP_HDR><SII:ESTADO>-2</SII:ESTADO></SII:RESP_HDR>'
+            .'</SII:RESPUESTA>';
+
+        $seedOtherError = '<SII:RESPUESTA xmlns:SII="http://www.sii.cl/SiiDte">'
+            .'<SII:RESP_HDR><SII:ESTADO>-1</SII:ESTADO></SII:RESP_HDR>'
+            .'</SII:RESPUESTA>';
+
+        $seedCalls = 0;
+
+        $this->makeAuthGateway();
+
+        $this->mockSoapFlow(
+            static function (SoapClient $client) use ($seedBackoff, $seedOtherError, &$seedCalls): void {
+                $client->expects('getSeed')->times(2)->andReturnUsing(
+                    static function () use (&$seedCalls, $seedBackoff, $seedOtherError) {
+                        $seedCalls++;
+
+                        return $seedCalls === 1 ? $seedBackoff : $seedOtherError;
+                    }
+                );
+            },
+            static function (SoapClient $client): void {
+                $client->expects('getToken')->never();
+            }
+        );
+
+        $this->mockOpenSsl();
+
+        $gateway = $this->app->make(SoapGateway::class);
+
+        $this->expectException(RuntimeException::class);
+
+        $gateway->authenticate($issuer);
+    }
+
+    public function test_token_backoff_exhausted_throws(): void
+    {
+        $issuer = Rut::parse('76.123.456-7');
+
+        $seedResponse = '<SII:RESPUESTA xmlns:SII="http://www.sii.cl/SiiDte">'
+            .'<SII:RESP_HDR><SII:ESTADO>00</SII:ESTADO></SII:RESP_HDR>'
+            .'<SII:RESP_BODY><SEMILLA>000000001042</SEMILLA></SII:RESP_BODY>'
+            .'</SII:RESPUESTA>';
+
+        $tokenPending = '<SII:RESPUESTA xmlns:SII="http://www.sii.cl/SiiDte">'
+            .'<SII:RESP_HDR><SII:ESTADO>12</SII:ESTADO></SII:RESP_HDR>'
+            .'</SII:RESPUESTA>';
+
+        $this->makeAuthGateway();
+
+        $this->mockSoapFlow(
+            static function (SoapClient $client) use ($seedResponse): void {
+                $client->expects('getSeed')->andReturn($seedResponse);
+            },
+            static function (SoapClient $client) use ($tokenPending): void {
+                $client->expects('getToken')->times(5)->andReturn($tokenPending);
+            }
+        );
+
+        $this->mockOpenSsl();
+
+        $gateway = $this->app->make(SoapGateway::class);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessageIs('SII could not exchange the seed for a token after multiple retries.');
+
+        $gateway->authenticate($issuer);
+    }
+
+    public function test_throws_on_unexpected_token_state(): void
+    {
+        $issuer = Rut::parse('76.123.456-7');
+
+        $seedResponse = '<SII:RESPUESTA xmlns:SII="http://www.sii.cl/SiiDte">'
+            .'<SII:RESP_HDR><SII:ESTADO>00</SII:ESTADO></SII:RESP_HDR>'
+            .'<SII:RESP_BODY><SEMILLA>000000001042</SEMILLA></SII:RESP_BODY>'
+            .'</SII:RESPUESTA>';
+
+        $tokenUnknown = '<SII:RESPUESTA xmlns:SII="http://www.sii.cl/SiiDte">'
+            .'<SII:RESP_HDR><SII:ESTADO>99</SII:ESTADO></SII:RESP_HDR>'
+            .'</SII:RESPUESTA>';
+
+        $this->makeAuthGateway();
+
+        $this->mockSoapFlow(
+            static function (SoapClient $client) use ($seedResponse): void {
+                $client->expects('getSeed')->andReturn($seedResponse);
+            },
+            static function (SoapClient $client) use ($tokenUnknown): void {
+                $client->expects('getToken')->andReturn($tokenUnknown);
+            }
+        );
+
+        $this->mockOpenSsl();
+
+        $gateway = $this->app->make(SoapGateway::class);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessageIs("SII returned an unexpected token state '99'.");
+
+        $gateway->authenticate($issuer);
+    }
+
+    public function test_call_seed_throws_when_estado_is_null(): void
+    {
+        $issuer = Rut::parse('76.123.456-7');
+
+        $invalidXml = 'not valid xml at all';
+
+        $this->makeAuthGateway();
+
+        $this->mockSoapFlow(
+            static function (SoapClient $client) use ($invalidXml): void {
+                $client->expects('getSeed')->andReturn($invalidXml);
+            },
+            static function (SoapClient $client): void {
+                $client->expects('getToken')->never();
+            }
+        );
+
+        $this->mockOpenSsl();
+
+        $gateway = $this->app->make(SoapGateway::class);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessageIs('Unable to parse the SII seed response.');
+
+        $gateway->authenticate($issuer);
+    }
+
+    public function test_call_token_throws_when_estado_is_null(): void
+    {
+        $issuer = Rut::parse('76.123.456-7');
+
+        $seedResponse = '<SII:RESPUESTA xmlns:SII="http://www.sii.cl/SiiDte">'
+            .'<SII:RESP_HDR><SII:ESTADO>00</SII:ESTADO></SII:RESP_HDR>'
+            .'<SII:RESP_BODY><SEMILLA>000000001042</SEMILLA></SII:RESP_BODY>'
+            .'</SII:RESPUESTA>';
+
+        $invalidToken = 'not valid xml at all';
+
+        $this->makeAuthGateway();
+
+        $this->mockSoapFlow(
+            static function (SoapClient $client) use ($seedResponse): void {
+                $client->expects('getSeed')->andReturn($seedResponse);
+            },
+            static function (SoapClient $client) use ($invalidToken): void {
+                $client->expects('getToken')->andReturn($invalidToken);
+            }
+        );
+
+        $this->mockOpenSsl();
+
+        $gateway = $this->app->make(SoapGateway::class);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessageIs('Unable to parse the SII token response.');
+
+        $gateway->authenticate($issuer);
+    }
+
+    public function test_normalize_soap_return_reads_get_seed_return_property(): void
+    {
+        $issuer = Rut::parse('76.123.456-7');
+
+        $seedResponse = '<SII:RESPUESTA xmlns:SII="http://www.sii.cl/SiiDte">'
+            .'<SII:RESP_HDR><SII:ESTADO>00</SII:ESTADO></SII:RESP_HDR>'
+            .'<SII:RESP_BODY><SEMILLA>000000001042</SEMILLA></SII:RESP_BODY>'
+            .'</SII:RESPUESTA>';
+
+        $tokenOk = '<SII:RESPUESTA xmlns:SII="http://www.sii.cl/SiiDte">'
+            .'<SII:RESP_HDR><SII:ESTADO>00</SII:ESTADO></SII:RESP_HDR>'
+            .'<SII:RESP_BODY><TOKEN>sii-token</TOKEN></SII:RESP_BODY>'
+            .'</SII:RESPUESTA>';
+
+        $seedObject = (object) ['getSeedReturn' => $seedResponse];
+
+        $this->makeAuthGateway();
+
+        $this->mockSoapFlow(
+            static function (SoapClient $client) use ($seedObject): void {
+                $client->expects('getSeed')->andReturn($seedObject);
+            },
+            static function (SoapClient $client) use ($tokenOk): void {
+                $client->expects('getToken')->andReturn($tokenOk);
+            }
+        );
+
+        $this->mockOpenSsl();
+
+        $gateway = $this->app->make(SoapGateway::class);
+
+        static::assertSame('sii-token', $gateway->authenticate($issuer));
+    }
+
+    public function test_normalize_soap_return_falls_back_to_string_cast(): void
+    {
+        $issuer = Rut::parse('76.123.456-7');
+
+        $seedResponse = '<SII:RESPUESTA xmlns:SII="http://www.sii.cl/SiiDte">'
+            .'<SII:RESP_HDR><SII:ESTADO>00</SII:ESTADO></SII:RESP_HDR>'
+            .'<SII:RESP_BODY><SEMILLA>000000001042</SEMILLA></SII:RESP_BODY>'
+            .'</SII:RESPUESTA>';
+
+        $tokenOk = '<SII:RESPUESTA xmlns:SII="http://www.sii.cl/SiiDte">'
+            .'<SII:RESP_HDR><SII:ESTADO>00</SII:ESTADO></SII:RESP_HDR>'
+            .'<SII:RESP_BODY><TOKEN>sii-token</TOKEN></SII:RESP_BODY>'
+            .'</SII:RESPUESTA>';
+
+        $seedObject = new class {
+            public function __toString(): string
+            {
+                return '<SII:RESPUESTA xmlns:SII="http://www.sii.cl/SiiDte">'
+                    .'<SII:RESP_HDR><SII:ESTADO>00</SII:ESTADO></SII:RESP_HDR>'
+                    .'<SII:RESP_BODY><SEMILLA>000000001042</SEMILLA></SII:RESP_BODY>'
+                    .'</SII:RESPUESTA>';
+            }
+        };
+
+        $this->makeAuthGateway();
+
+        $this->mockSoapFlow(
+            static function (SoapClient $client) use ($seedObject): void {
+                $client->expects('getSeed')->andReturn($seedObject);
+            },
+            static function (SoapClient $client) use ($tokenOk): void {
+                $client->expects('getToken')->andReturn($tokenOk);
+            }
+        );
+
+        $this->mockOpenSsl();
+
+        $gateway = $this->app->make(SoapGateway::class);
+
+        static::assertSame('sii-token', $gateway->authenticate($issuer));
+    }
+
+    public function test_status_element_returns_null_on_invalid_xml(): void
+    {
+        $issuer = Rut::parse('76.123.456-7');
+
+        $invalidSeed = 'not valid xml at all';
+
+        $this->makeAuthGateway();
+
+        $this->mockSoapFlow(
+            static function (SoapClient $client) use ($invalidSeed): void {
+                $client->expects('getSeed')->andReturn($invalidSeed);
+            },
+            static function (SoapClient $client): void {
+                $client->expects('getToken')->never();
+            }
+        );
+
+        $this->mockOpenSsl();
+
+        $gateway = $this->app->make(SoapGateway::class);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessageIs('Unable to parse the SII seed response.');
+
+        $gateway->authenticate($issuer);
+    }
+
+    public function test_resolve_wsdl_url_throws_on_null_base_url(): void
+    {
+        $issuer = Rut::parse('76.123.456-7');
+
+        $this->makeAuthGateway();
+
+        $this->mock(SoapProxy::class);
+        $this->mock(OpenSslProxy::class);
+
+        $this->instance(EnvironmentResolver::class, $this->makeEnvironmentResolver(DteEnvironment::Local));
+
+        $gateway = $this->app->make(SoapGateway::class);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessageIs('Cannot resolve the WSDL URL without a SOAP base URL.');
+
+        $gateway->query(new Token('token', new DateTimeImmutable('+1 hour')), 'QueryEstUp', 'getEstUp');
     }
 }

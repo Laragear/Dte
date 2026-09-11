@@ -8,6 +8,8 @@ use Laragear\Dte\Actions\CompileDte\Pipes\ApplyDigitalSignature;
 use Laragear\Dte\Actions\CompileDte\Pipes\ApplyTedToDom;
 use Laragear\Dte\Actions\CompileDte\Pipes\BuildXml;
 use Laragear\Dte\Actions\CompileDte\Pipes\CanonicalizeXml;
+use Laragear\Dte\Actions\CompileDte\Pipes\FireDteBuildingEvent;
+use Laragear\Dte\Actions\CompileDte\Pipes\FireDteBuiltEvent;
 use Laragear\Dte\Actions\CompileDte\Pipes\FireDteCompiledEvent;
 use Laragear\Dte\Actions\CompileDte\Pipes\FireDteCompilingEvent;
 use Laragear\Dte\Actions\CompileDte\Pipes\GenerateTed;
@@ -28,12 +30,14 @@ class CompileTest extends TestCase
                 FireDteCompilingEvent::class,
                 ValidateState::class,
                 AcquireFolio::class,
+                FireDteBuildingEvent::class,
                 BuildXml::class,
-                XsdValidation::class,
+                FireDteBuiltEvent::class,
                 GenerateTed::class,
                 ApplyTedToDom::class,
                 CanonicalizeXml::class,
                 ApplyDigitalSignature::class,
+                XsdValidation::class,
                 FireDteCompiledEvent::class,
             ]);
     }
@@ -47,6 +51,6 @@ class CompileTest extends TestCase
             ->through([])
             ->forDte($dte);
 
-        static::assertSame($dte, $result->dte);
+        static::assertInstanceOf(SiiDte::class, $result);
     }
 }

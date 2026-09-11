@@ -13,6 +13,7 @@ use Laragear\Dte\Models\SiiDteEnvelope;
 use Laragear\Dte\Models\SiiDtePayload;
 use Laragear\Dte\Support\XmlDomFactory;
 use Laragear\MetaTesting\Pipeline\InteractsWithPipelines;
+use Laragear\Rut\Rut;
 use Mockery;
 use RuntimeException;
 use Tests\DatabaseTestCase;
@@ -105,5 +106,102 @@ class EmbedDteNodesTest extends DatabaseTestCase
         $this->pipeline(CreateEnvelope::class)
             ->isolatePipe(EmbedDteNodes::class)
             ->send($assembly);
+    }
+
+    /*
+     |---------- | targetReceiverRut filtering | ---------- |
+     */
+
+    public function test_filters_payloads_by_receiver_rut_when_target_receiver_is_set(): void
+    {
+        // Line 67: $query->where('sii_dtes.receiver_num', $rut->num) in payloads()
+        $targetReceiver = Rut::parse('33333333-3');
+
+        $envelope = SiiDteEnvelope::factory()->create();
+
+        // DTE matching receiver
+        $dteMatch = SiiDte::factory()->create([
+            'sii_dte_envelope_id' => $envelope->id,
+            'receiver_rut' => $targetReceiver,
+        ]);
+
+        SiiDtePayload::factory()->create([
+            'sii_dte_id' => $dteMatch->id,
+            'xml' => '<DTE><Documento></Documento></DTE>',
+        ]);
+
+        // DTE for a different receiver (should be filtered out)
+        $dteOther = SiiDte::factory()->create([
+            'sii_dte_envelope_id' => $envelope->id,
+            'receiver_rut' => Rut::parse('44444444-4'),
+        ]);
+
+        SiiDtePayload::factory()->create([
+            'sii_dte_id' => $dteOther->id,
+            'xml' => '<DTE><Documento></Documento></DTE>',
+        ]);
+
+        $assembly = new Assembly($envelope, targetReceiverRut: $targetReceiver);
+        $assembly->expectedDocuments = 1; // only 1 should match
+
+        $writer = $this->app->make(XmlDomFactory::class)->writer();
+        $writer->openMemory();
+        $writer->startDocument('1.0', 'ISO-8859-1');
+        $writer->startElement('EnvioDTE');
+        $writer->startElement('SetDTE');
+        $assembly->writer = $writer;
+
+        $this->pipeline(CreateEnvelope::class)
+            ->isolatePipe(EmbedDteNodes::class)
+            ->send($assembly)
+            ->assertPassable(function (Assembly $result) {
+                static::assertEquals(1, $result->embeddedDocuments);
+                static::assertNull($result->writer); // closed
+
+                return true;
+            });
+    }
+
+    public function test_orders_documents_by_metadata_sort_order_then_id(): void
+    {
+        $envelope = SiiDteEnvelope::factory()->create();
+
+        // Create DTEs with metadata.sort_order: 2, 1, 3 — embed order should be 1, 2, 3
+        $dteA = SiiDte::factory()->create([
+            'sii_dte_envelope_id' => $envelope->id,
+            'metadata' => ['sort_order' => 2],
+        ]);
+        SiiDtePayload::factory()->create(['sii_dte_id' => $dteA->id, 'xml' => '<DTE><Documento><ID>A</ID></Documento></DTE>']);
+
+        $dteB = SiiDte::factory()->create([
+            'sii_dte_envelope_id' => $envelope->id,
+            'metadata' => ['sort_order' => 1],
+        ]);
+        SiiDtePayload::factory()->create(['sii_dte_id' => $dteB->id, 'xml' => '<DTE><Documento><ID>B</ID></Documento></DTE>']);
+
+        $dteC = SiiDte::factory()->create([
+            'sii_dte_envelope_id' => $envelope->id,
+            'metadata' => ['sort_order' => 3],
+        ]);
+        SiiDtePayload::factory()->create(['sii_dte_id' => $dteC->id, 'xml' => '<DTE><Documento><ID>C</ID></Documento></DTE>']);
+
+        $assembly = new Assembly($envelope);
+        $assembly->expectedDocuments = 3;
+
+        $writer = $this->app->make(XmlDomFactory::class)->writer();
+        $writer->openMemory();
+        $writer->startDocument('1.0', 'ISO-8859-1');
+        $writer->startElement('EnvioDTE');
+        $writer->startElement('SetDTE');
+        $assembly->writer = $writer;
+
+        $this->pipeline(CreateEnvelope::class)
+            ->isolatePipe(EmbedDteNodes::class)
+            ->send($assembly)
+            ->assertPassable(function (Assembly $result) {
+                static::assertEquals(3, $result->embeddedDocuments);
+
+                return true;
+            });
     }
 }

@@ -30,6 +30,7 @@ return new class extends Migration {
             $table->timestamp('accepted_at')->nullable();
             $table->json('repairs')->nullable();
             $table->timestamp('rejected_at')->nullable();
+            $table->timestamp('poll_at')->nullable();
             $table->timestamps();
         });
 

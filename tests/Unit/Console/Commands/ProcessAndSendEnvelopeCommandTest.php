@@ -37,12 +37,12 @@ class ProcessAndSendEnvelopeCommandTest extends DatabaseTestCase
                 ->withArgs(function (SiiDteEnvelope $sent) use ($envelope): bool {
                     return $sent->is($envelope);
                 })
-                ->once()
+
                 ->andReturnSelf();
 
             $mock
                 ->expects('thenReturn')
-                ->once()
+
                 ->andReturnUsing(function () use ($envelope) {
                     $payload = SiiDteEnvelopePayload::factory()->make(['xml' => 'signed-xml']);
                     $envelope->setRelation('payload', $payload);
@@ -105,11 +105,11 @@ class ProcessAndSendEnvelopeCommandTest extends DatabaseTestCase
             $mock
                 ->expects('send')
                 ->withArgs(fn($s) => $s->is($envelope))
-                ->once()
+
                 ->andReturnSelf();
             $mock
                 ->expects('thenReturn')
-                ->once()
+
                 ->andReturnUsing(function () use ($envelope) {
                     $payload = SiiDteEnvelopePayload::factory()->make(['xml' => 'signed-xml']);
                     $envelope->setRelation('payload', $payload);

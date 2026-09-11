@@ -12,19 +12,29 @@ use function sprintf;
 class ReclamoWebserviceGateway
 {
     /**
-     * Action code for "Rechazo del Contenido" (RCD).
+     * Action code for "Aceptación Comercial del Documento".
+     */
+    public const string ACTION_ACCEPT = 'ACD';
+
+    /**
+     * Action code for "Reclamo Comercial al Contenido del Documento".
      */
     public const string ACTION_REJECT = 'RCD';
 
     /**
-     * Action code for "Rechazo por Falta Total de Mercaderías" (RFT).
+     * Action code for "Reclamo por Falta Total de Entrega de Mercaderías".
      */
-    public const string ACTION_REJECT_GOODS = 'RFT';
+    public const string ACTION_REJECT_GOODS = 'ERM';
 
     /**
-     * Action code for "Aceptación Comercial" (ACD).
+     * Action code for "Reclamo por Falta Parcial de Entrega de Mercaderías".
      */
-    public const string ACTION_ACCEPT = 'ACD';
+    public const string ACTION_REJECT_PARTIAL = 'RFP';
+
+    /**
+     * Action code for "Recibo de Mercaderías o Servicios Prestados".
+     */
+    public const string ACTION_GOODS_RECEIPT = 'RMA';
 
     /**
      * Create a new Reclamo Webservice Gateway instance.
@@ -38,6 +48,14 @@ class ReclamoWebserviceGateway
     }
 
     /**
+     * Commercially accept a vendor invoice (Aceptación Comercial).
+     */
+    public function accept(SiiInboundDocument $document): void
+    {
+        $this->claim($document, static::ACTION_ACCEPT, '');
+    }
+
+    /**
      * Reject a vendor invoice commercially (Reclamo al Contenido).
      */
     public function reject(SiiInboundDocument $document, string $reason = ''): void
@@ -46,7 +64,7 @@ class ReclamoWebserviceGateway
     }
 
     /**
-     * Reject a vendor invoice due to missing goods (Reclamo Falta de Mercaderías).
+     * Reject a vendor invoice due to missing goods (Reclamo Falta Total de Mercaderías).
      */
     public function rejectGoods(SiiInboundDocument $document, string $reason = ''): void
     {
@@ -54,11 +72,19 @@ class ReclamoWebserviceGateway
     }
 
     /**
-     * Commercially accept a vendor invoice (Aceptación Comercial).
+     * Reject a vendor invoice due to partially missing goods (Reclamo por Falta Parcial).
      */
-    public function accept(SiiInboundDocument $document): void
+    public function rejectPartial(SiiInboundDocument $document, string $reason = ''): void
     {
-        $this->claim($document, static::ACTION_ACCEPT, '');
+        $this->claim($document, static::ACTION_REJECT_PARTIAL, $reason);
+    }
+
+    /**
+     * Confirm receipt of goods or services (Acuse de Recibo de Mercaderías).
+     */
+    public function confirmGoodsReceipt(SiiInboundDocument $document, string $reason = ''): void
+    {
+        $this->claim($document, static::ACTION_GOODS_RECEIPT, $reason);
     }
 
     /**
@@ -70,13 +96,13 @@ class ReclamoWebserviceGateway
 
         $this->authenticator->retryWithFreshToken(function () use ($document, $action, $reason, $issuer): void {
             $token = $this->authenticator->token($issuer);
-            $baseUrl = $this->environment->resolve()->soapBaseUrl();
+            $baseUrl = $this->environment->resolve()->reclamoBaseUrl();
 
             if ($baseUrl === null) {
                 return;
             }
 
-            $wsdlUrl = $baseUrl.'/DTEWS/ReclamoRecibos.asmx?WSDL';
+            $wsdlUrl = $baseUrl.'?wsdl';
 
             $client = $this->soapClientFactory->createAuthenticatedClient($wsdlUrl, $token);
 

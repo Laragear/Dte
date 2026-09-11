@@ -115,6 +115,7 @@ class OpenSslProxy
      */
     protected function readLegacyPkcs12String(string $contents, string $password): array
     {
+        $this->temporary->delete();
         $path = $this->temporary->create()->path('pkcs12.pfx');
 
         if (!$this->file->put($path, $contents)) {
@@ -165,7 +166,7 @@ class OpenSslProxy
         // 2. Free the multi-dimensional regex array immediately
         unset($certificates);
 
-        if (empty($certificateMatches) || empty($privateKey[0])) {
+        if ($certificateMatches === [] || ($privateKey[0] ?? null) === null) {
             throw new RuntimeException('OpenSSL legacy mode did not return a certificate and private key.');
         }
 

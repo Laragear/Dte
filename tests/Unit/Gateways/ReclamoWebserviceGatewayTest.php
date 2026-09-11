@@ -159,4 +159,53 @@ class ReclamoWebserviceGatewayTest extends DatabaseTestCase
 
         $gateway->reject($document);
     }
+
+    public function test_rejects_for_partial_missing_goods(): void
+    {
+        $document = $this->makeDocument();
+        $gateway = $this->makeGateway();
+
+        $gateway->rejectPartial($document, 'Falta parcial de mercadería');
+    }
+
+    public function test_confirms_goods_receipt(): void
+    {
+        $document = $this->makeDocument();
+        $gateway = $this->makeGateway();
+
+        $gateway->confirmGoodsReceipt($document, 'Mercadería recibida');
+    }
+
+    public function test_throws_on_invalid_token_status(): void
+    {
+        $document = $this->makeDocument();
+        $token = new Token('sii-token', new DateTimeImmutable('+1 hour'));
+        $this->mock(TokenAuthenticator::class, static function (MockInterface $mock) use ($token): void {
+            $mock->expects('token')->zeroOrMoreTimes()->andReturn($token);
+            $mock->expects('retryWithFreshToken')->zeroOrMoreTimes()
+                ->andReturnUsing(fn($request, $issuer) => $request());
+        });
+
+        $mockClient = Mockery::mock(SoapClient::class, static function (MockInterface $mock): void {
+            $mock->expects('__setSoapHeaders');
+            $mock
+                ->expects('__soapCall')
+                ->andReturn((object) [
+                    'ReclamoDocResult' => (object) ['status' => '001'],
+                ]);
+        });
+
+        $this->mock(SoapProxy::class, static function (MockInterface $mock) use ($mockClient): void {
+            $mock->expects('withWsdl')->andReturnSelf();
+            $mock->expects('build')->andReturn($mockClient);
+        });
+
+        $this->instance(EnvironmentResolver::class, $this->makeEnvironmentResolver(DteEnv::Production));
+
+        $gateway = $this->app->make(ReclamoWebserviceGateway::class);
+
+        $this->expectException(\Laragear\Dte\Gateways\Exceptions\TokenInvalidException::class);
+
+        $gateway->reject($document);
+    }
 }

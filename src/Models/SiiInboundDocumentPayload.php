@@ -18,6 +18,8 @@ use Laragear\Dte\Models\Concerns\HasXmlPayload;
  * @see  SiiInboundDocumentPayloadFactory
  * @link database/migrations/2026_01_01_000008_create_sii_inbound_document_payloads_table.php
  * ---
+ * @mixin Builder<static>
+ * ---
  * @method static SiiInboundDocumentPayloadFactory factory(callable|array|int|null $count = null, callable|array $state = [])
  * @method Builder<static>|static newQuery()
  * @method static Builder<static>|static query()

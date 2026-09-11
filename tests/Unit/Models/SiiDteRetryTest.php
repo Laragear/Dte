@@ -15,7 +15,6 @@ use Laragear\Dte\Data\Item;
 use Laragear\Dte\Data\ReferenceData;
 use Laragear\Dte\Enums\DteStatus;
 use Laragear\Dte\Enums\DteType;
-use Laragear\Dte\Facades\Dte;
 use Laragear\Dte\Models\SiiDte;
 use LogicException;
 use Override;
@@ -98,7 +97,7 @@ class SiiDteRetryTest extends DatabaseTestCase
 
         $dte->refresh()->load('payload');
 
-        $builder = Dte::retry($dte);
+        $builder = $dte->retry();
 
         static::assertInstanceOf($class, $builder);
         static::assertSame($type, $builder->documentType());
@@ -113,7 +112,7 @@ class SiiDteRetryTest extends DatabaseTestCase
         if ($class === CreditNoteBuilder::class || $class === DebitNoteBuilder::class) {
             static::assertCount(1, $references);
             static::assertInstanceOf(ReferenceData::class, $references[0]);
-            static::assertSame(DteType::Invoice->value, $references[0]->documentType);
+            static::assertSame(DteType::Invoice, $references[0]->documentType);
             static::assertSame('100', $references[0]->folio);
         } else {
             static::assertSame([], $references);
@@ -176,6 +175,6 @@ class SiiDteRetryTest extends DatabaseTestCase
         $this->expectException(LogicException::class);
         $this->expectExceptionMessageIs('DTE type [41] does not support retry.');
 
-        Dte::retry($dte);
+        $dte->retry();
     }
 }

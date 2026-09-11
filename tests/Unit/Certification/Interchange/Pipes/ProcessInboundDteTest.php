@@ -12,7 +12,6 @@ use Laragear\Dte\Models\SiiInboundDocument;
 use Laragear\Dte\Models\SiiInterchangeLog;
 use Laragear\MetaTesting\Pipeline\InteractsWithPipelines;
 use Laragear\Rut\Rut;
-use Mockery\MockInterface;
 use RuntimeException;
 use Tests\DatabaseTestCase;
 
@@ -36,7 +35,7 @@ class ProcessInboundDteTest extends DatabaseTestCase
             xmlAttachment: '<xml></xml>'
         );
 
-        $this->mock(ProcessInboundDtePipeline::class)->expects('handle')->once()->with($emailData);
+        $this->mock(ProcessInboundDtePipeline::class)->expects('forEmail')->with($emailData);
 
         $log = SiiInterchangeLog::factory()->create(['message_id' => 'found']);
         $doc = SiiInboundDocument::factory()->create(['sii_interchange_log_id' => $log->id]);
@@ -71,9 +70,10 @@ class ProcessInboundDteTest extends DatabaseTestCase
             xmlAttachment: '<xml></xml>'
         );
 
-        $this->mock(ProcessInboundDtePipeline::class, function (MockInterface $mock) use ($emailData) {
-            $mock->expects('handle')->once()->with($emailData)->andThrow(new RuntimeException('Processing failed'));
-        });
+        $this->mock(ProcessInboundDtePipeline::class)
+            ->expects('forEmail')
+            ->with($emailData)
+            ->andThrow(new RuntimeException('Processing failed'));
 
         $data = new InterchangeData(new Rut(76_123_456, 0));
         $data->emailData = $emailData;

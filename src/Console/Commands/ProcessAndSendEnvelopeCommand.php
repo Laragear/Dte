@@ -4,6 +4,7 @@ namespace Laragear\Dte\Console\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Support\DateFactory;
 use Laragear\Dte\Actions\CreateEnvelope\CreateEnvelope;
 use Laragear\Dte\Enums\EnvelopeStatus;
 use Laragear\Dte\Events\EnvelopeSending;
@@ -33,6 +34,7 @@ class ProcessAndSendEnvelopeCommand extends Command
      */
     public function handle(
         Dispatcher $event,
+        DateFactory $date,
         CreateEnvelope $create,
         UploadGateway $upload,
         BoletaRestGateway $boletaUpload
@@ -51,6 +53,7 @@ class ProcessAndSendEnvelopeCommand extends Command
         $envelope->update([
             'track_id' => $trackId,
             'status' => EnvelopeStatus::Uploaded,
+            'poll_at' => $date->now(),
         ]);
 
         $event->dispatch(new EnvelopeSent($envelope));

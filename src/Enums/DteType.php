@@ -2,8 +2,13 @@
 
 namespace Laragear\Dte\Enums;
 
+use Closure;
+use Illuminate\Support\Collection;
+
 enum DteType: int
 {
+    use Concerns\EnumHelpers;
+
     public const self DEFAULT = self::Invoice;
 
     /** Paper invoice (Factura) */
@@ -45,6 +50,26 @@ enum DteType: int
     public function isReceipt(): bool
     {
         return $this === self::Receipt || $this === self::ExemptReceipt;
+    }
+
+    /**
+     * Returns the label.
+     */
+    public function label(): string
+    {
+        return match ($this) {
+            self::InvoicePhysical => 'Factura',
+            self::InvoicePhysicalExempt => 'Factura Exenta',
+            self::Invoice => 'Factura Electrónica',
+            self::InvoiceExempt => 'Factura Electrónica Exenta',
+            self::Receipt => 'Boleta',
+            self::ExemptReceipt => 'Boleta Exenta',
+            self::InvoiceLiquidation => 'Liquidación de Factura',
+            self::PurchaseInvoice => 'Factura de Compra',
+            self::DispatchGuide => 'Guía de Despacho',
+            self::DebitNote => 'Nota de Débito',
+            self::CreditNote => 'Nota de Crédito',
+        };
     }
 
     /**

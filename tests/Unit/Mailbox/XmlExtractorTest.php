@@ -99,4 +99,30 @@ class XmlExtractorTest extends TestCase
         static::assertSame('', $extractor->extractFromRaw("Content-Type: text/plain\r\n\r\njust text, no xml here"));
         static::assertSame('', $extractor->extractFromRaw($this->multipart('nothing here', 'text/plain', 'note.txt')));
     }
+
+    /*
+     |---------- | Text body XML extraction | ---------- |
+     */
+
+    public function test_extracts_xml_from_text_body_when_no_xml_attachments(): void
+    {
+        // Line 47: extractFromRaw returns XML found in the text body
+        // Line 83: extractXmlFromText returns substr from <?xml onward
+        $xml = '<?xml version="1.0"?><DTE><Documento ID="F1">x</Documento></DTE>';
+        $raw = "Content-Type: text/plain\r\n\r\n{$xml}";
+
+        $extractor = new XmlExtractor;
+
+        static::assertSame($xml, $extractor->extractFromRaw($raw));
+    }
+
+    public function test_extracts_xml_from_text_body_with_prefix_before_declaration(): void
+    {
+        $xml = '<?xml version="1.0"?><DTE><Documento ID="F1">y</Documento></DTE>';
+        $raw = "Content-Type: text/plain\r\n\r\nSome preamble text\r\n{$xml}";
+
+        $extractor = new XmlExtractor;
+
+        static::assertSame($xml, $extractor->extractFromRaw($raw));
+    }
 }

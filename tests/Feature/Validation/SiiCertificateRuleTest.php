@@ -37,7 +37,7 @@ class SiiCertificateRuleTest extends DatabaseTestCase
      |--------------------------------------------------------------------------
      */
 
-    public function test_it_validates_a_valid_certificate()
+    public function test_validates_a_valid_certificate()
     {
         $this->assertValidationPasses([
             'password' => $this->fixture->password,
@@ -48,7 +48,7 @@ class SiiCertificateRuleTest extends DatabaseTestCase
         ]);
     }
 
-    public function test_it_validates_with_custom_password_field()
+    public function test_validates_with_custom_password_field()
     {
         $this->assertValidationPasses([
             'cert_pass' => $this->fixture->password,
@@ -65,7 +65,7 @@ class SiiCertificateRuleTest extends DatabaseTestCase
      |--------------------------------------------------------------------------
      */
 
-    public function test_it_fails_validation_with_missing_password()
+    public function test_fails_validation_with_missing_password()
     {
         $this->assertValidationFails([
             'cert' => 'binary-string-cert',
@@ -74,7 +74,7 @@ class SiiCertificateRuleTest extends DatabaseTestCase
         ]);
     }
 
-    public function test_it_fails_validation_with_wrong_password_or_corrupt_file()
+    public function test_fails_validation_with_wrong_password_or_corrupt_file()
     {
         $this->assertValidationFails([
             'password' => 'wrong',
@@ -85,7 +85,7 @@ class SiiCertificateRuleTest extends DatabaseTestCase
         ]);
     }
 
-    public function test_it_fails_validation_when_certificate_is_expired()
+    public function test_fails_validation_when_certificate_is_expired()
     {
         $now = $this->freezeSecond();
 
@@ -107,7 +107,7 @@ class SiiCertificateRuleTest extends DatabaseTestCase
         ]);
     }
 
-    public function test_it_fails_validation_when_certificate_missing(): void
+    public function test_fails_validation_when_certificate_missing(): void
     {
         // Mock OpenSslProxy to return an expired certificate metadata
         $this->mock(OpenSslProxy::class, static function (MockInterface $mock): void {

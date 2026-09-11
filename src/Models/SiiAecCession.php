@@ -20,6 +20,8 @@ use Laragear\Rut\HasRut;
  * @see  SiiAecCessionFactory
  * @link database/migrations/2026_01_01_000009_create_sii_aec_cessions_table.php
  * ---
+ * @mixin Builder<static>
+ * ---
  * @method static SiiAecCessionFactory factory(callable|array|int|null $count = null, callable|array $state = [])
  * @method Builder<static>|static newQuery()
  * @method static Builder<static>|static query()

@@ -126,6 +126,22 @@ class FolioTest extends TestCase
         static::assertSame(6, $folio->remaining());
     }
 
+    public function test_remaining_includes_both_endpoints(): void
+    {
+        $folio = new Folio(1, 10, 1);
+
+        static::assertSame(10, $folio->remaining());
+    }
+
+    public function test_remaining_decrements_after_allocation(): void
+    {
+        $folio = new Folio(1, 10, 1);
+
+        $folio->next(); // allocates 1, current becomes 2
+
+        static::assertSame(9, $folio->remaining());
+    }
+
     public function test_is_exhausted_when_no_remaining_folios(): void
     {
         static::assertFalse((new Folio(1, 10, 1))->isExhausted());
@@ -163,6 +179,20 @@ class FolioTest extends TestCase
 
         static::assertSame(3, $folio->first());
         static::assertSame(9, $folio->last());
+    }
+
+    public function test_first_returns_current_when_not_annulled(): void
+    {
+        $folio = new Folio(1, 10, 1);
+
+        static::assertSame(1, $folio->first());
+    }
+
+    public function test_last_returns_to_when_not_annulled(): void
+    {
+        $folio = new Folio(1, 10, 1);
+
+        static::assertSame(10, $folio->last());
     }
 
     public function test_blocks(): void
@@ -329,5 +359,49 @@ class FolioTest extends TestCase
         $folio->annul(8);
 
         static::assertSame([[1, 2], [5, 7], [9, 10]], $folio->blocks());
+    }
+
+    public function test_insert_range_flushes_carry_when_non_adjacent(): void
+    {
+        // annul [1,5] then [3,8] — carry extends, then [10,12] — new range is non-adjacent to carry [1,8]
+        $folio = new Folio(1, 20, 1);
+        $folio->annul([1, 5]);
+        $folio->annul([3, 8]);
+        $folio->annul([10, 12]);
+
+        static::assertSame([[1, 8], [10, 12]], $folio->annuled);
+    }
+
+    public function test_insert_range_before_existing(): void
+    {
+        // When a range [10,20] is annulled first, then [1,5] is annulled,
+        // the new range [1,5] is entirely before the existing range [10,20].
+        // This exercises insertRange lines 134-136 (carryFrom === null && to < a - 1).
+        $folio = new Folio(1, 30, 1);
+        $folio->annul([10, 20]);
+        $folio->annul([1, 5]);
+
+        static::assertTrue($folio->isAnnuled(1));
+        static::assertTrue($folio->isAnnuled(3));
+        static::assertTrue($folio->isAnnuled(15));
+        static::assertFalse($folio->isAnnuled(7));
+    }
+
+    public function test_subtract_range_splits_partial_right_overlap(): void
+    {
+        // annul [1,10] then restore [5,15] — existing range [1,10] starts before restore, ends within
+        $folio = new Folio(1, 20, 1);
+        $folio->annul([1, 10]);
+        $folio->restore([5, 15]);
+
+        static::assertSame([[1, 4]], $folio->annuled);
+    }
+
+    public function test_blocks_skips_outside_ranges(): void
+    {
+        // annulled range [1,5] is entirely before current=10, should be skipped
+        $folio = new Folio(10, 20, 10, [[1, 5]]);
+
+        static::assertSame([[10, 20]], $folio->blocks());
     }
 }

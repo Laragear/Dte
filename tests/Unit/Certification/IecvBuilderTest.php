@@ -3,7 +3,9 @@
 namespace Tests\Unit\Certification;
 
 use Laragear\Dte\Certification\IecvBuilder;
+use Laragear\Dte\Certification\IecvPurchaseData;
 use Laragear\Dte\Enums\DteType;
+use Laragear\Dte\Enums\IecvProperty;
 use Laragear\Dte\Enums\IecvType;
 use Laragear\Dte\Models\SiiDte;
 use Laragear\Dte\Support\XmlDomFactory;
@@ -159,5 +161,173 @@ class IecvBuilderTest extends DatabaseTestCase
         static::assertStringContainsString('<MntIVA>0</MntIVA>', $xml);
         // TotMntIVA must be present in ResumenPeriodo, even when 0
         static::assertStringContainsString('<TotMntIVA>0</TotMntIVA>', $xml);
+    }
+
+    /*
+     |---------- | OtrosImp XSD ordering | ---------- |
+     */
+
+    public function test_otros_imp_appears_before_mnt_total(): void
+    {
+        $dte = SiiDte::factory()->create([
+            'document_type' => DteType::Invoice,
+            'folio' => 42,
+            'issuer_rut' => '76123456-0',
+            'receiver_rut' => '55666777-8',
+            'issued_on' => '2023-10-05',
+            'amount_net' => 1000,
+            'amount_exempt' => 0,
+            'amount_taxes' => 190,
+            'amount_total' => 1190,
+            'taxes' => [15 => 500],
+        ]);
+
+        $xml = $this->app->make(IecvBuilder::class)->build(
+            dtes: collect([$dte]),
+            type: IecvType::Sales,
+            period: '2023-10',
+            resolutionDate: '2020-01-01',
+            resolutionNumber: 1234,
+            senderRut: Rut::parse('55666777-8'),
+        );
+
+        $otrosImpPos = strpos($xml, '<OtrosImp>');
+        $mntTotalPos = strpos($xml, '<MntTotal>');
+
+        static::assertNotFalse($otrosImpPos, 'OtrosImp should be present');
+        static::assertNotFalse($mntTotalPos, 'MntTotal should be present');
+        static::assertLessThan($mntTotalPos, $otrosImpPos, 'OtrosImp must appear before MntTotal in XSD order');
+    }
+
+    /*
+     |---------- | buildPurchases | ---------- |
+     */
+
+    public function test_build_purchases_from_entries(): void
+    {
+        $companyRut = Rut::parse('76.123.456-0');
+        $senderRut = Rut::parse('76.123.456-0');
+        $vendor1 = Rut::parse('77.777.777-7');
+        $vendor2 = Rut::parse('88.888.888-8');
+
+        $entries = [
+            IecvPurchaseData::make(
+                documentType: DteType::InvoicePhysical,
+                folio: 234,
+                issuedOn: '2023-10-01',
+                issuerRut: $vendor1,
+                amountNet: 45899,
+            ),
+            IecvPurchaseData::make(
+                documentType: DteType::InvoicePhysical,
+                folio: 781,
+                issuedOn: '2023-10-01',
+                issuerRut: $vendor1,
+                amountNet: 30082,
+                ivaCommonUse: true,
+            ),
+            IecvPurchaseData::make(
+                documentType: DteType::Invoice,
+                folio: 32,
+                issuedOn: '2023-10-01',
+                issuerRut: $vendor1,
+                amountNet: 10335,
+                amountExempt: 10221,
+            ),
+            IecvPurchaseData::make(
+                documentType: DteType::Invoice,
+                folio: 67,
+                issuedOn: '2023-10-01',
+                issuerRut: $vendor2,
+                amountNet: 11650,
+                noCost: true,
+            ),
+            IecvPurchaseData::make(
+                documentType: DteType::PurchaseInvoice,
+                folio: 9,
+                issuedOn: '2023-10-01',
+                issuerRut: $vendor1,
+                amountNet: 10388,
+                ivaRetainedTotal: true,
+            ),
+            IecvPurchaseData::make(
+                documentType: DteType::CreditNote,
+                folio: 451,
+                issuedOn: '2023-10-01',
+                issuerRut: $vendor1,
+                amountNet: 2880,
+                referenceType: DteType::InvoicePhysical,
+                referenceFolio: 234,
+            ),
+        ];
+
+        $properties = [IecvProperty::CommonIvaFactor->of(0.60)];
+
+        $xml = $this->app->make(IecvBuilder::class)->buildPurchases(
+            entries: $entries,
+            period: '2023-10',
+            resolutionDate: '2020-01-01',
+            resolutionNumber: 1234,
+            companyRut: $companyRut,
+            senderRut: $senderRut,
+            properties: $properties,
+        );
+
+        // Carátula
+        static::assertStringContainsString('<TipoOperacion>COMPRA</TipoOperacion>', $xml);
+        static::assertStringContainsString('<TipoLibro>ESPECIAL</TipoLibro>', $xml);
+        static::assertStringContainsString('<TipoEnvio>TOTAL</TipoEnvio>', $xml);
+        static::assertStringContainsString('<FolioNotificacion>2</FolioNotificacion>', $xml);
+        static::assertStringContainsString('<RutEmisorLibro>76123456-0</RutEmisorLibro>', $xml);
+
+        // Vendor RUTDoc
+        static::assertStringContainsString('<RUTDoc>77777777-7</RUTDoc>', $xml);
+        static::assertStringContainsString('<RUTDoc>88888888-8</RUTDoc>', $xml);
+
+        // Computed amounts for Factura 234: net=45899, taxes=round(45899*0.19)=8721, total=54620
+        static::assertStringContainsString('<MntNeto>45899</MntNeto>', $xml);
+        static::assertStringContainsString('<MntIVA>8721</MntIVA>', $xml);
+        static::assertStringContainsString('<MntTotal>54620</MntTotal>', $xml);
+
+        // Retained IVA for Factura de Compra 9: taxes=round(10388*0.19)=1974, total=10388
+        static::assertStringContainsString('<IVARetTotal>1974</IVARetTotal>', $xml);
+
+        // Reference fields
+        static::assertStringContainsString('<TpoDocRef>30</TpoDocRef>', $xml);
+        static::assertStringContainsString('<FolioRef>234</FolioRef>', $xml);
+
+        // IndSinCosto for entrega gratuita
+        static::assertStringContainsString('<IndSinCosto>1</IndSinCosto>', $xml);
+
+        // FctProp in resumen
+        static::assertStringContainsString('<FctProp>0.6</FctProp>', $xml);
+    }
+
+    public function test_build_purchases_accepts_raw_int_document_type(): void
+    {
+        $entries = [
+            IecvPurchaseData::make(
+                documentType: 30,
+                folio: 1,
+                issuedOn: '2023-10-01',
+                issuerRut: '77777777-7',
+                amountNet: 1000,
+                referenceType: 33,
+                referenceFolio: 10,
+            ),
+        ];
+
+        $xml = $this->app->make(IecvBuilder::class)->buildPurchases(
+            entries: $entries,
+            period: '2023-10',
+            resolutionDate: '2020-01-01',
+            resolutionNumber: 1234,
+            companyRut: Rut::parse('76.123.456-0'),
+            senderRut: Rut::parse('76.123.456-0'),
+        );
+
+        static::assertStringContainsString('<TpoDoc>30</TpoDoc>', $xml);
+        static::assertStringContainsString('<TpoDocRef>33</TpoDocRef>', $xml);
+        static::assertStringContainsString('<FolioRef>10</FolioRef>', $xml);
     }
 }

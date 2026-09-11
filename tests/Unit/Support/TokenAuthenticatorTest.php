@@ -182,7 +182,7 @@ class TokenAuthenticatorTest extends TestCase
         $attempts = 0;
 
         // One refresh before the successful second attempt.
-        $this->soap->expects('authenticate')->once()->andReturn('refreshed-token');
+        $this->soap->expects('authenticate')->andReturn('refreshed-token');
 
         $result = $this->authenticator->retryWithFreshToken(function () use (&$attempts): string {
             if (++$attempts === 1) {
@@ -243,7 +243,7 @@ class TokenAuthenticatorTest extends TestCase
     {
         $attempts = 0;
 
-        $this->rest->expects('fetchToken')->once()->andReturn('refreshed-rest');
+        $this->rest->expects('fetchToken')->andReturn('refreshed-rest');
 
         $result = $this->authenticator->retryRestWithFreshToken(function () use (&$attempts): string {
             if (++$attempts === 1) {

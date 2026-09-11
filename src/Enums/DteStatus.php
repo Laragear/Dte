@@ -44,4 +44,23 @@ enum DteStatus: string
             default => false,
         };
     }
+
+    /**
+     * Checks if the current DTE Status has an XML payload already built.
+     */
+    public function isXmlPayloadPresent(): bool
+    {
+        return $this !== self::Pending
+            && $this !== self::Building
+            && $this !== self::RequiresCaf
+            && $this !== self::Signing;
+    }
+
+    /**
+     * Checks if the current DTE Status does not have an XML payload already built.
+     */
+    public function isNotXmlPayloadPresent(): bool
+    {
+        return !$this->isXmlPayloadPresent();
+    }
 }

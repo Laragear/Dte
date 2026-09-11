@@ -25,7 +25,7 @@ class StubsTestCase extends PHPUnitTestCase
     {
         foreach (new Finder()->in(TestCase::STUBS)->files() as $file) {
             if ($file->getFilename() !== 'checksums.json') {
-                yield [$file->getFilename()];
+                yield [$file->getRelativePathname()];
             }
         }
     }

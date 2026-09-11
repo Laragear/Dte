@@ -58,7 +58,7 @@ class ApplyDigitalSignatureTest extends DatabaseTestCase
         $this->mock(XmlValidator::class)->allows('verifySignature');
         $signer
             ->expects('sign')
-            ->once()
+
             ->withArgs(function ($element, $cert) use ($certificate) {
                 return $element->nodeName === 'Documento' && $cert === $certificate;
             });
@@ -67,8 +67,8 @@ class ApplyDigitalSignatureTest extends DatabaseTestCase
             ->pipeline(Compile::class)
             ->isolatePipe(ApplyDigitalSignature::class)
             ->send($compilation)
-            ->assertPassable(function (Compilation $result) use ($dte, $document) {
-                return $result->dte->is($dte) && $result->document === $document;
+            ->assertPassable(function (Compilation $result) use ($dte) {
+                return $result->dte->is($dte) && $result->document === null;
             });
 
         static::assertEquals(DteStatus::Signed, $dte->status);

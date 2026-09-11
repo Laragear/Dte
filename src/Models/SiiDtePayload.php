@@ -18,6 +18,8 @@ use Laragear\Dte\Models\Concerns\HasXmlPayload;
  * @see  SiiDtePayloadFactory
  * @link database/migrations/2026_01_01_000003_create_sii_dte_payloads_table.php
  * ---
+ * @mixin Builder<static>
+ *  ---
  * @method static SiiDtePayloadFactory factory(callable|array|int|null $count = null, callable|array $state = [])
  * @method Builder<static>|static newQuery()
  * @method static Builder<static>|static query()

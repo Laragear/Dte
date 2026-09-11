@@ -11,7 +11,9 @@ use Laragear\Dte\Caf\CafParser;
 use Laragear\Dte\Support\XmlDomFactory;
 use Laragear\Dte\Xml\TimbreSigner;
 use RuntimeException;
+use Throwable;
 use function mb_substr;
+use const LIBXML_NONET;
 
 class GenerateTed
 {
@@ -50,6 +52,7 @@ class GenerateTed
         $this->appendDetails($compilation, $details);
         $this->appendSignature($compilation, $ted, $details);
 
+        $compilation->cafData = null;
         $compilation->ted = $ted;
 
         return $next($compilation);
@@ -71,7 +74,11 @@ class GenerateTed
         $this->element($details, 'RR', $dte->receiver_rut->formatBasic());
         $this->element($details, 'RSR', mb_substr($receiver['legal_name'], 0, 40));
         $this->element($details, 'MNT', $dte->amount_total);
-        $this->element($details, 'IT1', mb_substr($data['items'][0]['name'], 0, 40));
+
+        if (isset($data['items'][0]['name'])) {
+            $this->element($details, 'IT1', mb_substr($data['items'][0]['name'], 0, 40));
+        }
+
 
         $details->appendChild($details->ownerDocument->importNode($this->cafNode($compilation), true));
 
@@ -109,8 +116,10 @@ class GenerateTed
     {
         $document = $this->xml->document(encoding: 'ISO-8859-1');
 
-        if (!@$document->loadXML($xml, LIBXML_NONET)) {
-            throw new RuntimeException('Unable to parse the allocated CAF XML.');
+        try {
+            $document->loadXML($xml, LIBXML_NONET);
+        } catch (Throwable $e) {
+            throw new RuntimeException('Unable to parse the allocated CAF XML.', previous: $e);
         }
 
         return $document;

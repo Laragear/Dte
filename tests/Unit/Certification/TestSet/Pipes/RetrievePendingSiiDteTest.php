@@ -6,7 +6,8 @@ use Closure;
 use Illuminate\Console\ManuallyFailedException;
 use Laragear\Dte\Certification\TestingSet\Pipes\RetrievePendingSiiDte;
 use Laragear\Dte\Certification\TestingSet\TestSetData;
-use Laragear\Dte\Certification\TestingSet\TestSetSalesBook;
+use Laragear\Dte\Certification\TestingSet\TestSetEnvelope;
+use Laragear\Dte\Enums\DteStatus;
 use Laragear\Dte\Models\SiiDte;
 use Laragear\MetaTesting\Pipeline\InteractsWithPipelines;
 use Laragear\Rut\Rut;
@@ -39,7 +40,7 @@ class RetrievePendingSiiDteTest extends DatabaseTestCase
         $createSiiDte($rut);
 
         $this
-            ->pipeline(TestSetSalesBook::class)
+            ->pipeline(TestSetEnvelope::class)
             ->isolatePipe(RetrievePendingSiiDte::class)
             ->send(new TestSetData($rut))
             ->assertPassable(function (TestSetData $data) {
@@ -57,11 +58,11 @@ class RetrievePendingSiiDteTest extends DatabaseTestCase
 
     public function test_fails_when_no_sii_dte_are_found(): void
     {
-        $pipeline = $this->pipeline(TestSetSalesBook::class)
+        $pipeline = $this->pipeline(TestSetEnvelope::class)
             ->isolatePipe(RetrievePendingSiiDte::class);
 
         $this->expectException(ManuallyFailedException::class);
-        $this->expectExceptionMessageIs('No DTEs found to generate the IECV. You need to create the DTEs first.');
+        $this->expectExceptionMessageIs('No eligible DTEs found for the Test Set. Create the DTEs first, or check their status.');
 
         $pipeline->send(new TestSetData(new Rut(76_123_456, 0)));
     }
@@ -70,11 +71,11 @@ class RetrievePendingSiiDteTest extends DatabaseTestCase
     {
         SiiDte::factory(['issuer_rut' => '76.123.456-1'])->create();
 
-        $pipeline = $this->pipeline(TestSetSalesBook::class)
+        $pipeline = $this->pipeline(TestSetEnvelope::class)
             ->isolatePipe(RetrievePendingSiiDte::class);
 
         $this->expectException(ManuallyFailedException::class);
-        $this->expectExceptionMessageIs('No DTEs found to generate the IECV. You need to create the DTEs first.');
+        $this->expectExceptionMessageIs('No eligible DTEs found for the Test Set. Create the DTEs first, or check their status.');
 
         $pipeline->send(new TestSetData(new Rut(76_123_456, 0)));
     }
@@ -114,5 +115,38 @@ class RetrievePendingSiiDteTest extends DatabaseTestCase
         static::assertCount(2, $result->dtes);
         static::assertTrue($result->dtes->contains('id', $dtes[0]->id));
         static::assertTrue($result->dtes->contains('id', $dtes[1]->id));
+    }
+
+    public function test_excludes_rejected_and_annulled_dtes(): void
+    {
+        $rut = new Rut(76_123_456, 0);
+
+        SiiDte::factory()->create(['issuer_rut' => $rut, 'status' => DteStatus::Pending]);
+        SiiDte::factory()->create(['issuer_rut' => $rut, 'status' => DteStatus::Signed]);
+        SiiDte::factory()->create(['issuer_rut' => $rut, 'status' => DteStatus::Rejected]);
+        SiiDte::factory()->create(['issuer_rut' => $rut, 'status' => DteStatus::Annulled]);
+        SiiDte::factory()->create(['issuer_rut' => $rut, 'status' => DteStatus::Failed]);
+
+        $pipe = new RetrievePendingSiiDte;
+        $result = $pipe->handle(new TestSetData($rut), function ($data) {
+            return $data;
+        });
+
+        static::assertCount(2, $result->dtes);
+    }
+
+    public function test_includes_sent_and_accepted_dtes(): void
+    {
+        $rut = new Rut(76_123_456, 0);
+
+        SiiDte::factory()->create(['issuer_rut' => $rut, 'status' => DteStatus::Sent]);
+        SiiDte::factory()->create(['issuer_rut' => $rut, 'status' => DteStatus::Accepted]);
+
+        $pipe = new RetrievePendingSiiDte;
+        $result = $pipe->handle(new TestSetData($rut), function ($data) {
+            return $data;
+        });
+
+        static::assertCount(2, $result->dtes);
     }
 }

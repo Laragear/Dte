@@ -5,6 +5,7 @@ namespace Laragear\Dte\Console\Commands;
 use Illuminate\Console\Command;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Filesystem\Factory;
+use Illuminate\Contracts\Filesystem\Filesystem;
 use Laragear\Dte\Configuration\ConfigurationManager as Config;
 use Laragear\Dte\Console\Commands\Concerns\HasDefaultRut;
 use Laragear\Dte\Support\OpenSslProxy as OpenSsl;
@@ -37,11 +38,11 @@ class MakeFakeCertificateCommand extends Command
     public function handle(Repository $config, Factory $storage, OpenSsl $openSsl, Config $configManager): int
     {
         $rut = $this->rut($configManager);
-        $name = $this->option('disk') ?: $config->get('dte.certificate.disk') ?: 'local';
+        $disk = $this->option('disk') ?: $config->get('dte.certificate.disk') ?: 'local';
         $path = $this->option('path') ?: $config->get('dte.certificate.path') ?: 'dte/certificate.p12';
         $password = $this->option('password') ?: $config->get('dte.certificate.password') ?: 'secret';
 
-        $this->info("Generating dummy certificate for {$name} ({$rut->format()})...");
+        $this->info("Generating dummy certificate for {$rut->format()}...");
 
         $key = $openSsl->pkeyNew([
             'private_key_bits' => 2048,
@@ -92,9 +93,10 @@ class MakeFakeCertificateCommand extends Command
             return self::FAILURE;
         }
 
-        $disk = $config->get('dte.certificate.disk') ?: 'local';
-
-        $storage->disk($disk)->put($path, $p12);
+        // If the disk instance was issued as storage option, use that, otherwise instance it.
+        $disk instanceof Filesystem
+            ? $disk->put($path, $p12)
+            : $storage->disk($disk)->put($path, $p12);
 
         $this->info("Successfully created fake certificate at disk {$disk}: {$path}");
         $this->info("Password: {$password}");

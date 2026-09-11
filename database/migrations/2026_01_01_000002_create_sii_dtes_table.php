@@ -15,6 +15,7 @@ return new class extends Migration {
             $table->id();
             $table->foreignIdFor(SiiCaf::class, 'sii_caf_id')->nullable()->constrained('sii_cafs')->nullOnDelete();
             $table->unsignedInteger('sii_dte_envelope_id')->nullable()->index();
+            $table->json('metadata')->nullable();
             $table->unsignedTinyInteger('pack_retries')->default(0);
             $table->rut('issuer');
             $table->rut('receiver');

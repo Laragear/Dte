@@ -9,7 +9,7 @@ use function array_column;
 
 class DteEnvironmentTest extends TestCase
 {
-    public function test_it_defines_environments(): void
+    public function test_defines_environments(): void
     {
         static::assertSame(
             [

@@ -34,7 +34,7 @@ class CanonicalizeEnvelopeTest extends DatabaseTestCase
         $canonicalizer = $this->mock(XmlCanonicalizer::class);
         $canonicalizer
             ->expects('canonicalize')
-            ->once()
+
             ->with('<EnvioDTE><SetDTE></SetDTE></EnvioDTE>')
             ->andReturn('<EnvioDTE><SetDTE/></EnvioDTE>');
 
@@ -43,7 +43,7 @@ class CanonicalizeEnvelopeTest extends DatabaseTestCase
         $xmlDomFactory = $this->mock(XmlDomFactory::class);
         $xmlDomFactory
             ->expects('document')
-            ->once()
+
             ->with('1.0', 'ISO-8859-1')
             ->andReturn($dom);
 

@@ -122,4 +122,14 @@ class CertificateResolverTest extends DatabaseTestCase
 
         $resolver->resolve(Rut::parse('76.123.456-0'));
     }
+
+    public function test_throws_when_no_callback_defined()
+    {
+        $resolver = new CertificateResolver($this->app);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessageIs('No certificate resolver callback defined.');
+
+        $resolver->resolve(Rut::parse('76.123.456-0'));
+    }
 }

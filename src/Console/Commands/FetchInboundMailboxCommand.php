@@ -57,7 +57,7 @@ class FetchInboundMailboxCommand extends Command
                 }
 
                 // The pipeline already uses transactions for database-level
-                $processor->handle($email);
+                $processor->forEmail($email);
                 // Only mark as read if the entire transaction succeeds.
                 $driver->markAsRead($email);
 

@@ -3,6 +3,7 @@
 namespace Laragear\Dte\Data;
 
 use Laragear\Rut\Rut;
+use function json_decode;
 
 readonly class IssuerData
 {
@@ -57,5 +58,34 @@ readonly class IssuerData
             $email,
             $branch
         );
+    }
+
+    /**
+     * Create a new instance from an array.
+     */
+    public static function fromArray(array $array): static
+    {
+        return static::make(
+            $array['rut'],
+            $array['legal_name'],
+            $array['business_activity'],
+            $array['economic_activity'],
+            $array['address'],
+            $array['commune'],
+            $array['resolution_date'],
+            $array['resolution_number'],
+            $array['city'] ?? null,
+            $array['telephone'] ?? null,
+            $array['email'] ?? null,
+            $array['branch'] ?? null,
+        );
+    }
+
+    /**
+     * Create a new instance from a JSON string.
+     */
+    public static function fromJson(string $json): static
+    {
+        return static::fromArray(json_decode($json, true, 2));
     }
 }

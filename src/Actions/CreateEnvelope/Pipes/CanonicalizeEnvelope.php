@@ -47,6 +47,7 @@ class CanonicalizeEnvelope
 
         $document->encoding = 'ISO-8859-1';
         $assembly->document = $document;
+        $assembly->path = null;
 
         return $next($assembly);
     }

@@ -73,6 +73,18 @@ enum DteEnvironment: string
     }
 
     /**
+     * Return the SII base URL for the Ley 19.983 Reclamo webservice.
+     */
+    public function reclamoBaseUrl(): ?string
+    {
+        return match ($this) {
+            self::Certification => SiiEndpoints::RECLAMO_CERTIFICATION,
+            self::Production => SiiEndpoints::RECLAMO_PRODUCTION,
+            default => null,
+        };
+    }
+
+    /**
      * Return the SII base URL available for this environment for REST endpoints.
      */
     public function restBaseUrl(): ?string

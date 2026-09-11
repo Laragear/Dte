@@ -9,6 +9,7 @@ use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Console\Kernel as ConsoleContract;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\DateFactory;
+use Illuminate\Support\Fluent;
 use InvalidArgumentException;
 use Laragear\Dte\Actions\PersistDte\PersistDte;
 use Laragear\Dte\Builders\Concerns\HasGlobalModifiers;
@@ -27,6 +28,8 @@ use Laragear\Dte\Events\DteCreating;
 use Laragear\Dte\Models\SiiDte;
 use Laragear\Rut\Rut;
 use LogicException;
+
+use function app;
 use function array_map;
 use function array_merge;
 use function min;
@@ -70,6 +73,16 @@ abstract class DocumentBuilder
     protected DateTimeImmutable $issueDate;
 
     /**
+     * Non-billable amount (MontoNoFacturable).
+     */
+    protected int $nonBillableAmount = 0;
+
+    /**
+     * Custom metadata attached to the DTE record.
+     */
+    protected ?\Illuminate\Support\Fluent $metadata = null;
+
+    /**
      * IndMntNeto indicator for boletas (types 39/41).
      *
      * Values:
@@ -101,14 +114,27 @@ abstract class DocumentBuilder
     abstract public function documentType(): DteType;
 
     /**
+     * Set custom metadata for this document.
+     */
+    public function withMetadata(Fluent|array $metadata): static
+    {
+        $this->metadata = $metadata instanceof Fluent
+            ? $metadata
+            : new Fluent($metadata);
+
+        return $this;
+    }
+
+    /**
      * Set the IndMntNeto indicator for boletas (types 39/41).
      *
      * @param  int  $indicator  0=gross (IVA included), 1=net (without IVA), 2=gross with explicit net
+     *
      * @see knowledge/documentation/formato_boleta_electronica.md Section 3.1
      */
     public function withNetAmountIndicator(int $indicator): static
     {
-        if (!in_array($indicator, [0, 1, 2], true)) {
+        if (! in_array($indicator, [0, 1, 2], true)) {
             throw new InvalidArgumentException('IndMntNeto must be 0, 1, or 2.');
         }
 
@@ -123,6 +149,26 @@ abstract class DocumentBuilder
     public function netAmountIndicator(): ?int
     {
         return $this->indMntNeto;
+    }
+
+    /**
+     * Set the non-billable amount (MontoNoFacturable).
+     *
+     * @see knowledge/formats/formato_dte_202602.md Section 3.1 (Totales)
+     */
+    public function nonBillableAmount(int $amount): static
+    {
+        $this->nonBillableAmount = max(0, $amount);
+
+        return $this;
+    }
+
+    /**
+     * Return the non-billable amount.
+     */
+    public function getNonBillableAmount(): int
+    {
+        return $this->nonBillableAmount;
     }
 
     /**
@@ -213,8 +259,6 @@ abstract class DocumentBuilder
 
     /**
      * Restore the builder state from an existing document payload.
-     *
-     * @param  SiiDte  $dte
      */
     public function hydrate(SiiDte $dte): static
     {
@@ -227,63 +271,21 @@ abstract class DocumentBuilder
             $this->issueDate = DateTimeImmutable::createFromFormat('Y-m-d', $data['issued_on']) ?: $this->issueDate;
         }
 
-        if ($issuer = $data['issuer'] ?? null) {
-            $this->issuedBy(IssuerData::make(
-                $issuer['rut'],
-                $issuer['legal_name'],
-                $issuer['business_activity'],
-                $issuer['economic_activity'],
-                $issuer['address'],
-                $issuer['commune'],
-                $issuer['resolution_date'],
-                $issuer['resolution_number'],
-                $issuer['city'] ?? null,
-                $issuer['telephone'] ?? null,
-                $issuer['email'] ?? null,
-                $issuer['branch'] ?? null,
-            ));
+        if (isset($data['issuer'])) {
+            $this->issuedBy(IssuerData::fromArray($data['issuer']));
         }
 
-        if ($receiver = $data['receiver'] ?? null) {
-            $this->receivedBy(ReceiverData::make(
-                $receiver['rut'],
-                $receiver['legal_name'],
-                $receiver['business_activity'] ?? null,
-                $receiver['email'] ?? null,
-                $receiver['address'] ?? null,
-                $receiver['commune'] ?? null,
-                $receiver['city'] ?? null,
-            ));
+        if (isset($data['receiver'])) {
+            $this->receivedBy(ReceiverData::fromArray($data['receiver']));
         }
 
-        $this->items = array_map(
-            fn(array $item): Item => Item::make(
-                $item['name'],
-                $item['unit_price'],
-                $item['quantity'] ?? 1,
-                $item['description'] ?? null,
-                $item['unit'] ?? null,
-                $item['code'] ?? null,
-                $item['code_type'] ?? null,
-                $item['discount_percentage'] ?? 0,
-                $item['exempt'] ?? false,
-                $item['taxes'] ?? [],
-            ),
-            $data['items'] ?? [],
-        );
+        $this->items = array_map(Item::fromArray(...), $data['items'] ?? []);
 
-        $this->references = array_map(
-            fn(array $reference): ReferenceData => ReferenceData::make(
-                $reference['document_type'],
-                $reference['folio'],
-                new DateTimeImmutable($reference['date']),
-                $reference['reason'] ?? null,
-                $reference['reference_code'] ?? null,
-            ),
-            $data['references'] ?? [],
-        );
+        $this->references = array_map(ReferenceData::fromArray(...), $data['references'] ?? []);
 
         $this->globalModifiers = $data['global_modifiers'] ?? [];
+
+        $this->nonBillableAmount = $data['totals']['non_billable'] ?? 0;
 
         $this->hydrateAdditional($data);
 
@@ -311,7 +313,7 @@ abstract class DocumentBuilder
 
         $dte = SiiDte::query()
             ->getConnection()
-            ->transaction(fn() => $this->pipeline->handle($this, $sync));
+            ->transaction(fn () => $this->pipeline->handle($this, $sync));
 
         $this->events->dispatch(new DteCreated($dte));
 
@@ -334,7 +336,7 @@ abstract class DocumentBuilder
 
         return $this->dte
             ->getConnection()
-            ->transaction(fn() => $this->pipeline->handle($this, $sync, true));
+            ->transaction(fn () => $this->pipeline->handle($this, $sync, true));
     }
 
     /**
@@ -373,10 +375,10 @@ abstract class DocumentBuilder
     protected function validateB2bReceiver(): void
     {
         if (
-            !$this->receiver
-            || empty($this->receiver->businessActivity)
-            || empty($this->receiver->address)
-            || empty($this->receiver->commune)
+            ! $this->receiver
+            || $this->receiver->businessActivity === null
+            || $this->receiver->address === null
+            || $this->receiver->commune === null
         ) {
             throw new LogicException(
                 'B2B documents require a receiver with a business activity, address, and commune.',
@@ -397,6 +399,7 @@ abstract class DocumentBuilder
             'issuer_rut' => $this->issuer()->rut,
             'receiver_rut' => $this->receiverRut(),
             'document_type' => $this->documentType(),
+            'metadata' => $this->metadata?->toArray(),
             'issued_on' => $this->issueDate,
             'amount_net' => $totals['net'],
             'amount_exempt' => $totals['exempt'],
@@ -418,7 +421,7 @@ abstract class DocumentBuilder
     /**
      * Return document totals after applying document-specific rules.
      *
-     * @return array{net: int, exempt: int, tax: int, total: int}
+     * @return array{net: int, exempt: int, tax: int, total: int, non_billable: int}
      */
     protected function calculatedTotals(): array
     {
@@ -433,6 +436,7 @@ abstract class DocumentBuilder
             'exempt' => $exempt,
             'tax' => $tax,
             'total' => $net + $exempt + $tax + $taxesEffect,
+            'non_billable' => $this->nonBillableAmount,
         ];
     }
 
@@ -600,14 +604,14 @@ abstract class DocumentBuilder
             $receiver === null
                 ? null
                 : [
-                'rut' => $receiver->rut->formatRaw(),
-                'legal_name' => $receiver->legalName,
-                'business_activity' => $receiver->businessActivity,
-                'email' => $receiver->email,
-                'address' => $receiver->address,
-                'commune' => $receiver->commune,
-                'city' => $receiver->city,
-            ];
+                    'rut' => $receiver->rut->formatRaw(),
+                    'legal_name' => $receiver->legalName,
+                    'business_activity' => $receiver->businessActivity,
+                    'email' => $receiver->email,
+                    'address' => $receiver->address,
+                    'commune' => $receiver->commune,
+                    'city' => $receiver->city,
+                ];
     }
 
     /**

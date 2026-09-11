@@ -12,6 +12,7 @@ use Laragear\Dte\Certification\TestingSet\TestSetSalesBook;
 use Laragear\Dte\Enums\IecvType;
 use Laragear\Dte\Models\SiiDte;
 use Laragear\Dte\Xml\XmlSigner;
+use Laragear\Dte\Xml\XsdValidator;
 use Laragear\MetaTesting\Pipeline\InteractsWithPipelines;
 use Laragear\Rut\Rut;
 use RuntimeException;
@@ -68,17 +69,25 @@ class OutputIecvSalesTest extends TestCase
                 string $resolutionDate,
                 int $resolutionNumber,
                 Rut $senderRut,
+                array $properties,
             ) use ($passable): true {
-                static::assertSame($passable->dtes, $dtes);
+                static::assertCount($passable->dtes->count(), $dtes);
+                static::assertEquals($passable->dtes->pluck('id')->values(), $dtes->pluck('id')->values());
                 static::assertSame(IecvType::Sales, $type);
                 static::assertSame($passable->period, $period);
                 static::assertSame($passable->resolutionDate, $resolutionDate);
                 static::assertSame($passable->resolutionNumber, $resolutionNumber);
                 static::assertSame($passable->senderRut, $senderRut);
+                static::assertSame([], $properties);
 
                 return true;
             })
             ->andReturn($xmlString);
+
+        $this
+            ->mock(XsdValidator::class)
+            ->expects('validate')
+            ->once();
 
         $this
             ->mock(XmlSigner::class)
@@ -143,7 +152,7 @@ class OutputIecvSalesTest extends TestCase
         );
 
         $this->mock(IecvBuilder::class)->expects('build')->andReturn('invalid xml');
-
+        $this->mock(XsdValidator::class)->expects('validate')->once();
         $this->mock(CertificateResolver::class)->expects('resolve')->andReturn(new DigitalCertificate('fake', 'fake'));
 
         $pipe = $this->app->make(OutputIecvSales::class);
@@ -166,7 +175,7 @@ class OutputIecvSalesTest extends TestCase
         );
 
         $this->mock(IecvBuilder::class)->expects('build')->andReturn('<?xml version="1.0"?><WrongRoot></WrongRoot>');
-
+        $this->mock(XsdValidator::class)->expects('validate')->once();
         $this->mock(CertificateResolver::class)->expects('resolve')->andReturn(new DigitalCertificate('fake', 'fake'));
 
         $pipe = $this->app->make(OutputIecvSales::class);

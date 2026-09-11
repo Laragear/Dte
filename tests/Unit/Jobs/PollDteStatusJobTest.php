@@ -12,6 +12,7 @@ use Laragear\Dte\Enums\DteType;
 use Laragear\Dte\Environment\EnvironmentResolver;
 use Laragear\Dte\Events\DteAccepted;
 use Laragear\Dte\Events\DteRejected;
+use Laragear\Dte\Gateways\Exceptions\TokenInvalidException;
 use Laragear\Dte\Gateways\SoapGateway;
 use Laragear\Dte\Gateways\Token;
 use Laragear\Dte\Jobs\PollDteStatusJob;
@@ -292,6 +293,54 @@ class PollDteStatusJobTest extends DatabaseTestCase
 
         $this->expectException(RuntimeException::class);
         $this->expectexceptionMessageIs('Connection failed');
+
+        $job = new PollDteStatusJob($dte);
+        $this->app->call($job->handle(...));
+    }
+
+    /*
+     |---------- | Token invalid (SII 001/002/003) | ---------- |
+     */
+
+    public function test_throws_token_invalid_exception_when_sii_returns_001(): void
+    {
+        $this->assertTokenInvalidResponseThrows('001');
+    }
+
+    public function test_throws_token_invalid_exception_when_sii_returns_002(): void
+    {
+        $this->assertTokenInvalidResponseThrows('002');
+    }
+
+    public function test_throws_token_invalid_exception_when_sii_returns_003(): void
+    {
+        $this->assertTokenInvalidResponseThrows('003');
+    }
+
+    protected function assertTokenInvalidResponseThrows(string $code): void
+    {
+        // Line 105: throw new TokenInvalidException when SII returns 001/002/003
+        $dte = SiiDte::factory()->hasPayload(['sii_response' => null])->create([
+            'status' => DteStatus::Pending,
+        ]);
+
+        $this->mock(TokenAuthenticator::class, static function (MockInterface $mock): void {
+            $mock->expects('token')
+                ->zeroOrMoreTimes()
+                ->andReturn(new Token('FAKE_TOKEN', now()->addHour()->toDateTimeImmutable()));
+            $mock->expects('retryWithFreshToken')->zeroOrMoreTimes()
+                ->andReturnUsing(fn($request, $issuer) => $request());
+        });
+
+        $this->mock(SoapGateway::class, static function (MockInterface $mock) use ($code): void {
+            $mock->expects('query')->once()->andReturn('<ESTADO>'.$code.'</ESTADO>');
+        });
+
+        $this->mock(LoggerInterface::class)
+            ->expects('error')
+            ->withArgs(fn(string $msg): bool => str_contains($msg, 'SII SOAP token was invalidated'));
+
+        $this->expectException(TokenInvalidException::class);
 
         $job = new PollDteStatusJob($dte);
         $this->app->call($job->handle(...));

@@ -41,7 +41,7 @@ class CheckNearDepletedCafsCommand extends Command
             ->chunk(100, static function ($cafs) use ($threshold, $event, $date): void {
                 foreach ($cafs as $caf) {
                     $total = $caf->folio_to - $caf->folio_from + 1;
-                    $remaining = max(0, $caf->folio_to - $caf->folio_current + 1);
+                    $remaining = $caf->folios->remaining();
 
                     $percentage = ($remaining / $total) * 100;
 

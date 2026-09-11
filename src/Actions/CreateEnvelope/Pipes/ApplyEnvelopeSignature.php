@@ -42,11 +42,7 @@ class ApplyEnvelopeSignature
 
         $this->signer->sign($this->target($assembly->requireDocument()), $certificate);
 
-        $xml = $assembly->requireDocument()->saveXML();
-
-        if ($xml !== false) {
-            $this->validator->verifySignature($xml);
-        }
+        $this->validator->verifySignatureDocument($assembly->requireDocument(), 'SetDoc');
 
         return $next($assembly);
     }

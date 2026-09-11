@@ -30,23 +30,19 @@ class PersistEnvelopePayload
             return $next($assembly);
         }
 
-        $path = $assembly->requirePath();
         $xml = $assembly->requireDocument()->saveXML();
 
-        if ($xml === false || $this->file->put($path, $xml) === false) {
-            throw new RuntimeException('Unable to write the signed envelope XML.');
+        if ($xml === false) {
+            throw new RuntimeException('Unable to serialize the signed envelope XML.');
         }
 
-        try {
-            $contents = $this->file->get($path);
-        } catch (FileNotFoundException $e) {
-            throw new RuntimeException('Unable to read the signed envelope XML.', previous: $e);
-        }
-
-        $payload = $assembly->envelope->payload()->updateOrCreate([], ['xml' => $contents]);
+        $payload = $assembly->envelope->payload()->updateOrCreate([], ['xml' => $xml]);
 
         $assembly->envelope->setRelation('payload', $payload);
         $assembly->envelope->transitionTo(EnvelopeStatus::Signed);
+
+        $assembly->document = null;
+        $assembly->path = null;
 
         return $next($assembly);
     }

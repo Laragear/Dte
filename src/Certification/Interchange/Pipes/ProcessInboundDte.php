@@ -24,7 +24,7 @@ class ProcessInboundDte
      */
     public function handle(InterchangeData $data, Closure $next): InterchangeData
     {
-        $this->pipeline->handle($data->emailData);
+        $this->pipeline->forEmail($data->emailData);
 
         $log = SiiInterchangeLog::where('message_id', $data->emailData->messageId)->first();
 

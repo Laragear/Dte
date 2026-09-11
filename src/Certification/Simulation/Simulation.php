@@ -14,8 +14,8 @@ class Simulation extends Pipeline
      * @var array
      */
     protected $pipes = [
-        EnsureDtesCompiled::class,
         Pipes\GenerateSimulationDtes::class,
+        EnsureDtesCompiled::class,
         Pipes\CompileEnvelope::class,
         Pipes\SendEnvelope::class,
     ];

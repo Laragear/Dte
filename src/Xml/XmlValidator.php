@@ -53,9 +53,19 @@ class XmlValidator
      *
      * @throws RuntimeException If the signature is missing or invalid.
      */
-    public function verifySignature(string $xmlString): bool
+    public function verifySignature(string $xmlString, ?string $targetId = null): bool
     {
-        return $this->validateSignature($this->parse($xmlString));
+        $document = $this->parse($xmlString);
+
+        return $this->validateSignature($document, $targetId);
+    }
+
+    /**
+     * Verify the XMLDSig signature directly from a DOM document.
+     */
+    public function verifySignatureDocument(DOMDocument $document, ?string $targetId = null): bool
+    {
+        return $this->validateSignature($document, $targetId);
     }
 
     /**
@@ -85,16 +95,24 @@ class XmlValidator
     /**
      * Verify the XMLDSig signature embedded in the document.
      */
-    protected function validateSignature(DOMDocument $document): bool
+    protected function validateSignature(DOMDocument $document, ?string $targetId = null): bool
     {
         $xpath = $this->xml->xpath($document);
         $xpath->registerNamespace('ds', static::XMLDSIGNS);
 
-        $signature = $xpath->query('//ds:Signature')->item(0) ?? throw new RuntimeException(
-            'Invalid DTE XML: XMLDSig signature is missing.',
-        );
+        $signature = $targetId !== null
+            ? $xpath->query("//ds:Signature[.//ds:Reference[@URI=\"#{$targetId}\"]]")->item(0)
+            : $xpath->query('//ds:Signature')->item(0);
 
-        $x509Cert = $this->extractX509Cert($document) ?? throw new RuntimeException(
+        if ($signature === null) {
+            throw new RuntimeException(
+                $targetId !== null
+                    ? "Invalid DTE XML: XMLDSig signature for target [{$targetId}] is missing."
+                    : 'Invalid DTE XML: XMLDSig signature is missing.',
+            );
+        }
+
+        $x509Cert = $this->extractX509Cert($signature) ?? throw new RuntimeException(
             'Invalid DTE XML: X509 certificate is missing from KeyInfo.',
         );
 
@@ -114,6 +132,7 @@ class XmlValidator
         );
 
         $id = ltrim($reference->getAttribute('URI'), '#');
+
         $target = $xpath->query("//*[@ID=\"$id\"]")->item(0) ?? throw new RuntimeException(
             'Invalid DTE XML: XMLDSig digest reference does not match.',
         );
@@ -160,23 +179,27 @@ class XmlValidator
     /**
      * Extract the embedded X509Certificate PEM string from the document's KeyInfo.
      */
-    protected function extractX509Cert(DOMDocument $document): ?string
+    protected function extractX509Cert(DOMNode $context): ?string
     {
+        $document = $context->ownerDocument;
         $nodes = $document->getElementsByTagNameNS(static::XMLDSIGNS, 'X509Certificate');
 
         if ($nodes->length === 0) {
             $nodes = $document->getElementsByTagName('X509Certificate');
         }
 
-        $certNode = $nodes->item(0);
+        // Find the X509Certificate node within this specific Signature context.
+        for ($i = 0; $i < $nodes->length; $i++) {
+            $node = $nodes->item($i);
 
-        if ($certNode === null) {
-            return null;
+            if ($context->contains($node)) {
+                return
+                    "-----BEGIN CERTIFICATE-----\n"
+                    .chunk_split(trim($node->textContent), 64, "\n")
+                    ."-----END CERTIFICATE-----\n";
+            }
         }
 
-        return
-            "-----BEGIN CERTIFICATE-----\n"
-            .chunk_split(trim($certNode->textContent), 64, "\n")
-            ."-----END CERTIFICATE-----\n";
+        return null;
     }
 }

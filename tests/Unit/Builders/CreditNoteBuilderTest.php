@@ -79,4 +79,17 @@ class CreditNoteBuilderTest extends DatabaseTestCase
         $builder->discount($dte);
         static::assertSame('123', $builder->references()[0]->folio);
     }
+
+    public function test_discount_with_sii_dte_null_issued_on_falls_back_to_now(): void
+    {
+        $dte = SiiDte::factory()->create([
+            'issued_on' => null,
+        ]);
+
+        $builder = $this->app->make(CreditNoteBuilder::class);
+
+        $builder->discount($dte);
+
+        static::assertNotEmpty($builder->references());
+    }
 }

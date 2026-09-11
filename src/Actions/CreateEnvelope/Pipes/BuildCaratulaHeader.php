@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Support\DateFactory;
 use Laragear\Dte\Actions\CreateEnvelope\Assembly;
 use Laragear\Dte\Enums\DteStatus;
+use Laragear\Dte\Enums\DteType;
 use Laragear\Dte\Enums\SiiRut;
 use Laragear\Dte\Support\XmlDomFactory;
 use Laragear\Rut\Rut;
@@ -64,12 +65,12 @@ class BuildCaratulaHeader
             throw new LogicException('The DTE envelope must contain at least one signed document.');
         }
 
-        if ($assembly->expectedDocuments > $this->maximumDocuments()) {
+        if ($assembly->expectedDocuments > $this->maximumDocuments($assembly)) {
             throw new LogicException('The DTE envelope exceeds the configured document limit.');
         }
 
         if ($this->hasInvalidDocuments($assembly)) {
-            throw new LogicException('The DTE envelope documents must share its issuer, type, and signed state.');
+            throw new LogicException('The DTE envelope documents must share its issuer, signed state, and receipt type.');
         }
     }
 
@@ -86,11 +87,23 @@ class BuildCaratulaHeader
                 return $query->where('receiver_num', $rut->num);
             })
             ->where(static function (EloquentBuilder $query) use ($envelope): void {
-                $query
-                    ->where('issuer_num', '!=', $envelope->issuer_rut->num)
-                    ->orWhere('issuer_vd', '!=', $envelope->issuer_rut->vd)
-                    ->orWhere('document_type', '!=', $envelope->document_type->value)
-                    ->orWhere('status', '!=', DteStatus::Signed->value);
+                $query->where(static function (EloquentBuilder $q) use ($envelope): void {
+                    $q->where('issuer_num', '!=', $envelope->issuer_rut->num)
+                        ->orWhere('issuer_vd', '!=', $envelope->issuer_rut->vd)
+                        ->orWhere('status', '!=', DteStatus::Signed->value);
+                });
+
+                if ($envelope->isReceipt()) {
+                    $query->orWhereNotIn('document_type', [
+                        DteType::Receipt->value,
+                        DteType::ExemptReceipt->value,
+                    ]);
+                } else {
+                    $query->orWhereIn('document_type', [
+                        DteType::Receipt->value,
+                        DteType::ExemptReceipt->value,
+                    ]);
+                }
             })
             ->exists();
     }
@@ -98,9 +111,13 @@ class BuildCaratulaHeader
     /**
      * Return the configured envelope document limit.
      */
-    protected function maximumDocuments(): int
+    protected function maximumDocuments(Assembly $assembly): int
     {
-        $maximum = $this->config->get('dte.envelopes.max_documents');
+        $configKey = $assembly->envelope->isReceipt()
+            ? 'dte.envelopes.max.receipts'
+            : 'dte.envelopes.max.documents';
+
+        $maximum = $this->config->get($configKey);
 
         if (!is_int($maximum) || $maximum < 1) {
             throw new UnexpectedValueException('The envelope document limit must be a positive integer.');
@@ -131,9 +148,16 @@ class BuildCaratulaHeader
         $tag = $assembly->envelope->type === 'boleta' ? 'EnvioBOLETA' : 'EnvioDTE';
 
         $writer->startDocument('1.0', 'ISO-8859-1');
-        $writer->startElement($tag);
-        $writer->writeAttribute('xmlns', XmlDomFactory::XML_NAMESPACE);
+        $writer->startElementNs(null, $tag, XmlDomFactory::XML_NAMESPACE);
+
+        $writer->writeAttributeNs(
+            'xsi',
+            'schemaLocation',
+            'http://www.w3.org/2001/XMLSchema-instance',
+            XmlDomFactory::XML_NAMESPACE . ' EnvioDTE_v10.xsd'
+        );
         $writer->writeAttribute('version', '1.0');
+
         $writer->startElement('SetDTE');
         $writer->writeAttribute('ID', 'SetDoc');
     }
@@ -149,8 +173,9 @@ class BuildCaratulaHeader
         $writer->writeAttribute('version', '1.0');
         $writer->writeElement('RutEmisor', $envelope->issuer_rut->formatBasic());
         $writer->writeElement('RutEnvia', $envelope->sender_rut->formatBasic());
-        $writer->writeElement('RutReceptor',
-            $assembly->targetReceiverRut?->formatBasic() ?? SiiRut::Sii->formatBasic());
+        $writer->writeElement(
+            'RutReceptor', $assembly->targetReceiverRut?->formatBasic() ?? SiiRut::Sii->formatBasic()
+        );
         $writer->writeElement('FchResol', $this->resolutionDate($assembly));
         $writer->writeElement('NroResol', (string) $this->resolutionNumber($assembly));
         $writer->writeElement('TmstFirmaEnv', $this->date->now('America/Santiago')->format('Y-m-d\TH:i:s'));
@@ -162,15 +187,27 @@ class BuildCaratulaHeader
     }
 
     /**
-     * Write the homogeneous DTE subtotal.
+     * Write a SubTotDTE for each document type present in the envelope.
      */
     protected function writeSubtotal(Assembly $assembly, XMLWriter $writer): void
     {
-        $writer->startElement('SubTotDTE');
-        $writer->writeElement('TpoDTE', (string) $assembly->envelope->document_type->value);
-        $writer->writeElement('NroDTE', (string) $assembly->expectedDocuments);
+        $counts = $assembly->envelope
+            ->dtes()
+            ->when($assembly->targetReceiverRut, static function (EloquentBuilder $query, Rut $rut): void {
+                $query->where('receiver_num', $rut->num);
+            })
+            ->select('document_type')
+            ->selectRaw('count(*) as total')
+            ->groupBy('document_type')
+            ->orderBy('document_type')
+            ->get();
 
-        $writer->endElement();
+        foreach ($counts as $row) {
+            $writer->startElement('SubTotDTE');
+            $writer->writeElement('TpoDTE', (string) $row->document_type->value);
+            $writer->writeElement('NroDTE', (string) $row->total);
+            $writer->endElement();
+        }
     }
 
     /**

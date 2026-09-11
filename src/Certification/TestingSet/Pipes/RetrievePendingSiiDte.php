@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\Console\ManuallyFailedException;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Laragear\Dte\Certification\TestingSet\TestSetData;
+use Laragear\Dte\Enums\DteStatus;
 use Laragear\Dte\Models\SiiDte;
 
 class RetrievePendingSiiDte
@@ -23,13 +24,19 @@ class RetrievePendingSiiDte
             'issuer_num' => $data->rut->num,
             'issuer_vd' => $data->rut->vd,
         ])
-            ->when(!empty($data->dteIds), static function (EloquentBuilder $query) use ($data): void {
+            ->whereIn('status', [
+                DteStatus::Pending,
+                DteStatus::Signed,
+                DteStatus::Sent,
+                DteStatus::Accepted,
+            ])
+            ->when($data->dteIds !== null && $data->dteIds !== [], static function (EloquentBuilder $query) use ($data): void {
                 $query->whereIn('id', $data->dteIds);
             })
             ->get();
 
         if ($data->dtes->isEmpty()) {
-            throw new ManuallyFailedException('No DTEs found to generate the IECV. You need to create the DTEs first.');
+            throw new ManuallyFailedException('No eligible DTEs found for the Test Set. Create the DTEs first, or check their status.');
         }
 
         return $next($data);

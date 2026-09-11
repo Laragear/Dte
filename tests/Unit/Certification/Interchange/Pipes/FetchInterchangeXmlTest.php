@@ -38,8 +38,8 @@ class FetchInterchangeXmlTest extends DatabaseTestCase
                 xmlAttachment: '<xml></xml>',
             );
 
-            $driver->expects('unread')->once()->andReturn(collect([$email1, $email2]));
-            $driver->expects('markAsRead')->once()->with($email2);
+            $driver->expects('unread')->andReturn(collect([$email1, $email2]));
+            $driver->expects('markAsRead')->with($email2);
 
             $mock->allows('driver')->andReturn($driver);
         });
@@ -147,7 +147,7 @@ class FetchInterchangeXmlTest extends DatabaseTestCase
         $this->mock(MailboxManager::class, function (MockInterface $mock) {
             $driver = $this->mock(MailboxDriverInterface::class);
 
-            $driver->expects('unread')->once()->andReturn(collect());
+            $driver->expects('unread')->andReturn(collect());
 
             $mock->expects('driver')->andReturn($driver);
         });

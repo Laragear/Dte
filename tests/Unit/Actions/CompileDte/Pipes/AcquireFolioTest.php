@@ -52,7 +52,7 @@ class AcquireFolioTest extends DatabaseTestCase
         $this
             ->mock(CafManager::class)
             ->expects('allocate')
-            ->once()
+
             ->withArgs(function ($rut, $type, $callback) use ($dte, $caf) {
                 if ((string) $rut !== (string) $dte->issuer_rut || $type !== $dte->document_type) {
                     return false;
@@ -92,7 +92,7 @@ class AcquireFolioTest extends DatabaseTestCase
             'sii_caf_id' => null,
         ]);
 
-        $this->mock(CafManager::class)->expects('allocate')->once()->andThrow(new DepletionException('No folios'));
+        $this->mock(CafManager::class)->expects('allocate')->andThrow(new DepletionException('No folios'));
 
         $this
             ->pipeline(Compile::class)

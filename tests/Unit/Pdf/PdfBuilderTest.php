@@ -132,7 +132,7 @@ class PdfBuilderTest extends DatabaseTestCase
         $this->barcode
             ->expects('generate')
             ->with('<sii:TED xmlns:sii="http://www.sii.cl/SiiDte">TEST_TED</sii:TED>')
-            ->once()
+
             ->andReturn('data:image/png;base64,barcode');
 
         $data = $this->builder->force()->generate();
@@ -145,7 +145,7 @@ class PdfBuilderTest extends DatabaseTestCase
         $this->barcode
             ->expects('generate')
             ->with('<sii:TED xmlns:sii="http://www.sii.cl/SiiDte">TEST_TED</sii:TED>')
-            ->once()
+
             ->andReturn('data:image/png;base64,barcode');
 
         $content = $this->builder->binary();

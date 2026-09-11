@@ -2,16 +2,17 @@
 
 namespace Tests\Unit\Certification\TestSet\Pipes;
 
-use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Console\ManuallyFailedException;
 use Laragear\Dte\Certificate\CertificateResolver;
 use Laragear\Dte\Certificate\DigitalCertificate;
 use Laragear\Dte\Certification\IecvBuilder;
+use Laragear\Dte\Certification\IecvPurchaseData;
 use Laragear\Dte\Certification\TestingSet\Pipes\OutputIecvPurchases;
 use Laragear\Dte\Certification\TestingSet\TestSetData;
 use Laragear\Dte\Certification\TestingSet\TestSetPurchasesBook;
-use Laragear\Dte\Enums\IecvType;
-use Laragear\Dte\Models\SiiDte;
+use Laragear\Dte\Enums\DteType;
 use Laragear\Dte\Xml\XmlSigner;
+use Laragear\Dte\Xml\XsdValidator;
 use Laragear\MetaTesting\Pipeline\InteractsWithPipelines;
 use Laragear\Rut\Rut;
 use RuntimeException;
@@ -30,14 +31,23 @@ class OutputIecvPurchasesTest extends TestCase
 
     public function test_builds_and_stores_iecv_xml(): void
     {
+        $entries = [
+            IecvPurchaseData::make(
+                documentType: DteType::Invoice,
+                folio: 42,
+                issuedOn: '2026-01-15',
+                issuerRut: Rut::parse('77.777.777-7'),
+                amountNet: 1000,
+            ),
+        ];
+
         $passable = new TestSetData(
             Rut::parse('76.123.456-0'),
-            [],
-            SiiDte::factory(2, ['issuer_rut' => new Rut(76_123_456, 0)])->makeMany(),
-            '2026-01',
-            '2026-01-01',
-            1,
-            new Rut(22_222_222, 2),
+            purchaseEntries: $entries,
+            period: '2026-01',
+            resolutionDate: '2026-01-01',
+            resolutionNumber: 1,
+            senderRut: new Rut(22_222_222, 2),
         );
 
         $xmlString = '<?xml version="1.0" encoding="ISO-8859-1"?>
@@ -60,25 +70,13 @@ class OutputIecvPurchasesTest extends TestCase
 
         $this
             ->mock(IecvBuilder::class)
-            ->expects('build')
-            ->withArgs(static function (
-                Collection $dtes,
-                IecvType $type,
-                string $period,
-                string $resolutionDate,
-                int $resolutionNumber,
-                Rut $senderRut,
-            ) use ($passable): true {
-                static::assertSame($passable->dtes, $dtes);
-                static::assertSame(IecvType::Purchases, $type);
-                static::assertSame($passable->period, $period);
-                static::assertSame($passable->resolutionDate, $resolutionDate);
-                static::assertSame($passable->resolutionNumber, $resolutionNumber);
-                static::assertSame($passable->senderRut, $senderRut);
-
-                return true;
-            })
+            ->expects('buildPurchases')
             ->andReturn($xmlString);
+
+        $this
+            ->mock(XsdValidator::class)
+            ->expects('validate')
+            ->once();
 
         $this
             ->mock(XmlSigner::class)
@@ -104,10 +102,27 @@ class OutputIecvPurchasesTest extends TestCase
      |--------------------------------------------------------------------------
      */
 
+    public function test_fails_when_no_purchase_entries(): void
+    {
+        $data = new TestSetData(
+            Rut::parse('76.123.456-0'),
+        );
+
+        $this->expectException(ManuallyFailedException::class);
+        $this->expectExceptionMessage('No purchase entries provided');
+
+        $pipe = $this->app->make(OutputIecvPurchases::class);
+        $pipe->handle($data, fn($d) => $d);
+    }
+
     public function test_fails_when_no_certificate_is_found(): void
     {
+        $entries = [
+            IecvPurchaseData::make(DteType::Invoice, 1, '2026-01-15', '77777777-7'),
+        ];
+
         $this->mock(CertificateResolver::class)->expects('resolve')->andReturnNull();
-        $this->mock(IecvBuilder::class)->expects('build')->never();
+        $this->mock(IecvBuilder::class)->expects('buildPurchases')->never();
         $this->mock(XmlSigner::class)->expects('sign')->never();
 
         $pipeline = $this->pipeline(TestSetPurchasesBook::class)
@@ -118,12 +133,11 @@ class OutputIecvPurchasesTest extends TestCase
 
         $pipeline->send(new TestSetData(
             new Rut(76_123_456, 0),
-            [],
-            new Collection,
-            '2026-01',
-            '2026-01-01',
-            1,
-            new Rut(22_222_222, 2),
+            purchaseEntries: $entries,
+            period: '2026-01',
+            resolutionDate: '2026-01-01',
+            resolutionNumber: 1,
+            senderRut: new Rut(22_222_222, 2),
         ));
     }
 
@@ -134,16 +148,17 @@ class OutputIecvPurchasesTest extends TestCase
 
         $data = new TestSetData(
             new Rut('76000000', '0'),
-            [],
-            Collection::empty(),
-            '2026-01',
-            '2026-01-01',
-            0,
-            new Rut('76000000', '0'),
+            purchaseEntries: [
+                IecvPurchaseData::make(DteType::Invoice, 1, '2026-01-15', '77777777-7'),
+            ],
+            period: '2026-01',
+            resolutionDate: '2026-01-01',
+            resolutionNumber: 0,
+            senderRut: new Rut('76000000', '0'),
         );
 
-        $this->mock(IecvBuilder::class)->expects('build')->andReturn('invalid xml');
-
+        $this->mock(IecvBuilder::class)->expects('buildPurchases')->andReturn('invalid xml');
+        $this->mock(XsdValidator::class)->expects('validate')->once();
         $this->mock(CertificateResolver::class)->expects('resolve')->andReturn(new DigitalCertificate('fake', 'fake'));
 
         $pipe = $this->app->make(OutputIecvPurchases::class);
@@ -157,16 +172,17 @@ class OutputIecvPurchasesTest extends TestCase
 
         $data = new TestSetData(
             new Rut('76000000', '0'),
-            [],
-            Collection::empty(),
-            '2026-01',
-            '2026-01-01',
-            0,
-            new Rut('76000000', '0'),
+            purchaseEntries: [
+                IecvPurchaseData::make(DteType::Invoice, 1, '2026-01-15', '77777777-7'),
+            ],
+            period: '2026-01',
+            resolutionDate: '2026-01-01',
+            resolutionNumber: 0,
+            senderRut: new Rut('76000000', '0'),
         );
 
-        $this->mock(IecvBuilder::class)->expects('build')->andReturn('<?xml version="1.0"?><WrongRoot></WrongRoot>');
-
+        $this->mock(IecvBuilder::class)->expects('buildPurchases')->andReturn('<?xml version="1.0"?><WrongRoot></WrongRoot>');
+        $this->mock(XsdValidator::class)->expects('validate')->once();
         $this->mock(CertificateResolver::class)->expects('resolve')->andReturn(new DigitalCertificate('fake', 'fake'));
 
         $pipe = $this->app->make(OutputIecvPurchases::class);

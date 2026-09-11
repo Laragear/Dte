@@ -81,7 +81,7 @@ class Microsoft365DriverTest extends TestCase
                         && $config->queryParameters->expand === ['attachments']
                     );
                 })
-                ->once()
+
                 ->andReturn($promise);
         });
 
@@ -127,11 +127,11 @@ class Microsoft365DriverTest extends TestCase
                         && $config->queryParameters->top === 1
                     );
                 })
-                ->once()
+
                 ->andReturn($promise);
 
             $messageItemBuilder = Mockery::mock(MessageItemRequestBuilder::class);
-            $userBuilder->expects('messagesById')->with('123')->once()->andReturn($messageItemBuilder);
+            $userBuilder->expects('messagesById')->with('123')->andReturn($messageItemBuilder);
 
             $patchPromise = new FulfilledPromise('ok');
 
@@ -140,7 +140,7 @@ class Microsoft365DriverTest extends TestCase
                 ->withArgs(function (Message $update) {
                     return $update->getIsRead() === true;
                 })
-                ->once()
+
                 ->andReturn($patchPromise);
         });
 

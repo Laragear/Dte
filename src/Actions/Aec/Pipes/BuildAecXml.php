@@ -219,9 +219,7 @@ class BuildAecXml
             throw new InvalidArgumentException("The [$name] XML payload is invalid.");
         }
 
-        $element = $this->xml->xpath($document)
-            ->query("//*[local-name()='$name']")
-            ?->item(0);
+        $element = $this->xml->xpath($document)->query("//*[local-name()='$name']")?->item(0);
 
         if (!$element) {
             throw new InvalidArgumentException("The XML payload does not contain a [$name] element.");

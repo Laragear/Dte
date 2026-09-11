@@ -5,15 +5,16 @@ namespace Laragear\Dte\Certification\TestingSet\Pipes;
 use Closure;
 use DOMDocument;
 use DOMElement;
+use Illuminate\Console\ManuallyFailedException;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\DateFactory;
 use Laragear\Dte\Certificate\CertificateResolver;
 use Laragear\Dte\Certification\IecvBuilder;
 use Laragear\Dte\Certification\TestingSet\TestSetData;
-use Laragear\Dte\Enums\IecvType;
 use Laragear\Dte\Support\XmlDomFactory;
 use Laragear\Dte\Xml\XmlSigner;
+use Laragear\Dte\Xml\XsdValidator;
 use RuntimeException;
 
 class OutputIecvPurchases
@@ -29,17 +30,26 @@ class OutputIecvPurchases
         protected CertificateResolver $certificate,
         protected IecvBuilder $builder,
         protected XmlDomFactory $xml,
+        protected XsdValidator $xsd,
     ) {
         //
     }
 
     public function handle(TestSetData $data, Closure $next): TestSetData
     {
+        if ($data->purchaseEntries === []) {
+            throw new ManuallyFailedException(
+                'No purchase entries provided. Pass IecvPurchaseData entries to purchasesBookTestSet().',
+            );
+        }
+
         $certificate = $this->certificate->resolve($data->rut) ?? throw new RuntimeException(
             "No certificate was found for [$data->rut]."
         );
 
-        $document = $this->parseDocument($this->buildXml($data));
+        $unsignedXml = $this->buildXml($data);
+        $this->xsd->validate($unsignedXml, 'LibroCV_v10.xsd');
+        $document = $this->parseDocument($unsignedXml);
 
         $this->signer->sign($this->getEnvioLibroElement($document), $certificate);
 
@@ -82,14 +92,14 @@ class OutputIecvPurchases
      */
     protected function buildXml(TestSetData $data): string
     {
-        return $this->builder->build(
-            $data->dtes,
-            IecvType::Purchases,
+        return $this->builder->buildPurchases(
+            $data->purchaseEntries,
             $data->period,
             $data->resolutionDate,
             $data->resolutionNumber,
+            $data->rut,
             $data->senderRut,
-            [], // properties
+            $data->properties,
         );
     }
 }

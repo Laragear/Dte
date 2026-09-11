@@ -6,6 +6,7 @@ use DateTimeImmutable;
 use Illuminate\Contracts\Cache\Factory;
 use Laragear\Dte\Contracts\TokenProviderInterface;
 use Laragear\Dte\Environment\EnvironmentResolver;
+use Laragear\Dte\Gateways\Exceptions\TokenInvalidException;
 use Laragear\Dte\Gateways\Token;
 use Laragear\Dte\Mailbox\RutEmailResolver;
 use Laragear\Dte\Support\SoapProxy;
@@ -218,6 +219,49 @@ class RutEmailResolverTest extends TestCase
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessageIs('SII directory service failed to resolve email for 76123456-7.');
+
+        $resolver->resolve(Rut::parse('76.123.456-7'));
+    }
+
+    /*
+     |---------- | Token invalid (SII 001/002/003) | ---------- |
+     */
+
+    public function test_throws_token_invalid_exception_when_sii_returns_invalid_token_status(): void
+    {
+        // Line 107: throw new TokenInvalidException when TokenStatus::isNotValid
+        $token = new Token('tok', new DateTimeImmutable('+1 hour'));
+        $this->mock(TokenProviderInterface::class, static function (Mockery\MockInterface $mock) use ($token): void {
+            $mock->expects('token')->zeroOrMoreTimes()->andReturn($token);
+            $mock->expects('retryWithFreshToken')->zeroOrMoreTimes()
+                ->andReturnUsing(fn($request, $issuer) => $request());
+        });
+
+        $this->app['config']->set([
+            'dte.environment' => 'certification',
+            'dte.cache.prefix' => 'dte',
+            'dte.dim.addresses.cache' => false,
+            'dte.dim.addresses.days' => 30,
+        ]);
+        $this->app->make(EnvironmentResolver::class)->flush();
+
+        $mockClient = Mockery::mock(SoapClient::class);
+        $mockClient->expects('__setSoapHeaders');
+        $mockClient
+            ->expects('__soapCall')
+            ->andReturn((object) [
+                'ESTADO' => '001',
+            ]);
+
+        $this->mock(SoapProxy::class, static function (MockInterface $mock) use ($mockClient): void {
+            $mock->expects('withWsdl')->andReturnSelf();
+            $mock->expects('build')->andReturn($mockClient);
+        });
+
+        $resolver = $this->app->make(RutEmailResolver::class);
+
+        $this->expectException(TokenInvalidException::class);
+        $this->expectExceptionMessageIs('SII directory service rejected the authentication token.');
 
         $resolver->resolve(Rut::parse('76.123.456-7'));
     }

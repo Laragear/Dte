@@ -24,13 +24,13 @@ class DteClaimServiceTest extends DatabaseTestCase
         $certificate = new DigitalCertificate('fake', 'fake');
         $signedAt = new DateTimeImmutable;
 
-        $this->mock(ReclamoWebserviceGateway::class)->expects('accept')->with($document)->once();
+        $this->mock(ReclamoWebserviceGateway::class)->expects('accept')->with($document);
 
         $this
             ->mock(CommercialReceiptBuilder::class)
             ->expects('build')
             ->with($document, $signer, $location, $certificate, $signedAt)
-            ->once()
+
             ->andReturn('<xml>erm</xml>');
 
         $service = $this->app->make(DteClaimService::class);
@@ -88,7 +88,7 @@ class DteClaimServiceTest extends DatabaseTestCase
             ->mock(ReclamoWebserviceGateway::class)
             ->expects('accept')
             ->with($document)
-            ->once()
+
             ->andThrow(new RuntimeException('SII timeout'));
 
         $service = $this->app->make(DteClaimService::class);
@@ -97,5 +97,41 @@ class DteClaimServiceTest extends DatabaseTestCase
         $this->expectExceptionMessageIs('SII timeout');
 
         $service->accept($document, $signer, $location, $certificate, $signedAt);
+    }
+
+    public function test_rejects_for_partial_missing_goods(): void
+    {
+        $document = SiiInboundDocument::factory()->create();
+
+        $this->mock(ReclamoWebserviceGateway::class)->expects('rejectPartial')->with($document, 'partial reason');
+
+        $service = $this->app->make(DteClaimService::class);
+
+        $service->rejectPartial($document, 'partial reason');
+    }
+
+    public function test_confirms_goods_receipt(): void
+    {
+        $document = SiiInboundDocument::factory()->create();
+
+        $this->mock(ReclamoWebserviceGateway::class)->expects('confirmGoodsReceipt')->with($document, 'receipt reason');
+
+        $service = $this->app->make(DteClaimService::class);
+
+        $service->confirmGoodsReceipt($document, 'receipt reason');
+    }
+
+    public function test_throws_when_already_rejected_for_confirm(): void
+    {
+        $document = SiiInboundDocument::factory()->create([
+            'status' => InboundDteStatus::CommercialRejected,
+        ]);
+
+        $service = $this->app->make(DteClaimService::class);
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessageIs('The document has already been commercially claimed or accepted.');
+
+        $service->confirmGoodsReceipt($document);
     }
 }

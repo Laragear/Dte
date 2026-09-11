@@ -8,7 +8,7 @@ use Laragear\Dte\Actions\CreateEnvelope\CreateEnvelope;
 use Laragear\Dte\Certification\Simulation\SimulationData;
 use Laragear\Dte\Certification\TestingSet\TestSetData;
 use Laragear\Dte\Configuration\ConfigurationManager;
-use Laragear\Dte\Enums\DteType;
+use Laragear\Dte\Enums\EnvelopeStatus;
 use Laragear\Dte\Models\SiiDteEnvelope;
 
 class CompileEnvelope
@@ -31,13 +31,17 @@ class CompileEnvelope
     {
         $dynamicIssuer = $this->manager->getIssuer($data->rut);
 
+        $senderRut = $data->senderRut
+            ?? ($this->manager->hasSenderResolver() ? $this->manager->getSender($data->rut) : $data->rut);
+
         $envelope = SiiDteEnvelope::create([
             'issuer_rut' => $data->rut,
-            'sender_rut' => $data->senderRut ?? $data->rut,
+            'sender_rut' => $senderRut,
             'type' => 'normal',
-            'document_type' => DteType::DEFAULT,
+            'document_type' => $data->dtes->first()->document_type,
             'resolution_date' => $dynamicIssuer->resolutionDate,
             'resolution_number' => $dynamicIssuer->resolutionNumber,
+            'status' => EnvelopeStatus::Pending,
         ]);
 
         // Associate documents

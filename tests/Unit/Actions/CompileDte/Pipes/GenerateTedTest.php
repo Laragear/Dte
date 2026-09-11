@@ -73,12 +73,12 @@ class GenerateTedTest extends DatabaseTestCase
 
         $compilation = $this->makeCompilation();
 
-        $this->mock(CafParser::class)->expects('parse')->once()->andReturn([
+        $this->mock(CafParser::class)->expects('parse')->andReturn([
             'private_key' => 'fake_private_key',
             'xml' => '<AUTORIZACION><CAF><DA><RE>11111111-1</RE></DA></CAF></AUTORIZACION>',
         ]);
 
-        $this->mock(TimbreSigner::class)->expects('sign')->once()->andReturn('fake_signature');
+        $this->mock(TimbreSigner::class)->expects('sign')->andReturn('fake_signature');
 
         $this->pipeline(Compile::class)
             ->isolatePipe(GenerateTed::class)
@@ -109,26 +109,23 @@ class GenerateTedTest extends DatabaseTestCase
             });
     }
 
-    public function test_caf_data_stored_on_compilation(): void
+    public function test_caf_data_nulled_after_ted_generation(): void
     {
         $compilation = $this->makeCompilation();
 
-        $this->mock(CafParser::class)->expects('parse')->once()->andReturn([
+        $this->mock(CafParser::class)->expects('parse')->andReturn([
             'private_key' => 'cached_private_key',
             'xml' => '<AUTORIZACION><CAF><DA><RE>11111111-1</RE></DA></CAF></AUTORIZACION>',
         ]);
 
-        $this->mock(TimbreSigner::class)->expects('sign')->once()->andReturn('fake_signature');
+        $this->mock(TimbreSigner::class)->expects('sign')->andReturn('fake_signature');
 
         $this->pipeline(Compile::class)
             ->isolatePipe(GenerateTed::class)
             ->send($compilation)
             ->assertPassable(function (Compilation $result) {
-                static::assertSame('cached_private_key', $result->cafData['private_key']);
-                static::assertSame(
-                    '<AUTORIZACION><CAF><DA><RE>11111111-1</RE></DA></CAF></AUTORIZACION>',
-                    $result->cafData['xml']
-                );
+                static::assertNull($result->cafData);
+                static::assertNotNull($result->ted);
 
                 return true;
             });
@@ -162,7 +159,7 @@ class GenerateTedTest extends DatabaseTestCase
 
         $this->mock(CafParser::class)
             ->expects('parse')
-            ->once()
+
             ->andThrow(new InvalidArgumentException('The XML document does not contain a CAF node.'));
 
         $this->expectException(InvalidArgumentException::class);
@@ -180,8 +177,38 @@ class GenerateTedTest extends DatabaseTestCase
 
         $this->mock(CafParser::class)
             ->expects('parse')
-            ->once()
+
             ->andThrow(new RuntimeException('Unable to parse the allocated CAF XML.'));
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessageIs('Unable to parse the allocated CAF XML.');
+
+        $this->pipeline(Compile::class)
+            ->isolatePipe(GenerateTed::class)
+            ->send($compilation);
+    }
+
+    public function test_throws_when_caf_xml_load_fails(): void
+    {
+        $compilation = $this->makeCompilation();
+
+        // CafParser returns valid data but with invalid XML for DOMDocument
+        $this->mock(CafParser::class)
+            ->expects('parse')
+            ->andReturn([
+                'private_key' => 'fake_private_key',
+                'xml' => '<AUTORIZACION><CAF><DA><RE>11111111-1</RE></DA></CAF></AUTORIZACION>',
+            ]);
+
+        $this->mock(TimbreSigner::class)->expects('sign')->zeroOrMoreTimes()->andReturn('fake_signature');
+
+        // Mock XmlDomFactory to return a DOMDocument where loadXML throws
+        $mockDocument = \Mockery::mock(\DOMDocument::class);
+        $mockDocument->expects('loadXML')->andThrow(new \ErrorException('DOMDocument::loadXML(): xmlParseChunk'));
+
+        $this->mock(XmlDomFactory::class, static function (\Mockery\MockInterface $mock) use ($mockDocument) {
+            $mock->expects('document')->with('1.0', 'ISO-8859-1')->andReturn($mockDocument);
+        });
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessageIs('Unable to parse the allocated CAF XML.');

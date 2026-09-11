@@ -51,7 +51,7 @@ class YieldLazyCollectionTest extends TestCase
             $mock
                 ->expects('fgetcsv')
                 ->with($stream, null, ';')
-                ->once()
+
                 ->andReturn([
                     'Tipo Doc',
                     'Folio',
@@ -92,7 +92,7 @@ class YieldLazyCollectionTest extends TestCase
             $mock
                 ->expects('fgetcsv')
                 ->with($stream, null, ';')
-                ->once()
+
                 ->andReturn([
                     'Tipo Doc',
                     'Folio',
@@ -128,7 +128,7 @@ class YieldLazyCollectionTest extends TestCase
             $mock
                 ->expects('fgetcsv')
                 ->with($stream, null, ';')
-                ->once()
+
                 ->andReturn([
                     'Tipo Doc',
                     'Folio',

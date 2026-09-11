@@ -2,8 +2,12 @@
 
 namespace Laragear\Dte\Enums;
 
+use Illuminate\Support\Collection;
+
 enum ReferenceType: string
 {
+    use Concerns\EnumHelpers;
+
     /** Purchase Order (Orden de Compra) */
     case PurchaseOrder = '801';
 
@@ -54,4 +58,30 @@ enum ReferenceType: string
 
     /** Service Entry Sheet (Hoja de entrada de servicios) */
     case ServiceEntrySheet = 'HES';
+
+    /**
+     * Returns the label.
+     */
+    public function label(): string
+    {
+        return match($this) {
+            self::PurchaseOrder => 'Orden de Compra',
+            self::OrderNote => 'Nota de Pedido',
+            self::Contract => 'Contrato',
+            self::Resolution => 'Resolución',
+            self::ChileCompraProcess => 'Proceso ChileCompra',
+            self::ChileCompraFile => 'Ficha ChileCompra',
+            self::Dus => 'Documento Único de Salida',
+            self::BillOfLading => 'B/L (Conocimiento de Embarque)',
+            self::AirWaybill => 'Guía Aérea',
+            self::MicDta => 'Manifiesto Internacional de Carga',
+            self::Waybill => 'Carta de Porte',
+            self::SnaResolution => 'Resolución del SNA donde califica Servicios de Exportación',
+            self::Passport => 'Pasaporte',
+            self::DepositCertificate => 'Certificado de Depósito Bolsa de Productos de Chile',
+            self::PledgeVoucher => 'Vale de Prenda Bolsa de Productos de Chile',
+            self::TestSet => 'Set de Pruebas',
+            self::ServiceEntrySheet => 'Hoja de Entrada de Servicios',
+        };
+    }
 }

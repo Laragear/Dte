@@ -36,6 +36,14 @@ final readonly class SiiEndpoints
     public const string TOKEN_COOKIE = 'TOKEN';
 
     /**
+     * Reclamo webservice endpoints (Ley 19.983 acceptance/rejection).
+     * These run on separate SII hosts from the DTE SOAP endpoints.
+     */
+    public const string RECLAMO_CERTIFICATION = 'https://ws2.sii.cl/WSREGISTRORECLAMODTECERT/registroreclamodteservice';
+
+    public const string RECLAMO_PRODUCTION = 'https://ws1.sii.cl/WSREGISTRORECLAMODTE/registroreclamodteservice';
+
+    /**
      * Name of the HTTP header carrying the user agent.
      */
     public const string USER_AGENT_HEADER = 'User-Agent';

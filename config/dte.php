@@ -81,9 +81,15 @@ return [
 
     'envelopes' => [
         // Maximum number of DTE documents packaged into a single EnvioDTE XML
-        // file. Adjust based on your volume. If you're heavy hitter, you can
+        // file. Adjust based on your volume. If you're a heavy hitter, you can
         // add more but your application may crash due to memory exhaustion.
-        'max_documents' => 20,
+        'max' => [
+            'documents' => env('DTE_MAX_DOCUMENTS_DOCUMENTS', 20),
+
+            // Maximum number of Boleta (39/41) documents per EnvioBOLETA envelope.
+            // SII REST API recommends batches of ~50 boletas per upload for optimal throughput.
+            'receipts' => env('DTE_MAX_DOCUMENTS_RECEIPTS', 50),
+        ],
 
         // Delay / backoff duration (in seconds) to wait before generating or
         // dispatching the next envelope chunk. This avoids hammering the SII

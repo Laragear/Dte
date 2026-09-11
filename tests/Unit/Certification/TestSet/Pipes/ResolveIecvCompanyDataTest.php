@@ -2,7 +2,6 @@
 
 namespace Tests\Unit\Certification\TestSet\Pipes;
 
-use Illuminate\Database\Eloquent\Collection;
 use Laragear\Dte\Certification\TestingSet\Pipes\ResolveIecvCompanyData;
 use Laragear\Dte\Certification\TestingSet\TestSetData;
 use Laragear\Dte\Certification\TestingSet\TestSetSalesBook;

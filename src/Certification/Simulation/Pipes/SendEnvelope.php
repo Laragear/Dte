@@ -35,6 +35,7 @@ class SendEnvelope
         $envelope->update([
             'track_id' => $trackId,
             'status' => EnvelopeStatus::Uploaded,
+            'poll_at' => now(),
         ]);
 
         $this->event->dispatch(new EnvelopeSent($envelope));

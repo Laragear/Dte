@@ -44,7 +44,7 @@ class GenerateSimulationDtes
             DteType::CreditNote->value => 'Credit Note (61)',
         ];
 
-        $selectedTypes = empty($data->documentTypes) ? array_keys($typeLabels) : $data->documentTypes;
+        $selectedTypes = ($data->documentTypes ?? []) === [] ? array_keys($typeLabels) : $data->documentTypes;
 
         $data->dtes = SiiDte::factory([
             'issuer_rut' => $data->rut,

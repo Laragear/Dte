@@ -8,18 +8,18 @@ metadata:
 
 # Laragear Dte Build
 
-Use the `Dte` facade to create DTE depending on the type required to legally issue. Each method instances a custom builder for each document type:
+Use the `Sii{DocumentType}` facade to create a DTE depending on the type required to legally issue. Each facade instances a custom builder for each document type:
 
-| Builder                     | Description                          | Reason                              |
-|-----------------------------|--------------------------------------|-------------------------------------|
-| `Dte::invoice()`            | Electronic invoice / exempt          | Selling B2B                         |
-| `Dte::receipt()`            | Electronic receipt (boleta)          | Selling B2C                         |
-| `Dte::creditNote()`         | Credit note                          | Anull/Amends/Discount Invoice       |
-| `Dte::debitNote()`          | Debit note                           | Anull/Amend/Charge Invoice          |
-| `Dte::dispatchGuide()`      | Dispatch guide (guía de despacho)    | Moving unsold goods                 |
-| `Dte::invoiceLiquidation()` | Invoice liquidation                  | Consignment sales, Commissions      |
-| `Dte::purchaseInvoice()`    | Purchase invoice (factura de compra) | Buying from consumers/international |
-| `Dte::aecBuilder()`         | AEC (Acuse Electrónico de Cargo),    | Factoring / Cession                 |
+| Builder                        | Description                          | Reason                              |
+|--------------------------------|--------------------------------------|-------------------------------------|
+| `SiiInvoice::class`            | Electronic invoice / exempt          | Selling B2B                         |
+| `SiiReceipt::class`            | Electronic receipt (boleta)          | Selling B2C                         |
+| `SiiCreditNote::class`         | Credit note                          | Anull/Amends/Discount Invoice       |
+| `SiiDebitNote::class`          | Debit note                           | Anull/Amend/Charge Invoice          |
+| `SiiDispatchGuide::class`      | Dispatch guide (guía de despacho)    | Moving unsold goods                 |
+| `SiiInvoiceLiquidation::class` | Invoice liquidation                  | Consignment sales, Commissions      |
+| `SiiPurchaseInvoice::class`    | Purchase invoice (factura de compra) | Buying from consumers/international |
+| `SiiAecBuilder::class`         | AEC (Acuse Electrónico de Cargo),    | Factoring / Cession                 |
 
 Depending on the builder, some methods will be available and others won't. You're required to check the methods available for each builder on the source code using codebase tools available, e.g. search codebase, find nodes, etc.
 
@@ -28,17 +28,16 @@ Depending on the builder, some methods will be available and others won't. You'r
 Call `receivedBy` to set in the receipt the optional person RUT and name.
 
 ```php
-use Laragear\Dte\Facades\Dte;
+use Laragear\Dte\Facades\SiiReceipt;
 
-$invoice = Dte::receipt()
-    ->receivedBy('18.765.321-0', 'Jorge Pérez');
+$invoice = SiiReceipt::receivedBy('18.765.321-0', 'Jorge Pérez');
 ```
 
 All other documents that are not receipts, the full Business data is required. This must be done using the `ReceiverData` object and filling all required properties.
 
 ```php
 use Laragear\Dte\Data\ReceiverData;
-use Laragear\Dte\Facades\Dte;
+use Laragear\Dte\Facades\SiiInvoice;
 
 $receiver = ReceiverData::make(
     rut: '76.123.456-0',
@@ -50,8 +49,7 @@ $receiver = ReceiverData::make(
     city: 'Osorno',
 );
 
-$invoice = Dte::receipt()
-    ->receivedBy($receiver);
+$invoice = SiiInvoice::receivedBy($receiver);
 ``` 
 
 ### Eloquent Model as Receiver
@@ -75,12 +73,11 @@ class Business extends Model implements Receivable
     }
 }
 
-use Laragear\Dte\Facades\Dte;
+use Laragear\Dte\Facades\SiiInvoice;
 
 $business = Business::find(66);
 
-$invoice = Dte::receipt()
-    ->receivedBy($business);
+$invoice = SiiInvoice::receivedBy($business);
 ```
 
 ## Adding Items
@@ -88,10 +85,9 @@ $invoice = Dte::receipt()
 Use `addItem()` to add simple description-price items. If the item should be legally exempt from taxes, use `isExempt: true`.
 
 ```php
-use Laragear\Dte\Facades\Dte;
+use Laragear\Dte\Facades\SiiInvoice;
 
-$invoice = Dte::invoice()
-    ->receivedBy($business)
+$invoice = SiiInvoice::receivedBy($business)
     ->addItem('Crema de Leche', 12_000)
     ->addItem('Clases de ordeñamiento', 56_000, isExempt: true)
     ->create();
@@ -101,7 +97,7 @@ For more control on the item to be added (price per unit, quantity, description,
 
 ```php
 use Laragear\Dte\Data\Item;
-use Laragear\Dte\Facades\Dte;
+use Laragear\Dte\Facades\SiiInvoice;
 
 $item = Item::make(
     name: 'Crema de Leche', 
@@ -110,8 +106,7 @@ $item = Item::make(
     discountPercentage: 0.15
 );
 
-$invoice = Dte::invoice()
-    ->receivedBy('76.543.210-K', 'Helados S.A.')
+$invoice = SiiInvoice::receivedBy('76.543.210-K', 'Helados S.A.')
     ->addItem($item)
     ->create();
 ```
@@ -123,7 +118,9 @@ Implement the `Laragear\Dte\Contracts\Itemable` interface on models that can be 
 ```php
 use Illuminate\Database\Eloquent\Model;
 use Laragear\Dte\Contracts\Itemable;
-use Laragear\Dte\Data\Item;use Laragear\Dte\Data\ReceiverData;
+use Laragear\Dte\Data\Item;
+use Laragear\Dte\Data\ReceiverData;
+use Laragear\Dte\Facades\SiiInvoice;
 
 class Product extends Model implements Itemable
 {
@@ -137,12 +134,11 @@ class Product extends Model implements Itemable
     }
 }
 
-use Laragear\Dte\Facades\Dte;
+use Laragear\Dte\Facades\SiiInvoice;
 
 $item = Product::find(4658);
 
-$invoice = Dte::receipt()
-    ->addItem($item);
+$invoice = SiiInvoice::addItem($item);
 ```
 
 ## Persistence
@@ -150,10 +146,9 @@ $invoice = Dte::receipt()
 Use the `create()` to persist the DTE into the database. The method returns an `Laragear\Dte\Models\SiiDte` model instance. Consider this instance as **READ-ONLY**. Use the model instance for later reference: attaching it to a purchase order, cart, internal invoicing/receipt, ERP ingress/egress registration, accounting API, etc.
 
 ```php
-use Laragear\Dte\Facades\Dte;
+use Laragear\Dte\Facades\SiiInvoice;
 
-$invoice = Dte::invoice()
-    ->receivedBy($business)
+$invoice = SiiInvoice::receivedBy($business)
     ->addItem('Crema de Leche', 12_000)
     ->create();
 ```
@@ -161,10 +156,9 @@ $invoice = Dte::invoice()
 If the user requires printing a PDF immediately, use the `sync: true`. The operation will take a few seconds. The PDF will be able to be generated using `pdf()->generate()`.
 
 ```php
-use Laragear\Dte\Facades\Dte;
+use Laragear\Dte\Facades\SiiInvoice;
 
-$invoice = Dte::invoice()
-    ->receivedBy($business)
+$invoice = SiiInvoice::receivedBy($business)
     ->addItem('Crema de Leche', 12_000)
     ->create(sync: true);
 

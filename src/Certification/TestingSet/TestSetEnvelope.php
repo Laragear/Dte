@@ -14,9 +14,10 @@ class TestSetEnvelope extends Pipeline
      * @var array
      */
     protected $pipes = [
-        EnsureDtesCompiled::class,
         Pipes\RetrievePendingSiiDte::class,
-        CompileEnvelope::class, // Reuse the pipeline from the simulation
+        EnsureDtesCompiled::class,
+        Pipes\ValidateTestSetReferences::class,
+        CompileEnvelope::class,
         Pipes\SendTestingEnvelope::class,
     ];
 }

@@ -18,7 +18,6 @@ use RuntimeException;
 use SoapClient;
 use Throwable;
 use function is_object;
-use function sleep;
 use function sprintf;
 use function trim;
 

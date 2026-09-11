@@ -35,7 +35,7 @@ class CanonicalizeXmlTest extends DatabaseTestCase
         $this
             ->mock(XmlCanonicalizer::class)
             ->expects('canonicalize')
-            ->once()
+
             ->with($originalDocument)
             ->andReturn($canonicalizedXml);
 
@@ -72,7 +72,7 @@ class CanonicalizeXmlTest extends DatabaseTestCase
         $this->mock(XmlCanonicalizer::class, function (MockInterface $mock) use ($originalDocument, $invalidXml) {
             $mock
                 ->expects('canonicalize')
-                ->once()
+
                 ->with($originalDocument)
                 ->andReturn($invalidXml);
         });

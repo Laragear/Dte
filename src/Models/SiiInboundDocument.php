@@ -168,10 +168,26 @@ class SiiInboundDocument extends Model
     }
 
     /**
-     * Reject this vendor invoice due to missing goods (Reclamo Falta de Mercaderías).
+     * Reject this vendor invoice due to missing goods (Reclamo Falta Total de Mercaderías).
      */
     public function rejectGoods(string $reason = ''): void
     {
         app(DteClaimService::class)->rejectGoods($this, $reason);
+    }
+
+    /**
+     * Reject this vendor invoice due to partially missing goods (Falta Parcial).
+     */
+    public function rejectPartial(string $reason = ''): void
+    {
+        app(DteClaimService::class)->rejectPartial($this, $reason);
+    }
+
+    /**
+     * Confirm receipt of goods or services (Acuse de Recibo de Mercaderías).
+     */
+    public function confirmGoodsReceipt(string $reason = ''): void
+    {
+        app(DteClaimService::class)->confirmGoodsReceipt($this, $reason);
     }
 }

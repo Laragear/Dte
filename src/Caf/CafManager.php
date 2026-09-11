@@ -73,7 +73,7 @@ class CafManager
         try {
             $contents = $this->files->get($path);
         } catch (FileNotFoundException $e) {
-            throw new RuntimeException("Unable to read the CAF file at [$path].", 0, $e);
+            throw new RuntimeException("Unable to read the CAF file at [$path].", previous: $e);
         }
 
         return $this->store($contents);
@@ -132,17 +132,7 @@ class CafManager
             ->whereNotDepleted()
             ->orderBy('folio_from')
             ->lockForUpdate()
-            ->firstOr([
-                'id',
-                'rut_num',
-                'rut_vd',
-                'document_type',
-                'folio_from',
-                'folio_to',
-                'folio_current',
-                'folio_annuled',
-                'authorized_on',
-            ], function () use ($issuer, $documentType): never {
+            ->firstOr(function () use ($issuer, $documentType): never {
                 $this->event->dispatch(new CafDepleted($issuer, $documentType));
 
                 throw new DepletionException(

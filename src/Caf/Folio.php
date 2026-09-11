@@ -90,7 +90,8 @@ class Folio
             if (is_array($folio)) {
                 [$from, $to] = self::range($folio);
             } else {
-                $from = $to = (int) $folio;
+                $to = (int) $folio;
+                $from = $to;
             }
 
             $merged = $this->insertRange($merged, $from, $to);
@@ -118,12 +119,6 @@ class Folio
         $carryTo = null;
 
         foreach ($ranges as [$a, $b]) {
-            if ($carryFrom !== null && $from > $carryTo + 1) {
-                $result[] = [$carryFrom, $carryTo];
-                $carryFrom = null;
-                $carryTo = null;
-            }
-
             if ($carryFrom === null && $from > $b + 1) {
                 $result[] = [$a, $b];
                 continue;

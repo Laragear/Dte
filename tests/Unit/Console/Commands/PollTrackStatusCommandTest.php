@@ -26,38 +26,38 @@ class PollTrackStatusCommandTest extends DatabaseTestCase
         $this->app->make('config')->set('dte.queue.track.connection', 'database');
         $this->app->make('config')->set('dte.queue.track.name', 'dte-queue');
 
-        // Should be queued
+        // Should be queued (poll_at in the past)
         $envelope1 = SiiDteEnvelope::factory()->create([
             'status' => EnvelopeStatus::Uploaded,
             'track_id' => '123456789',
-            'updated_at' => now()->subMinutes(35),
+            'poll_at' => now()->subMinute(),
         ]);
 
         $envelope2 = SiiDteEnvelope::factory()->create([
             'status' => EnvelopeStatus::Uploaded,
             'track_id' => '987654321',
-            'updated_at' => now()->subMinutes(35),
+            'poll_at' => now()->subMinute(),
         ]);
 
         // Should be ignored (no track id)
         SiiDteEnvelope::factory()->create([
             'status' => EnvelopeStatus::Uploaded,
             'track_id' => null,
-            'updated_at' => now()->subMinutes(35),
+            'poll_at' => now()->subMinute(),
         ]);
 
         // Should be ignored (wrong status)
         SiiDteEnvelope::factory()->create([
             'status' => EnvelopeStatus::Pending,
             'track_id' => '555555555',
-            'updated_at' => now()->subMinutes(35),
+            'poll_at' => now()->subMinute(),
         ]);
 
-        // Should be ignored (too new)
+        // Should be ignored (poll_at is in the future — not yet due)
         SiiDteEnvelope::factory()->create([
             'status' => EnvelopeStatus::Uploaded,
-            'track_id' => '666666666', // Different from above
-            'updated_at' => now(), // Right now
+            'track_id' => '666666666',
+            'poll_at' => now()->addMinutes(5),
         ]);
 
         $this
@@ -93,13 +93,13 @@ class PollTrackStatusCommandTest extends DatabaseTestCase
         SiiDteEnvelope::factory()->create([
             'status' => EnvelopeStatus::Uploaded,
             'track_id' => '111111111',
-            'updated_at' => now()->subMinutes(35),
+            'poll_at' => now()->subMinute(),
         ]);
 
         SiiDteEnvelope::factory()->create([
             'status' => EnvelopeStatus::Uploaded,
             'track_id' => '222222222',
-            'updated_at' => now()->subMinutes(35),
+            'poll_at' => now()->subMinute(),
         ]);
 
         $this

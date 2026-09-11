@@ -2,10 +2,8 @@
 
 namespace Tests\Unit\Certification\TestSet;
 
-use Laragear\Dte\Certification\Pipes\EnsureDtesCompiled;
 use Laragear\Dte\Certification\TestingSet\Pipes\OutputIecvPurchases;
 use Laragear\Dte\Certification\TestingSet\Pipes\ResolveIecvCompanyData;
-use Laragear\Dte\Certification\TestingSet\Pipes\RetrievePendingSiiDte;
 use Laragear\Dte\Certification\TestingSet\Pipes\SendTestingIecv;
 use Laragear\Dte\Certification\TestingSet\TestSetPurchasesBook;
 use Laragear\MetaTesting\Pipeline\InteractsWithPipelines;
@@ -18,8 +16,6 @@ class TestSetPurchasesBookTest extends TestCase
     public function test_check_pipes_order(): void
     {
         $this->pipeline(TestSetPurchasesBook::class)->assertPipes([
-            EnsureDtesCompiled::class,
-            RetrievePendingSiiDte::class,
             ResolveIecvCompanyData::class,
             OutputIecvPurchases::class,
             SendTestingIecv::class,

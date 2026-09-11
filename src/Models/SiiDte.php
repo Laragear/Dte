@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\UseFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
+use Illuminate\Database\Eloquent\Casts\AsFluent;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -15,12 +16,18 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 use Laragear\Dte\Builders\AecCessionBuilder;
+use Laragear\Dte\Builders\CreditNoteBuilder;
+use Laragear\Dte\Builders\DebitNoteBuilder;
+use Laragear\Dte\Builders\DispatchGuideBuilder;
 use Laragear\Dte\Builders\DocumentBuilder;
+use Laragear\Dte\Builders\InvoiceBuilder;
+use Laragear\Dte\Builders\InvoiceLiquidationBuilder;
+use Laragear\Dte\Builders\PurchaseInvoiceBuilder;
+use Laragear\Dte\Builders\ReceiptBuilder;
 use Laragear\Dte\Caf\Exceptions\CafNotFoundException;
 use Laragear\Dte\Database\Factories\SiiDteFactory;
 use Laragear\Dte\Enums\DteStatus;
 use Laragear\Dte\Enums\DteType;
-use Laragear\Dte\Facades\Dte as DteFacade;
 use Laragear\Dte\Models\Concerns\HasDocumentType;
 use Laragear\Dte\Models\Concerns\HasSiiStatus;
 use Laragear\Dte\Pdf\PdfBuilder;
@@ -28,6 +35,7 @@ use Laragear\Rut\Eloquent\RutAttribute;
 use Laragear\Rut\Rut;
 use LogicException;
 use function app;
+use function filled;
 
 /**
  * Stores the queryable header and lifecycle of an emitted DTE.
@@ -47,6 +55,7 @@ use function app;
  * @property Rut $receiver_rut
  * @property DteType $document_type
  * @property int|null $folio
+ * @property \Illuminate\Support\Fluent|null $metadata
  * @property Carbon|null $issued_on
  * @property int $amount_net
  * @property int $amount_exempt
@@ -72,6 +81,7 @@ use function app;
     'receiver_rut',
     'document_type',
     'folio',
+    'metadata',
     'issued_on',
     'amount_net',
     'amount_exempt',
@@ -98,6 +108,7 @@ class SiiDte extends Model
     protected $casts = [
         'pack_retries' => 'integer',
         'document_type' => DteType::class,
+        'metadata' => AsFluent::class,
         'issued_on' => 'date',
         'status' => DteStatus::class,
         'repairs' => 'array',
@@ -228,11 +239,29 @@ class SiiDte extends Model
      */
 
     /**
+     * Checks if the DTE can be deleted.
+     */
+    public function isReadOnly(): bool
+    {
+        // If the DTE is pending CAF assignment, we will not allow it to be deleted.
+        return $this->status !== DteStatus::Pending;
+    }
+
+    /**
+     * Checks if the DTE cannot be deleted.
+     */
+    public function isNotReadOnly(): bool
+    {
+        return !$this->isDeletable();
+    }
+
+    /**
      * Check if the document was accepted but contains SII repairs/rejections.
      */
     public function isAcceptedWithRepairs(): bool
     {
-        return $this->status === DteStatus::Accepted && !empty($this->repairs);
+        return $this->status === DteStatus::Accepted
+            && filled($this->repairs);
     }
 
     /**
@@ -282,7 +311,20 @@ class SiiDte extends Model
      */
     public function retry(): DocumentBuilder
     {
-        return DteFacade::retry($this);
+        $builder = match ($this->document_type) {
+            DteType::Invoice, DteType::InvoiceExempt => app(InvoiceBuilder::class),
+            DteType::Receipt => app(ReceiptBuilder::class),
+            DteType::CreditNote => app(CreditNoteBuilder::class),
+            DteType::DebitNote => app(DebitNoteBuilder::class),
+            DteType::DispatchGuide => app(DispatchGuideBuilder::class),
+            DteType::PurchaseInvoice => app(PurchaseInvoiceBuilder::class),
+            DteType::InvoiceLiquidation => app(InvoiceLiquidationBuilder::class),
+            default => throw new LogicException(
+                "DTE type [{$this->document_type->value}] does not support retry.",
+            ),
+        };
+
+        return $builder->hydrate($this);
     }
 
     /**

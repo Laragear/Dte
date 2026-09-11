@@ -37,7 +37,7 @@ class AwsSesDriverTest extends TestCase
                     'Prefix' => 'emails/unread/',
                     'MaxKeys' => 50,
                 ])
-                ->once()
+
                 ->andReturn([
                     'Contents' => [
                         ['Key' => 'emails/unread/msg1'],
@@ -49,7 +49,7 @@ class AwsSesDriverTest extends TestCase
             $mock
                 ->expects('getObject')
                 ->with(['Bucket' => 'test-bucket', 'Key' => 'emails/unread/msg1'])
-                ->once()
+
                 ->andReturn([
                     'Body' => "Message-ID: <msg1>\r\nFrom: sender@domain.com\r\nSubject: Test 1\r\n"
                         ."Content-Type: multipart/mixed; boundary=\"b1\"\r\n\r\n"
@@ -63,7 +63,7 @@ class AwsSesDriverTest extends TestCase
             $mock
                 ->expects('getObject')
                 ->with(['Bucket' => 'test-bucket', 'Key' => 'emails/unread/msg2'])
-                ->once()
+
                 ->andReturn([
                     'Body' => "Message-ID: <msg2>\r\nFrom: sender2@domain.com\r\nSubject: Test 2\r\n"
                         ."Content-Type: multipart/mixed; boundary=\"b2\"\r\n\r\n"
@@ -77,7 +77,7 @@ class AwsSesDriverTest extends TestCase
             $mock
                 ->expects('getObject')
                 ->with(['Bucket' => 'test-bucket', 'Key' => 'emails/unread/msg3'])
-                ->once()
+
                 ->andReturn(['Body' => "No valid headers\r\n\r\nEmpty body"]);
         });
 
@@ -112,7 +112,7 @@ class AwsSesDriverTest extends TestCase
                     'CopySource' => 'test-bucket/emails/unread/msg1',
                     'Key' => 'emails/read/msg1',
                 ])
-                ->once();
+                ;
 
             $mock
                 ->expects('deleteObject')
@@ -120,7 +120,7 @@ class AwsSesDriverTest extends TestCase
                     'Bucket' => 'test-bucket',
                     'Key' => 'emails/unread/msg1',
                 ])
-                ->once();
+                ;
         });
 
         $this->app->instance(SesClient::class, null);

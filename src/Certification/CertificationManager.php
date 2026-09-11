@@ -69,11 +69,11 @@ class CertificationManager
     /**
      * Executes the Test Set using pre-made DTEs provided by the end-user.
      */
-    public function testSetUsing(Rut|string $rut, Collection $dtes): TestSetData
+    public function testSetUsing(Rut|string $rut, Collection|array $dtes): TestSetData
     {
         $this->ensureCertificationAllowed();
 
-        $data = new TestSetData(Rut::parse($rut), dtes: $dtes);
+        $data = new TestSetData(Rut::parse($rut), dtes: Collection::wrap($dtes));
 
         return $this->app->make(TestSetEnvelope::class)->send($data)->thenReturn();
     }
@@ -104,12 +104,15 @@ class CertificationManager
 
     /**
      * Executes the Test Set for Purchases Book.
+     *
+     * @param  array<int, IecvPurchaseData>  $entries
+     * @param  array<int, IecvPropertyData>  $properties
      */
-    public function purchasesBookTestSet(Rut|string $rut, array $dteIds = []): TestSetData
+    public function purchasesBookTestSet(Rut|string $rut, array $entries, array $properties = []): TestSetData
     {
         $this->ensureCertificationAllowed();
 
-        $data = new TestSetData(Rut::parse($rut), $dteIds);
+        $data = new TestSetData(Rut::parse($rut), purchaseEntries: $entries, properties: $properties);
 
         return $this->app->make(TestSetPurchasesBook::class)->send($data)->thenReturn();
     }
@@ -188,7 +191,9 @@ class CertificationManager
     {
         $this->ensureCertificationAllowed();
 
-        $this->app->make(SchemaBuilder::class)->disableForeignKeyConstraints();
+        $schemaBuilder = $this->app->make(SchemaBuilder::class);
+
+        $schemaBuilder->disableForeignKeyConstraints();
 
         try {
             SiiAecCession::truncate();
@@ -201,7 +206,7 @@ class CertificationManager
             SiiDte::truncate();
             SiiCaf::truncate();
         } finally {
-            $this->app->make(SchemaBuilder::class)->enableForeignKeyConstraints();
+            $schemaBuilder->enableForeignKeyConstraints();
         }
     }
 }

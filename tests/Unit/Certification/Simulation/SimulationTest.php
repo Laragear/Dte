@@ -18,8 +18,8 @@ class SimulationTest extends TestCase
     public function test_check_pipes_order(): void
     {
         $this->pipeline(Simulation::class)->assertPipes([
-            EnsureDtesCompiled::class,
             GenerateSimulationDtes::class,
+            EnsureDtesCompiled::class,
             CompileEnvelope::class,
             SendEnvelope::class,
         ]);

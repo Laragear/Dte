@@ -3,7 +3,6 @@
 namespace Tests\Unit\Console\Commands;
 
 use Illuminate\Database\Eloquent\ModelNotFoundException;
-use Laragear\Dte\Actions\CompileDte\Compilation;
 use Laragear\Dte\Actions\CompileDte\Compile;
 use Laragear\Dte\Models\SiiDte;
 use Tests\DatabaseTestCase;
@@ -20,8 +19,8 @@ class CompileDteXmlCommandTest extends DatabaseTestCase
             ->withArgs(function (SiiDte $sent) use ($dte): bool {
                 return $sent->is($dte);
             })
-            ->once()
-            ->andReturn(new Compilation($dte));
+
+            ->andReturn($dte);
 
         $this
             ->artisan('dte:compile', ['dte_id' => $dte->getKey()])

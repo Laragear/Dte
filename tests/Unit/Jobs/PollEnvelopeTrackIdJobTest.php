@@ -994,4 +994,54 @@ class PollEnvelopeTrackIdJobTest extends DatabaseTestCase
                 && $redispatch->delay->getTimestamp() >= now()->addSeconds(360)->getTimestamp() - 5;
         });
     }
+
+    /*
+     |---------- | Boleta Retry-After header | ---------- |
+     */
+
+    public function test_boleta_processing_uses_retry_after_header_value(): void
+    {
+        // Line 390: $retryAfter when X-Retry-After header is > 0
+        $envelope = SiiDteEnvelope::factory()->hasPayload(['sii_response' => null])->create([
+            'status' => EnvelopeStatus::Uploaded,
+            'track_id' => '67890',
+            'type' => 'boleta',
+        ]);
+
+        Http::fake([
+            '*/boleta.electronica.semilla' => Http::response(
+                '<RESP_BODY><SEMILLA>123</SEMILLA></RESP_BODY>',
+                200,
+                ['Content-Type' => 'application/xml']
+            ),
+            '*/boleta.electronica.token' => Http::response(
+                '<RESP_BODY><TOKEN>FAKE_TOKEN</TOKEN></RESP_BODY>',
+                200,
+                ['Content-Type' => 'application/xml']
+            ),
+            '*/boleta.electronica.envio/*' => Http::response(
+                ['estado' => 'PRD'],
+                200,
+                ['X-Retry-After' => '90']
+            ),
+        ]);
+
+        $this->mock(CertificateResolverInterface::class, static function ($mock): void {
+            $fixture = CertificateFixture::create();
+            $cert = new DigitalCertificate(file_get_contents($fixture->path), $fixture->password);
+            $mock->expects('resolve')->andReturn($cert);
+        });
+
+        $queue = Queue::fake([PollEnvelopeTrackIdJob::class]);
+
+        $job = new PollEnvelopeTrackIdJob($envelope);
+        $this->app->call($job->handle(...));
+
+        // The X-Retry-After header value (90) should be used as the delay
+        $queue->assertPushed(PollEnvelopeTrackIdJob::class, static function (PollEnvelopeTrackIdJob $redispatch): bool {
+            return $redispatch->delay !== null
+                && $redispatch->delay->getTimestamp() >= now()->addSeconds(90)->getTimestamp()
+                && $redispatch->delay->getTimestamp() <= now()->addSeconds(91)->getTimestamp();
+        });
+    }
 }

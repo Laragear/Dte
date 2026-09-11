@@ -124,25 +124,26 @@ class MakeFakeCafCommandTest extends DatabaseTestCase
 
         $fakeCaf = static::getStub('FakeCaf.xml');
 
-        $openSsl = $this->mock(OpenSslProxy::class)->makePartial();
+        $this->partialMock(OpenSslProxy::class, static function (MockInterface $mock): void {
+            $mock->expects('pkeyExport')
+                ->with(
+                    Mockery::type(OpenSSLAsymmetricKey::class),
+                    Mockery::on(function (string &$privateKey): bool {
+                        $privateKey = 'test-private-key';
 
-        $openSsl->expects('pkeyExport')
-            ->with(
-                Mockery::type(OpenSSLAsymmetricKey::class),
-                Mockery::on(function (string &$privateKey): bool {
-                    $privateKey = 'test-private-key';
+                        return true;
+                    })
+                );
 
-                    return true;
-                })
-            );
+            $mock->expects('pkeyGetDetails')->andReturn([
+                'rsa' => [
+                    'n' => 'test-n-value',
+                    'e' => 'test-e-value',
+                ],
+                'key' => 'test-public-key',
+            ]);
 
-        $openSsl->expects('pkeyGetDetails')->andReturn([
-            'rsa' => [
-                'n' => 'test-n-value',
-                'e' => 'test-e-value',
-            ],
-            'key' => 'test-public-key',
-        ]);
+        });
 
         $this
             ->artisan('dte:make-fake-caf')

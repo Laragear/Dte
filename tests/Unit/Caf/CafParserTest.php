@@ -263,4 +263,24 @@ class CafParserTest extends TestCase
 
         $this->parser->parse('<AUTORIZACION>');
     }
+
+    public function test_rejects_date_when_create_from_format_returns_null(): void
+    {
+        $this->openSsl->expects('privateKeyDetails')->never();
+
+        $mockDateFactory = $this->mock(\Illuminate\Support\DateFactory::class);
+        $mockDateFactory->expects('createFromFormat')->andReturn(null);
+
+        $parser = new CafParser(
+            $this->app->make(\Laragear\Dte\Support\XmlDomFactory::class),
+            $this->openSsl,
+            $mockDateFactory,
+        );
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageIs('The CAF element [.//DA/FA] must use YYYY-MM-DD format.');
+
+        $xml = str_replace('<FA>2026-08-01</FA>', '<FA>2026-08-01</FA>', CafFixture::create()->xml());
+        $parser->parse($xml);
+    }
 }

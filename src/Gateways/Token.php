@@ -22,7 +22,7 @@ class Token
      */
     public function isExpired(): bool
     {
-        return app(DateFactory::class)->now('America/Santiago')->toDateTimeImmutable() >= $this->expiresAt;
+        return app(DateFactory::class)->now()->toDateTimeImmutable() >= $this->expiresAt;
     }
 
     /**
@@ -34,12 +34,36 @@ class Token
     }
 
     /**
+     * Returns a serializable representation of the object.
+     *
+     * @return array{value: string, expires_at: int}
+     */
+    public function __serialize(): array
+    {
+        return [
+            'value' => $this->value,
+            'expires_at' => $this->expiresAt->getTimestamp(),
+        ];
+    }
+
+    /**
+     * Fills the object from serialized data.
+     *
+     * @param  array{value: string, expires_at: int}  $data
+     */
+    public function __unserialize(array $data): void
+    {
+        $this->value = $data['value'];
+        $this->expiresAt = DateTimeImmutable::createFromTimestamp($data['expires_at']);
+    }
+
+    /**
      * Create a token that expires in the given seconds.
      */
     public static function fromString(string $token, int $ttlSeconds): static
     {
         return new self(
-            $token, app(DateFactory::class)->now('America/Santiago')->addSeconds($ttlSeconds)->toDateTimeImmutable()
+            $token, app(DateFactory::class)->now()->addSeconds($ttlSeconds)->toDateTimeImmutable()
         );
     }
 }

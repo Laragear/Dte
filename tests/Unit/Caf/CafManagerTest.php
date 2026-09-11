@@ -3,6 +3,7 @@
 namespace Tests\Unit\Caf;
 
 use Illuminate\Support\Carbon;
+use InvalidArgumentException;
 use Laragear\Dte\Caf\CafManager;
 use Laragear\Dte\Caf\Exceptions\CafNotFoundException;
 use Laragear\Dte\Caf\Exceptions\DepletionException;
@@ -266,5 +267,23 @@ class CafManagerTest extends DatabaseTestCase
 
         $this->app->make(CafManager::class)
             ->annulFolios($caf2->rut, DteType::Invoice, 'Daños', [15, 16]);
+    }
+
+    public function test_throws_when_no_folios_to_annul(): void
+    {
+        $caf = SiiCaf::factory()->create([
+            'document_type' => DteType::Invoice,
+            'folio_from' => 10,
+            'folio_to' => 20,
+            'folio_current' => 12,
+            'folio_annuled' => [],
+            'expires_on' => now()->addDays(10),
+        ]);
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageIs('No folios given to annul.');
+
+        $this->app->make(CafManager::class)
+            ->annulFolios($caf->rut, DteType::Invoice, 'No reason', []);
     }
 }

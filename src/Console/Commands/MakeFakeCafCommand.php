@@ -75,7 +75,13 @@ class MakeFakeCafCommand extends Command
      */
     protected function getDteType(): DteType
     {
-        return DteType::tryFrom((int) $this->option('type'))
+        $option = $this->option('type');
+
+        if ($option instanceof DteType) {
+            return $option;
+        }
+
+        return DteType::tryFrom((int) $option)
             ?? $this->fail("Invalid DTE type provided: {$this->option('type')}");
     }
 

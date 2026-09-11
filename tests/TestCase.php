@@ -4,7 +4,15 @@ namespace Tests;
 
 use Laragear\Dte\DteServiceProvider;
 use Laragear\Dte\Facades\Certificate;
-use Laragear\Dte\Facades\Dte;
+use Laragear\Dte\Facades\SiiInvoice;
+use Laragear\Dte\Facades\SiiReceipt;
+use Laragear\Dte\Facades\SiiCreditNote;
+use Laragear\Dte\Facades\SiiDebitNote;
+use Laragear\Dte\Facades\SiiDispatchGuide;
+use Laragear\Dte\Facades\SiiPurchaseInvoice;
+use Laragear\Dte\Facades\SiiInvoiceLiquidation;
+use Laragear\Dte\Facades\SiiAec;
+use Laragear\Dte\Facades\SiiAecCession;
 use Laragear\Rut\RutServiceProvider;
 use Orchestra\Testbench\TestCase as BaseTestCase;
 use Override;
@@ -30,7 +38,15 @@ class TestCase extends BaseTestCase
     {
         return [
             Certificate::class,
-            Dte::class,
+            SiiInvoice::class,
+            SiiReceipt::class,
+            SiiCreditNote::class,
+            SiiDebitNote::class,
+            SiiDispatchGuide::class,
+            SiiPurchaseInvoice::class,
+            SiiInvoiceLiquidation::class,
+            SiiAec::class,
+            SiiAecCession::class,
         ];
     }
 

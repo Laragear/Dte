@@ -159,92 +159,71 @@ Each entry specifies: document type, folio number, description, amounts, and som
 
 #### Step 1a — Create DTEs from test set instructions
 
-For each entry in the test set, create a DTE in your database. The **receiver RUT is always `60803000-K`** (the SII itself), and each DTE must include a reference line identifying the test case.
+For each entry in the test set, create a DTE in your database. The **receiver RUT** should be a valid customer RUT; use different RUTs for different invoices (do not repeat them), as the SII instructs, so you'll need to find real businesses with their apropiate data. 
 
-**Using DocumentBuilder (recommended):**
+Use `forTestCase()` to mark a DTE as part of a test set case. This adds the required SET/CASO reference line automatically:
 
 ```php
-use Laragear\Dte\Facades\Dte;
-use Laragear\Dte\Enums\DteType;
-use Laragear\Dte\Data\ReferenceData;
+use App\Models\Business;
+use Laragear\Dte\Facades\SiiInvoice;
+use Laragear\Dte\Facades\SiiCreditNote;
 
-// Create each DTE from the test set
-$dte = Dte::invoice()
-    ->issuedBy('76.123.456-0')          // your company RUT
-    ->receivedBy('60.803.000-K')        // SII RUT (always this for certification)
-    ->addItem(item: 'FACTURA DEL GIRO CON DERECHO A CREDITO', unitPrice: 10221, quantity: 1)
-    ->addReference(new ReferenceData(
-        documentType: 'SET',            // literal "SET"
-        folio: '32',                    // folio from test set
-        date: now(),
-        reason: 'CASO 1234-1',          // case number from your test set
-    ))
+// Create an invoice for the test set
+$dte = SiiInvoice::issuedBy('76.123.456-0')     // your company RUT
+    ->receivedBy(Business::find(1))             // a customer RUT (distinct per invoice)
+    ->addItem(item: 'Cajón AFECTO', unitPrice: 1599, quantity: 135)
+    ->forTestCase('5034081-1')                  // marks as CASO 5034081-1
+    ->create();
+
+// Credit note referencing an original invoice
+$dte = SiiCreditNote::issuedBy('76.123.456-0')
+    ->receivedBy(Business::find(2))
+    ->forTestCase('5034081-5')
+    ->annul(SiiDte::find(1), reason: 'CORRIGE GIRO DEL RECEPTOR')
     ->create();
 ```
 
-**Using SiiDte model directly:**
-
-```php
-use Laragear\Dte\Models\SiiDte;
-use Laragear\Dte\Enums\DteType;
-
-$dte = SiiDte::create([
-    'issuer_rut'    => '76.123.456-0',
-    'receiver_rut'  => '60.803.000-K',  // SII RUT
-    'document_type' => DteType::Invoice,
-    'folio'         => 32,              // from test set
-    'issued_on'     => now(),
-    'amount_net'    => 10221,
-    'amount_taxes'  => 2114,            // 10335 - 10221
-    'amount_total'  => 10335,
-    'amount_exempt' => 0,
-]);
-```
+The `forTestCase()` prepends a reference line with `TpoDocRef="SET"` and `RazonRef="CASO xxxxx-x"` on every `references()` call — this survives correction methods like `annul()` that replace the reference list.
 
 > [!IMPORTANT]
 >
-> **Reference line required.** Each DTE must include a reference with:
-> - `TpoDocRef` = `"SET"` (literal string)
-> - `RazonRef` = `"CASO {number}"` (the case number from your test set)
+> **Reference line required.** The first reference of every test set DTE must have:
+> - `TpoDocRef` = `"SET"` (handled by `forTestCase()`)
+> - `RazonRef` = `"CASO xxxxx-x"` (handled by `forTestCase()`)
 >
-> Credit notes referencing original invoices should add the invoice reference on line 2.
+> Credit notes referencing original invoices add the invoice reference on line 2 (via `annul()` or `addReference()`).
 
-#### Step 1b — Upload the DTEs to SII
+#### Step 1b — Upload the Test Set as an EnvioDTE envelope
 
-After creating all DTEs from the test set, upload them using their IDs **in the same order as the test set**:
+After creating all DTEs, send them as a batch envelope. The library validates SET/CASO references, sorts documents in case order, and uploads via the SII certification endpoint:
 
 ```php
 $testData = $manager->testSet('76.123.456-0', [1, 2, 3, 4, 5, 6, 7]);
 
-echo $testData->envelope->trackId;  // Track ID to poll for status
+$trackId = $testData->envelope->trackId;  // Track ID to poll for status
+$status = $testData->envelope->status;   // Current envelope status
 ```
 
-Alternatively, pass the DTE collection directly with `testSetUsing()`:
+The manager automatically:
+
+1. Retrieves the DTEs by ID (filtering to `pending`, `signed`, `sent`, or `accepted` status).
+2. **Validates** each DTE has the SET/CASO reference on line 1, or throws with guidance.
+3. **Sorts** documents by case number from the `CASO xxxxx-x` reason.
+4. Compiles any unsigned DTEs.
+5. Creates an envelope with `RutReceptor = 60803000-K` (SII), mixed document types, and one `SubTotDTE` per type with per-type counts.
+6. Signs each DTE (RSA-SHA1, C14N), signs the `SetDTE`, uploads to `https://maullin.sii.cl/cgi_dte/UPL/DTEUpload`, and returns the **TrackID**.
+
+Alternatively, pass a pre-built collection or array directly if you need to build each DTE separately.
 
 ```php
-use Illuminate\Database\Eloquent\Collection;
+use Laragear\Dte\Facades\SiiCreditNote;use Laragear\Dte\Facades\SiiInvoice;
 
-$dtes = SiiDte::whereKey([1, 2, 3, 4, 5, 6, 7])->get();
+$dtes = [
+    // ...
+]
 
 $testData = $manager->testSetUsing('76.123.456-0', $dtes);
 ```
-
-> [!NOTE]
->
-> **DTEs are auto-compiled.** The manager compiles any DTEs without signed XML before uploading.
-
-#### Sub-step 1b — Send the EnvioDTE envelope (DTE Test Set)
-
-After all DTEs from the test set are created, upload them as a batch envelope:
-
-```php
-$testData = $manager->testSet('76.123.456-0', [1, 2, 3, 4]);
-
-echo $testData->envelope->trackId;  // The Track ID to poll in SII endpoints
-echo $testData->envelope->status;   // Current envelope status
-```
-
-The manager wraps the DTEs into a compliant `EnvioDTE` XML (`EnvioDTE_v10.xsd`), signs each DTE (RSA-SHA1, C14N) and the envelope, uploads via HTTP multipart to `https://maullin.sii.cl/cgi_dte/UPL/DTEUpload`, and returns the **TrackID**.
 
 Poll the result using the `dte:poll-track-status` Artisan Command, or programmatically:
 
@@ -254,72 +233,106 @@ use Laragear\Dte\Jobs\PollEnvelopeTrackIdJob;
 PollEnvelopeTrackIdJob::dispatchSync($testData->envelope);
 ```
 
+Otherwise, you may want to schedule it for each minute to check 
+
 #### Sub-step 1c — Build and upload the IECV (Sales Book)
 
-The Sales Book (`Libro de Ventas` / IEV) lists every sales document the company issued during the test period. Use the `salesBookTestSet()` with the ids of the documents made from prior step.
+The Sales Book (`Libro de Ventas` / IEV) lists every sales document the company issued during the test period. Only **reported** documents (those sent in an envelope and with `sent`/`accepted` status) are included. The book automatically filters to Facturas (33/34), Notas de Débito (56), and Notas de Crédito (61).
 
 ```php
-use Laragear\Dte\Certification\CertificationManager;
+$salesBook = $manager->salesBookTestSet('76.123.456-0', [1, 2, 3]);
 
-public function generateSalesBook(CertificationManager $manager)
-{
-    $salesBook = $manager->salesBookTestSet('76.123.456-0', [1, 2, 3]);
-
-    return $salesBook->iecvTrackId; // The TrackID for the IECV upload
-}
+return $salesBook->iecvTrackId;
 ```
 
 The manager automatically:
 
-1. Resolves your **resolution date/number** and **sender RUT** from the `ConfigurationManager`.
-2. Derives the **tax period** (`YYYY-MM`) from your DTEs' `issued_on` dates.
-3. Builds a `LibroCompraVenta` XML with `TipoOperacion=VENTA`, `TipoLibro=ESPECIAL`, `TipoEnvio=TOTAL`, `FolioNotificacion=1`.
-4. Aggregates totals by document type in `ResumenPeriodo`.
-5. Writes one `Detalle` entry per DTE (with `RUTDoc` = the **receiver** RUT, i.e. your customer).
-6. Signs the XML (RSA-SHA1, C14N) and uploads via HTTP multipart to SII.
+1. Retrieves only DTEs that have been sent in an envelope (envelope-associated, status `sent` or `accepted`).
+2. Filters to sales-relevant types: Invoice (33), InvoiceExempt (34), DebitNote (56), CreditNote (61).
+3. Resolves your **resolution date/number** and **sender RUT** from the `ConfigurationManager`.
+4. Validates all documents share the same **tax period** (`YYYY-MM`).
+5. Builds a `LibroCompraVenta` XML with `TipoOperacion=VENTA`, `TipoLibro=ESPECIAL`, `TipoEnvio=TOTAL`, `FolioNotificacion=1`.
+6. Aggregates totals by document type in `ResumenPeriodo`.
+7. Writes one `Detalle` entry per DTE (with `RUTDoc` = the **receiver** RUT, i.e. your customer).
+8. Validates the XML against `LibroCV_v10.xsd`, signs (RSA-SHA1, C14N), and uploads via HTTP multipart to SII.
 
 #### Sub-step 1d — Build and upload the IECV (Purchases Book)
 
-The Purchases Book (`Libro de Compras` / IECV) lists documents the business **received from suppliers**. Unlike sales documents, these are **not** issued by your company — they come from third-party suppliers.
+The Purchases Book (`Libro de Compras` / IECV) lists documents the business **received from suppliers**. Unlike the Sales Book, the Purchases Book does not use `SiiDte` records — it accepts the test set data directly as entries, because the purchase documents are third-party data, not documents your application issued.
 
-For certification, SII provides a **separate test set for purchases**. You create these DTEs with:
-
-- `issuer_rut` = **supplier RUT** (a third party, not your company)
-- `receiver_rut` = **your company RUT** (you received the document)
+Build an array of `IecvPurchaseData` entries from the SII's purchases test set and pass them to `purchasesBookTestSet()`:
 
 ```php
-use Illuminate\Http\Request;
-use Laragear\Dte\Certification\CertificationManager;
-use Laragear\Dte\Facades\Dte;
+use Laragear\Dte\Certification\IecvPurchaseData;
+use Laragear\Dte\Certification\IecvProperty;
+use Laragear\Dte\Enums\DteType;
 
-public function createPurchases(Request $request, CertificationManager $manager)
-{
-    $request->validate([
-        // ...
-    ]);
-    
-    $purchaseDte = Dte::purchaseInvoice()
-        ->issuedBy('99.888.777-1')          // supplier RUT (from test set)
-        ->receivedBy('76.123.456-0')        // your company RUT (receiver)
-        ->addItem(item: 'COMPRA CON RETENCION TOTAL DEL IVA', unitPrice: 10388, quantity: 1)
-        ->addReference(new ReferenceData('SET', '9', now(), 'CASO 1234-2'))
-        ->create();
-        
-    $testData = $manager->purchasesBookTestSet('76.123.456-0', [$purchaseDte->id]);
-    
-    // ...
-}
+$entries = [
+    IecvPurchaseData::make(
+        documentType: DteType::InvoicePhysical, // 30
+        folio: 234,
+        issuedOn: '2026-09-01',
+        issuerRut: '99.888.777-1',              // supplier RUT from the set
+        amountNet: 45899,
+    ),
+    IecvPurchaseData::make(
+        documentType: DteType::Invoice,         // 33
+        folio: 781,
+        issuedOn: '2026-09-01',
+        issuerRut: '99.888.777-1',
+        amountNet: 30082,
+        ivaCommonUse: true,                     // IVA uso común
+    ),
+    IecvPurchaseData::make(
+        documentType: DteType::CreditNote,      // 61
+        folio: 451,
+        issuedOn: '2026-09-01',
+        issuerRut: '99.888.777-1',
+        amountNet: 2880,
+        referenceType: DteType::InvoicePhysical, // references factura 234
+        referenceFolio: 234,
+    ),
+];
+
+// Pass the IVA proporcionalidad factor for uso común (set by SII)
+$properties = [IecvProperty::CommonIvaFactor->of(0.60)];
+
+$purchasesBook = $manager->purchasesBookTestSet(
+    '76.123.456-0',
+    $entries,
+    $properties,
+);
+
+return $purchasesBook->iecvTrackId;
 ```
+
+The `IecvPurchaseData` entry fields map to the IECV XML:
+
+| Entry field        | IECV XML element | Notes                                          |
+|--------------------|------------------|------------------------------------------------|
+| `documentType`     | `TpoDoc`         | `DteType` enum or raw int (30, 33, 46, 61...)  |
+| `folio`            | `NroDoc`         | Folio from the test set                        |
+| `issuedOn`         | `FchDoc`         | `Y-m-d` format                                 |
+| `issuerRut`        | `RUTDoc`         | The supplier's RUT                             |
+| `amountNet`        | `MntNeto`        | "Monto Afecto" from the set                    |
+| `amountExempt`     | `MntExe`         | "Monto Exento" from the set                    |
+| `ivaCommonUse`     | `IVAUsoComun`    | `TotOpIVAUsoComun`/`TotIVAUsoComun` in resumen |
+| `noCost`           | `IndSinCosto=1`  | Entrega gratuita del proveedor                 |
+| `ivaRetainedTotal` | `IVARetTotal`    | Compra con retención total del IVA             |
+| `referenceType`    | `TpoDocRef`      | For NC/ND referencing another document         |
+| `referenceFolio`   | `FolioRef`       | Folio of the referenced document               |
+
+The manager automatically:
+
+1. Validates all entries share the same tax period.
+2. Resolves **resolution date/number** and **sender RUT**.
+3. Computes `MntIVA`, `MntTotal`, and `TotCredIVAUsoComun` from net amounts and IVA rate.
+4. Builds `LibroCompraVenta` XML with `TipoOperacion=COMPRA`, `FolioNotificacion=2`.
+5. Validates against `LibroCV_v10.xsd`, signs, and uploads to SII.
 
 > [!IMPORTANT]
 >
-> **Pass DTE IDs explicitly.** Since purchase DTEs have a **supplier** as the issuer (not your company), the manager cannot auto-discover them by issuer RUT. You must pass the DTE IDs directly.
-
-The _Purchases Book_ differs from the Sales Book:
-
-- `TipoOperacion=COMPRA`, `FolioNotificacion=2`
-- `RUTDoc` in each `Detalle` row is the DTE's **issuer** RUT (the supplier)
-- The **tax period** is assumed to be the same as the Sales Book
+> **IVA proporcionalidad.** For entries with `ivaCommonUse: true`, pass `IecvProperty::CommonIvaFactor->of(0.60)` (or the factor value SII specifies for your company). This populates `FctProp` and `TotCredIVAUsoComun` in the resumen.
 
 ---
 
@@ -368,30 +381,22 @@ No DTEs need to be pre-created — the manager generates everything from scratch
 For more control, build DTEs with `DocumentBuilder` and pass them to `simulateUsing()`:
 
 ```php
-use Laragear\Dte\Builders\InvoiceBuilder;
-use Illuminate\Database\Eloquent\Collection;use Laragear\Dte\Facades\Dte;
+use Laragear\Dte\Facades\SiiInvoice;
+use Illuminate\Database\Eloquent\Collection;
 
-public function simulation(CertificationManager $manager)
-{
-    $dte1 = Dte::invoice()
-        ->issuedBy('76.123.456-0')
-        ->receivedBy('60.803.000-K')
-        ->addItem(item: 'Product A', unitPrice: 5000, quantity: 2)
-        ->create();
-    
-    $dte2 = Dte::invoice()
-        ->issuedBy('76.123.456-0')
-        ->receivedBy('60.803.000-K')
-        ->addItem(item: 'Service B', unitPrice: 25000, quantity: 1)
-        ->create();
-    
-    $dtes = new Collection([
-        $dte1,
-        $dte2,
-    ]);
-    
-    $simulationData = $manager->simulateUsing('76.123.456-0', $dtes);
-}
+$dte1 = SiiInvoice::issuedBy('76.123.456-0')
+    ->receivedBy('60.803.000-K')
+    ->addItem(item: 'Product A', unitPrice: 5000, quantity: 2)
+    ->create();
+
+$dte2 = SiiInvoice::issuedBy('76.123.456-0')
+    ->receivedBy('60.803.000-K')
+    ->addItem(item: 'Service B', unitPrice: 25000, quantity: 1)
+    ->create();
+
+$dtes = new Collection([$dte1, $dte2]);
+
+$simulationData = $manager->simulateUsing('76.123.456-0', $dtes);
 ```
 
 This bypasses Faker generation, letting you use realistic data for the simulation.

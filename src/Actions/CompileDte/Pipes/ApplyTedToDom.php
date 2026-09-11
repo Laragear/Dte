@@ -26,6 +26,8 @@ class ApplyTedToDom
 
         $documentNode->insertBefore($compilation->requireTed(), $timestamp);
 
+        $compilation->ted = null;
+
         return $next($compilation);
     }
 }

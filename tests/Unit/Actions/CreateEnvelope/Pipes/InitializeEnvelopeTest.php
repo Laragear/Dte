@@ -30,8 +30,8 @@ class InitializeEnvelopeTest extends DatabaseTestCase
         $assembly = new Assembly($envelope);
 
         $mockTemp = $this->mock(TemporaryDirectory::class);
-        $mockTemp->expects('create')->once()->andReturnSelf();
-        $mockTemp->expects('path')->with('envelope.xml')->once()->andReturn('/tmp/fake/envelope.xml');
+        $mockTemp->expects('create')->andReturnSelf();
+        $mockTemp->expects('path')->with('envelope.xml')->andReturn('/tmp/fake/envelope.xml');
 
         $this->pipeline(CreateEnvelope::class)
             ->isolatePipe(InitializeEnvelope::class)

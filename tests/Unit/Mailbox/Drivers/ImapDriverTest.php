@@ -56,13 +56,13 @@ class ImapDriverTest extends TestCase
             $mock
                 ->expects('open')
                 ->with('{imap.example.com:993/ssl}INBOX', 'test@example.com', 'secret')
-                ->once()
+
                 ->andReturn($connection);
 
             $mock
                 ->expects('search')
                 ->with($connection, 'UNSEEN', SE_UID)
-                ->once()
+
                 ->andReturn([10, 11, 12]);
 
             $mock
@@ -95,7 +95,7 @@ class ImapDriverTest extends TestCase
             $mock->expects('headerinfo')->with($connection, 12)->andReturn(false);
             $mock->expects('body')->with($connection, 12, FT_UID)->andReturn(false);
 
-            $mock->expects('close')->with($connection)->once();
+            $mock->expects('close')->with($connection);
         });
 
         $this->mock(MailerContract::class);
@@ -123,20 +123,20 @@ class ImapDriverTest extends TestCase
         $connection = Mockery::mock(Connection::class);
 
         $this->mock(ImapProxy::class, static function (MockInterface $mock) use ($connection): void {
-            $mock->expects('open')->once()->andReturn($connection);
+            $mock->expects('open')->andReturn($connection);
 
             $mock
                 ->expects('search')
                 ->with($connection, 'HEADER Message-ID msg-10', SE_UID)
-                ->once()
+
                 ->andReturn([10]);
 
             $mock
                 ->expects('setflag_full')
                 ->with($connection, '10', '\\Seen', ST_UID)
-                ->once();
+                ;
 
-            $mock->expects('close')->with($connection)->once();
+            $mock->expects('close')->with($connection);
         });
 
         $this->mock(MailerContract::class);
@@ -168,10 +168,10 @@ class ImapDriverTest extends TestCase
         $connection = Mockery::mock(Connection::class);
 
         $this->mock(ImapProxy::class, static function (MockInterface $mock) use ($connection): void {
-            $mock->expects('open')->once()->andReturn($connection);
+            $mock->expects('open')->andReturn($connection);
 
-            $mock->expects('search')->once()->andReturn([10, 11]);
-            $mock->expects('close')->with($connection)->once();
+            $mock->expects('search')->andReturn([10, 11]);
+            $mock->expects('close')->with($connection);
 
             $mock
                 ->expects('headerinfo')

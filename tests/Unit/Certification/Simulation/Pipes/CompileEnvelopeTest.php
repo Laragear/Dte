@@ -67,7 +67,7 @@ class CompileEnvelopeTest extends DatabaseTestCase
             $mock
                 ->expects('forEnvelope')
                 ->withAnyArgs()
-                ->once()
+
                 ->andReturn(new Assembly($envelopeMock));
         });
 

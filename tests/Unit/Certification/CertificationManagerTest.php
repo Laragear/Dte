@@ -14,8 +14,8 @@ use Laragear\Dte\Certification\TestingSet\TestSetData;
 use Laragear\Dte\Certification\TestingSet\TestSetEnvelope;
 use Laragear\Dte\Certification\TestingSet\TestSetPurchasesBook;
 use Laragear\Dte\Certification\TestingSet\TestSetSalesBook;
-use Laragear\Dte\Models\SiiDte;
 use Laragear\Dte\Environment\EnvironmentResolver;
+use Laragear\Dte\Models\SiiDte;
 use Laragear\Rut\Rut;
 use LogicException;
 use Mockery\MockInterface;
@@ -69,14 +69,14 @@ class CertificationManagerTest extends DatabaseTestCase
         static::assertInstanceOf(TestSetData::class, $manager->purchaseInvoiceTestSet('76.123.456-0', [1, 2]));
 
         $mockSales = $this->mock(TestSetSalesBook::class);
-        $mockSales->expects('send')->once()->andReturnSelf();
-        $mockSales->expects('thenReturn')->once()->andReturn(new TestSetData(Rut::parse('76.123.456-0')));
+        $mockSales->expects('send')->andReturnSelf();
+        $mockSales->expects('thenReturn')->andReturn(new TestSetData(Rut::parse('76.123.456-0')));
 
         static::assertInstanceOf(TestSetData::class, $manager->salesBookTestSet('76.123.456-0', [1, 2]));
 
         $mockPurchases = $this->mock(TestSetPurchasesBook::class);
-        $mockPurchases->expects('send')->once()->andReturnSelf();
-        $mockPurchases->expects('thenReturn')->once()->andReturn(new TestSetData(Rut::parse('76.123.456-0')));
+        $mockPurchases->expects('send')->andReturnSelf();
+        $mockPurchases->expects('thenReturn')->andReturn(new TestSetData(Rut::parse('76.123.456-0')));
 
         static::assertInstanceOf(TestSetData::class, $manager->purchasesBookTestSet('76.123.456-0', [1, 2]));
     }
@@ -188,8 +188,8 @@ class CertificationManagerTest extends DatabaseTestCase
         // to prevent actual DB modification errors, or just let it run if it's SQLite.
         // Actually, we can mock the models, or we can just assert it doesn't throw an exception.
         $this->mock(Builder::class, static function (MockInterface $mock): void {
-            $mock->expects('disableForeignKeyConstraints')->once();
-            $mock->expects('enableForeignKeyConstraints')->once();
+            $mock->expects('disableForeignKeyConstraints');
+            $mock->expects('enableForeignKeyConstraints');
         });
 
         // We will just let the models truncate the SQLite in-memory tables.

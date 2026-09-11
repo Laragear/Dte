@@ -98,7 +98,7 @@ class SendInterchangeEnvelopeJobTest extends TestCase
 
         Mail::fake();
 
-        $this->mock(LoggerInterface::class)->expects('warning')->once();
+        $this->mock(LoggerInterface::class)->expects('warning');
 
         $job = new SendInterchangeEnvelopeJob($envelope);
         $this->app->call($job->handle(...));
@@ -138,11 +138,11 @@ class SendInterchangeEnvelopeJobTest extends TestCase
         $this->mock(TokenProviderInterface::class)->expects('token')
             ->zeroOrMoreTimes()->andReturn(new Token('test',
                 new DateTimeImmutable));
-        $this->mock(CreateEnvelope::class)->expects('forSharing')->once()->andThrow(new RuntimeException('Compilation Failed'));
+        $this->mock(CreateEnvelope::class)->expects('forSharing')->andThrow(new RuntimeException('Compilation Failed'));
 
         Mail::fake();
 
-        $this->mock(LoggerInterface::class)->expects('error')->once();
+        $this->mock(LoggerInterface::class)->expects('error');
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessageIs('Compilation Failed');
@@ -168,24 +168,24 @@ class SendInterchangeEnvelopeJobTest extends TestCase
             $doc = Mockery::mock(DOMDocument::class);
             $doc->expects('saveXML')->andReturn('<xml>3</xml>');
             $assembly->expects('requireDocument')->andReturn($doc);
-            $mock->expects('forSharing')->once()->andReturn($assembly);
+            $mock->expects('forSharing')->andReturn($assembly);
         });
 
         $pendingMail = $this->mock(PendingMail::class, static function (MockInterface $mock): void {
-            $mock->expects('send')->once()->andThrow(new RuntimeException('Network error'));
+            $mock->expects('send')->andThrow(new RuntimeException('Network error'));
         });
 
         $mailer = $this->mock(Mailer::class, static function (MockInterface $mock) use ($pendingMail): void {
-            $mock->expects('to')->once()->andReturn($pendingMail);
+            $mock->expects('to')->andReturn($pendingMail);
         });
 
         $factory = $this->mock(Factory::class, static function (MockInterface $mock) use ($mailer): void {
-            $mock->expects('mailer')->once()->andReturn($mailer);
+            $mock->expects('mailer')->andReturn($mailer);
         });
 
         $this->app->instance(Factory::class, $factory);
 
-        $this->mock(LoggerInterface::class)->expects('error')->once();
+        $this->mock(LoggerInterface::class)->expects('error');
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessageIs('Network error');
@@ -213,7 +213,7 @@ class SendInterchangeEnvelopeJobTest extends TestCase
             $doc = Mockery::mock(DOMDocument::class);
             $doc->expects('saveXML')->andReturn('');
             $assembly->expects('requireDocument')->andReturn($doc);
-            $mock->expects('forSharing')->once()->andReturn($assembly);
+            $mock->expects('forSharing')->andReturn($assembly);
         });
 
         Mail::fake();

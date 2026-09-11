@@ -1,6 +1,6 @@
 ---
 name: laragear-dte-certification
-description: "Use this skill to prepare the application to certification subsequent production (real) environment. Don't use this if the business does not have a real Digital Certificate or is still on active development."
+description: "Use this skill to prepare the application to certification subsequent production (real) environment. Don't use this if the business does not have a real Digital Certificate or is still on development."
 license: MIT
 metadata:
   author: laragear
@@ -8,7 +8,7 @@ metadata:
 
 # Laragear Dte Certification
 
-The application requires to be _certified_ by SII before real operation on production environments. The library requires a real Digital Certificate (not the fake created by the application) and to follow the certification process. If this has not been set up, use the apropiate skill to do it.  
+The application requires to be _certified_ by SII before real operation on production environments. The library requires a real Digital Certificate (not the fake created by the library for development/testing) and to follow the certification process. If this has not been set up, use the apropiate skill to do it.  
 
 Once the business complies with _"Pre-Certificación"_, it will receive a `.txt` file with data to create the different sets the SII will require to handle. The set will have an "Attention Number", like `5145080`.
 
@@ -31,4 +31,8 @@ public function start(CertificationManager $manager)
 
 ## Certification
 
-Follow the certification documentation `CERTIFICATION.md` at the root if this package. It's usually found in `vendor/laragear/dte/CERTIFICATION.md`.
+Follow the certification documentation `CERTIFICATION.md` at the root if this package. It's usually found in `vendor/laragear/dte/CERTIFICATION.md` (or equivalent path).
+
+## Existing companies
+
+The certification process requires a Test Set of documents with existing (real) business receivers. Refer to [Random companies](references/companies.md) for an stable set of businesses to pick.

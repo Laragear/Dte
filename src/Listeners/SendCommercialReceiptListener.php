@@ -8,6 +8,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
 use Laragear\Dte\Events\InboundDteAcknowledged;
 use Laragear\Dte\Mail\Interchange\RespuestaDteMail;
+use function blank;
 
 class SendCommercialReceiptListener implements ShouldQueue
 {
@@ -30,7 +31,7 @@ class SendCommercialReceiptListener implements ShouldQueue
     {
         $interchangeLog = $event->document->interchangeLog;
 
-        if (!$interchangeLog || empty($interchangeLog->sender)) {
+        if (!$interchangeLog || blank($interchangeLog->sender)) {
             return;
         }
 

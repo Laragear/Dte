@@ -39,13 +39,13 @@ class AcceptAndSendReceiptTest extends TestCase
         );
 
         $this->mock(CertificateResolver::class, function (MockInterface $mock) use ($certificate) {
-            $mock->expects('resolve')->once()->withArgs(function (Rut $rut) {
+            $mock->expects('resolve')->withArgs(function (Rut $rut) {
                 return $rut->formatBasic() === '76123456-0';
             })->andReturn($certificate);
         });
 
         $this->mock(DteClaimService::class, function (MockInterface $mock) use ($inboundDocument, $certificate) {
-            $mock->expects('accept')->once()->withArgs(function ($document, $signer, $location, $cert) use (
+            $mock->expects('accept')->withArgs(function ($document, $signer, $location, $cert) use (
                 $inboundDocument,
                 $certificate
             ) {
@@ -72,7 +72,7 @@ class AcceptAndSendReceiptTest extends TestCase
         );
 
         $this->mock(CertificateResolver::class, static function (MockInterface $mock): void {
-            $mock->expects('resolve')->once()->andReturnNull();
+            $mock->expects('resolve')->andReturnNull();
         })->makePartial();
 
         $this->expectException(RuntimeException::class);

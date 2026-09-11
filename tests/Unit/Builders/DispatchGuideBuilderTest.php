@@ -4,6 +4,7 @@ namespace Tests\Unit\Builders;
 
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Laragear\Dte\Builders\DispatchGuideBuilder;
 use Laragear\Dte\Configuration\ConfigurationManager;
 use Laragear\Dte\Data\CompanyData;
@@ -52,6 +53,8 @@ class DispatchGuideBuilderTest extends DatabaseTestCase
 
     public function test_additional_data_includes_transport_destination_fields(): void
     {
+        $queue = Queue::fake();
+
         // Line 42: includes transport destination fields in additionalData
         $builder = $this->app->make(DispatchGuideBuilder::class);
 
@@ -162,6 +165,8 @@ class DispatchGuideBuilderTest extends DatabaseTestCase
 
     public function test_sets_transfer_motive_and_dispatch_type(): void
     {
+        Queue::fake();
+
         $builder = $this->app->make(DispatchGuideBuilder::class);
         $builder->issuedBy(BuilderFixture::issuer());
         $builder->receivedBy(BuilderFixture::receiver());

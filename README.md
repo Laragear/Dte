@@ -10,10 +10,9 @@
 Comply with SII within your Laravel application.
 
 ```php
-use Laragear\Dte\Facades\Dte;
+use Laragear\Dte\Facades\SiiInvoice;
 
-$invoice = Dte::invoice()
-    ->receivedBy('76.543.210-K', 'Helados S.A.')
+$invoice = SiiInvoice::receivedBy('76.543.210-K', 'Helados S.A.')
     ->addItem('Crema de Leche', 12_000)
     ->create();
 ```
@@ -35,9 +34,14 @@ Your support allows me to keep this package free, up-to-date, and maintainable. 
 * Laravel 13.x or later
 * Laravel Scheduler and Queue enabled
 
+> [!NOTE]
+>
+> The Scheduler is used to queue DTE Envelopes, check CAF depletion, and check DTE receives at `dte@my-company.cl`
+> The Queue is used to build XML, PDF, and send DTE Envelopes to SII API.
+
 ## Why does this library exist?
 
-In 2026, you (still) cannot just connect your application to the SII Servers to push invoices in JSON. SII works using pre-iPhone technologies: XML, SOAP, folio-authorization, digital-signing, and so forth.
+In 2026, you (still) cannot just connect your application to the SII Servers to push invoices through OAuth 2.0 and JSON. SII works using pre-iPhone technologies: XML, SOAP, folio-authorization, digital-signing, and so forth.
 
 To avoid your application being vendor-locked-in with external services, this library **handles everything from the document constructions onwards**, leaving you with only three tasks:
 
@@ -45,10 +49,7 @@ To avoid your application being vendor-locked-in with external services, this li
 2. Create the documents you need (the fun part)
 3. Check the state of your documents.
 
-You will require some **manual labor** due to SII self-imposed limits when you move to [production](#certification--production):
-
-- Download CAF and [load it into the library](#uploading-caf).
-- Download RCV and [load it into the library](#sii-rcv-registro-de-compras-y-ventas).
+You will require some **manual labor** due to SII self-imposed limits when you move to [production](#certification--production), like uploading a Digital Certificate and CAF.
 
 ## Installation
 
@@ -88,12 +89,12 @@ The implementation is not _straightforward_. The SII requires any app to comply 
 
 To deal with this, this library implements the following:
 
-1. Automatically loads CAF XML into the library.
-2. Automatically allocates folios, signing the DTE XML with the CAF and Digital Certificate.
-3. Automatically fills and sends envelopes, polling their status at SII for updates.
-4. Automatically reads your `dte@my-app.cl` (IMAP/driver) and sends acknowledgements.
-5. Automatically renders PDF for any DTE using a standard design.
-6. Once envelopes are approved, sends each DTE to the target business using Laravel's Mail driver.
+1. Loads and persists CAF XML into the database.
+2. Builds DTE XML, allocating a Folio, and signs it with a Digital Certificate.
+3. Fills and sends DTE envelopes, polling their status at SII for updates.
+4. Reads your `dte@my-app.cl` (IMAP/driver) and sends acknowledgements.
+5. Renders PDF for any DTE using a standard design.
+6. Sends each DTE approved to the target business using Laravel's Mail driver.
 7. All XML documents are stored separately from the original payload on the database.
 
 Odds are you already know some document types before implementing this library, but if you feel lost, check the [glossary section](#glossary) and come back. 
@@ -138,8 +139,6 @@ public function boot()
                 resolutionDate: $settings->resolution_date,
                 resolutionNumber: $settings->resolution_number,
             ),
-            // Optional, defaults to the issuer RUT
-            senderRut: $settings->sender_rut
         );
     });
 
@@ -170,13 +169,13 @@ php artisan dte:make-fake-cert
 php artisan dte:make-fake-caf
 ```
 
-You can run the `dte:make-fake-caf` again for Receipts (Code 39).
+If you plan to create more than simple Invoices from the start, run the `dte:make-fake-caf` again with the DTE Type code.
 
 ```shell
 php artisan dte:make-fake-caf --type=39
 ```
 
-In certification/production, you will be required to download the real CAF from SII and [upload it](#uploading-caf) instead.
+In [certification/production](#certification--production), you will be required to download the real CAF from SII and [upload it](#uploading-caf) instead.
 
 > [!NOTE]
 >
@@ -184,7 +183,7 @@ In certification/production, you will be required to download the real CAF from 
 
 ### 3. Schedule background commands
 
-[Schedule these Artisan commands](https://laravel.com/docs/13.x/scheduling) in your `routes/console.php`. You can read see [Artisan Commands Reference](#artisan-commands-reference) for details about what does what, but consider these commands the bare minimum.
+[Schedule these Artisan commands](https://laravel.com/docs/13.x/scheduling) in your `routes/console.php`. You can read see [Artisan Commands Reference](#artisan-commands-reference) for details about what does what, but consider these commands the bare minimum for continuous operation.
 
 ```php
 use Illuminate\Support\Facades\Schedule;
@@ -192,14 +191,14 @@ use Illuminate\Support\Facades\Schedule;
 // Checks for CAFs depletion
 Schedule::command('dte:check-cafs')->everyTwoHours();
 
-// Packs signed DTE into envelopes so these are ready to be sent.
+// Packs signed DTE into envelopes so these can be sent later.
 Schedule::command('dte:process-envelope')->everyTenMinutes();
 
 // Poll the email for unanswered DTE.
 Schedule::command('dte:fetch-mailbox')->hourly();
 
 // Poll the SII for the envelope status (accepted or rejected).
-Schedule::command('dte:poll-track-status')->hourly();
+Schedule::command('dte:poll-track-status')->everyFiveMinutes();
 
 // Reject phantom invoices sent to your app before the deadline (recommended).
 Schedule::command('dte:reject-phantom-invoices')->twiceDaily();
@@ -207,13 +206,12 @@ Schedule::command('dte:reject-phantom-invoices')->twiceDaily();
 
 ### You're all set!
 
-You can now create your own documents using the `Dte` facade.
+You can now create your own documents using the any document builder facade, like the `SiiReceipt`.
 
 ```php
-use Laragear\Dte\Facades\Dte;
+use Laragear\Dte\Facades\SiiInvoice;
 
-$invoice = Dte::invoice()
-    ->receivedBy('76.543.210-K', 'Helados S.A.')
+$invoice = SiiInvoice::receivedBy('76.543.210-K', 'Helados S.A.')
     ->addItem('Crema de Leche', 12_000)
     ->create();
 ```
@@ -235,7 +233,7 @@ The library supports most used SII documents types via dedicated builders, all s
 
 > [!IMPORTANT]
 >
-> The library is missing some documents, and this is by scope. Additional support will be based on sponsorship number.
+> The library is missing some documents, and this is by scope. Additional support will be based on sponsorship.
 
 ### Creating documents
 
@@ -243,13 +241,13 @@ The library supports most used SII documents types via dedicated builders, all s
 >
 > Never create a document using the Eloquent Model directly except in testing environments, otherwise you risk legal data corruption. **Always** use the builder.
 
-Every builder is reached through the `Dte` facade (or the underlying Builder instance). The builder methods are fluent; each call returns the builder, so you can freely chain the properties of the document.
+Every builder is reached through its corresponding facade (or the underlying Builder instance you can inject as a dependency). The builder methods are fluent; each call returns the builder, so you can freely chain the properties of the document.
 
 You're required to set who receives the DTE using `receivedBy()` with the RUT and legal name of the person. For businesses (like in invoices), you will require the `ReceiverData` object.
 
 ```php
 use Laragear\Dte\Data\ReceiverData;
-use Laragear\Dte\Facades\Dte;
+use Laragear\Dte\Facades\SiiInvoice;
 
 $receiver = ReceiverData::make(
     rut: '76.123.456-0',
@@ -261,8 +259,26 @@ $receiver = ReceiverData::make(
     city: 'Osorno',
 );
 
-$invoice = Dte::invoice()
-    ->receivedBy($receiver);
+$invoice = SiiInvoice::receivedBy($receiver);
+```
+
+```php
+use App\Models\Business;
+use Illuminate\Http\Request;
+use Laragear\Dte\Builders\InvoiceBuilder;use Laragear\Dte\Data\ReceiverData;
+
+public function createInvoice(Request $request, InvoiceBuilder $builder)
+{
+    $request->validate([
+        // ...
+    ]);
+    
+    $receiver = ReceiverData::fromArray($request->array('receiver'));
+    
+    $builder->receivedBy($receiver)
+        ->addItem($request->session()->item_name, $request->session()->item_price)
+        ->create();
+}
 ```
 
 Chances are that you will have an Eloquent Model that you will want to use as a receiver. In that case, use `Receivable` contract on the model you want, and it will be used as a receiver magically.
@@ -284,10 +300,9 @@ class Business extends Model implements Receivable
     }
 }
 
-use Laragear\Dte\Facades\Dte;
+use Laragear\Dte\Facades\SiiInvoice;
 
-$invoice = Dte::invoice()
-    ->receivedBy(Business::find(66));
+$invoice = SiiInvoice::receivedBy(Business::find(66));
 ```
 
 Once your document is ready, use the `->create()` method to persist the DTE to the database. It returns a `SiiDte` model you can use to inspect its status later using the primary key.
@@ -295,10 +310,9 @@ Once your document is ready, use the `->create()` method to persist the DTE to t
 Meanwhile, a queued job will be dispatched to compile the document XML, sign it, and be ready to be sent to SII through an envelope, where other similar DTE will be inserted. If you need the XML ready immediately (like for Receipts), especially for [printing a PDF](#pdf-generation), use the `sync` argument with a value that evaluates to `true` or `false`, or a callback.
 
 ```php
-use Laragear\Dte\Facades\Dte;
+use Laragear\Dte\Facades\SiiInvoice;
 
-$receipt = Dte::receipt()
-    ->addItem('Queso Ranco', 7_490)
+$receipt = SiiInvoice::addItem('Queso Ranco', 7_490)
     ->create(sync: fn() => true);
 
 return $receipt->pdf()->generate();
@@ -313,10 +327,9 @@ return $receipt->pdf()->generate();
 You can add an item using a name and a total through the `addItem()` method.
 
 ```php
-use Laragear\Dte\Facades\Dte;
+use Laragear\Dte\Facades\SiiInvoice;
 
-$invoice = Dte::invoice()
-    ->receivedBy('76.543.210-K', 'Helados S.A.')
+$invoice = SiiInvoice::receivedBy('76.543.210-K', 'Helados S.A.')
     ->addItem('Crema de Leche', 12_000)
     ->create();
 ```
@@ -324,10 +337,9 @@ $invoice = Dte::invoice()
 Use `addItem($name, $amount, isExempt: true)` for lines that carry no tax (IVA). Exempt items still count toward the document total but are excluded from the default 19% tax calculation.
 
 ```php
-use Laragear\Dte\Facades\Dte;
+use Laragear\Dte\Facades\SiiInvoice;
 
-$invoice = Dte::invoice()
-    ->receivedBy('76.543.210-K', 'Helados S.A.')
+$invoice = SiiInvoice::receivedBy('76.543.210-K', 'Helados S.A.')
     ->addItem('Crema de Leche', 12_000, isExempt: true)
     ->create();
 ```
@@ -336,7 +348,7 @@ If you require more control on the itemization, like quantity, description, spec
 
 ```php
 use Laragear\Dte\Data\Item;
-use Laragear\Dte\Facades\Dte;
+use Laragear\Dte\Facades\SiiInvoice;
 
 $item = Item::make(
     name: 'Crema de Leche', 
@@ -346,8 +358,7 @@ $item = Item::make(
     taxes: [15 => 1_900] // Automatically subtracts Retention Code 15
 );
 
-$invoice = Dte::invoice()
-    ->receivedBy('76.543.210-K', 'Helados S.A.')
+$invoice = SiiInvoice::receivedBy('76.543.210-K', 'Helados S.A.')
     ->addItem($item)
     ->create();
 ```
@@ -362,15 +373,18 @@ To dictate which accounting block the modifier mathematically targets, pass a `M
 
 ```php
 use Laragear\Dte\Enums\ModifierTarget;
-use Laragear\Dte\Facades\Dte;
+use Laragear\Dte\Facades\SiiInvoice;
 
-$invoice = Dte::invoice()
-    ->receivedBy('76.543.210-K', 'Helados S.A.')
+$invoice = SiiInvoice::receivedBy('76.543.210-K', 'Helados S.A.')
     ->addItem('Crema de Leche', 12_000)
     // Applies a 10% global discount mathematically targeting the Net amount
     ->globalDiscount(10, isPercent: true, target: ModifierTarget::Net, description: 'Descuento Global Primavera')
     ->create();
 ```
+
+> [!WARNING]
+>
+> The `description` parameter of `globalDiscount()` and `globalSurcharge()` is mapped to the SII `<GlosaDR>` tag, which has a **45-character limit**. Longer descriptions are silently truncated.
 
 ### Adding References
 
@@ -390,7 +404,7 @@ Link documents to customer Purchase Orders or commercial contracts:
 ```php
 use Laragear\Dte\Data\ReferenceData;
 use Laragear\Dte\Enums\ReferenceType;
-use Laragear\Dte\Facades\Dte;
+use Laragear\Dte\Facades\SiiInvoice;
 
 $reference = ReferenceData::make(
     documentType: ReferenceType::PurchaseOrder, 
@@ -399,8 +413,7 @@ $reference = ReferenceData::make(
     reason: 'Requiere artículo usado para mostrar helados' 
 );
 
-$invoice = Dte::purchaseInvoice()
-    ->receivedBy('18685226-5', 'Adrián Roberto Pérez González')
+$invoice = SiiInvoice::receivedBy('18685226-5', 'Adrián Roberto Pérez González')
     ->addItem('Vitrina', 140_000)
     ->addReference($reference)
     ->create();
@@ -428,18 +441,16 @@ For convenience, issue the `SiiDte` instance you want to alter directly and fill
 ```php
 use Laragear\Dte\Data\Item;
 use Laragear\Dte\Enums\DteType;
-use Laragear\Dte\Facades\Dte;
+use Laragear\Dte\Facades\SiiCreditNote;
 use Laragear\Dte\Models\SiiDte;
 
 // Cancel a previous invoice (Reason Code 1: Anula Documento de Referencia)
-$creditNote = Dte::creditNote()
-    ->receivedBy('76.482.465-2', 'Cliente SpA')
+$creditNote = SiiCreditNote::receivedBy('76.482.465-2', 'Cliente SpA')
     ->annul(SiiDte::invoices()->find(56), reason: 'Mercancía perdida en el camino')
     ->create();
 
 // Cancel a previous invoice (Reason Code 2: Corrige text)
-$creditNote = Dte::creditNote()
-    ->receivedBy('76.482.465-2', 'Cliente SpA')
+$creditNote = SiiCreditNote::receivedBy('76.482.465-2', 'Cliente SpA')
     // Add the correction as an Item (per SII instructions).
     ->addItem(new Item('Corrección', 0, description: 'Debería ser "Cliente SpA".'))
     ->amend(SiiDte::invoices()->find(56), reason: 'Corrección de Razón social')
@@ -450,17 +461,14 @@ $creditNote = Dte::creditNote()
 
 AEC cessions are meant for transferring a document's receivable to a third party. The most common use is for invoices to be paid later (30/60/90 days): transfer the invoice to a factoring business, receive part of the money now, and the other business receives the full amount later.
 
-While you can use the `Dte::aec()` method to create one manually, the best course of action is to find the invoice you want to cede and use the `cede()` method to fluently build and send the cession document.
+While you can use the `SiiAec::aec()` facade method to create one manually, the best course of action is to find the invoice you want to cede and use the `cede()` method to fluently build and send the cession document.
 
 ```php
 use Laragear\Dte\Models\SiiDte;
-use Laragear\Dte\Facades\Dte;
-use Laragear\Dte\Certificate\DigitalCertificate;
-use Laragear\Dte\Data\CessionData;
 use Laragear\Rut\Rut;
 
 // The invoice to cede. Must be an invoice.
-$invoice = SiiDte::invoices()->find(1);
+$invoice = SiiDte::find(45);
 
 $cession = $invoice->cede()
     ->to(rut: '76.543.210-K', name: 'Factoring Bank S.A.')
@@ -475,7 +483,7 @@ As with SII DTE, a cession document gets queued for building and sending to the 
 
 ### Consulting documents and status
 
-All documents persisted are just `SiiDte` models waiting to be sent to SII in XML. The latter is handled async by your application queue.
+All documents persisted are just `SiiDte` model instances waiting to be sent to SII in XML. The latter is handled async by your application queue.
 
 Since `SiiDte` is an Eloquent Model, you can query freely as with any other model. As a single model manages multiple types, you can filter the types using their respective local scope:
 
@@ -490,14 +498,15 @@ Since `SiiDte` is an Eloquent Model, you can query freely as with any other mode
 | `invoiceLiquidations()` | Invoice liquidation                                    | 
 | `purchaseInvoices()`    | Purchase invoice (factura de compra)                   | 
 
-The only recommended action to do over models is to check their status through the `withStatus()` local scope, or the `$status` attribute. Statuses flow through `DteStatus` enum (pending → sent → accepted/rejected).
+
+The only recommended action to do over models is to check their status through the `whereStatus()|accepted()|pending()` local scope, or the `$status` attribute. Statuses flow through `DteStatus` enum (pending → sent → accepted/rejected).
 
 ```php
 use Laragear\Dte\Enums\DteStatus;
 use Laragear\Dte\Models\SiiDte;
 
 // Using a Local Scope
-SiiDte::invoices()->whereStatus(DteStatus::Accepted)->first();
+SiiDte::invoices()->accepted()->first();
 
 // Using the `status` attribute.
 if (SiiDte::find(1)->status === DteStatus::Accepted) {
@@ -551,21 +560,6 @@ $dte->retryUsing(function (InvoiceBuilder $builder) {
     // Correct the underlying problem...
     $builder->addItem(Item::make('Corrección de datos', 0, description: 'Datos corregidos'));
 });
-```
-
-Alternatively, hydrate the builder yourself through the `Dte` facade or the `retry()` method, modify it fluently, and call `update()` to persist and resend:
-
-```php
-use Laragear\Dte\Data\Item;
-use Laragear\Dte\Facades\Dte;
-use Laragear\Dte\Models\SiiDte;
-
-$dte = SiiDte::whereStatus(DteStatus::Rejected)->first();
-
-$builder = Dte::retry($dte)
-    ->addItem(Item::make('Extra line', 500));
-
-$updatedDte = $builder->update();
 ```
 
 ### Acceptance with Repairs
@@ -633,11 +627,10 @@ While Facturas are grouped into a signed [DTE Envelope](#how-do-chilean-dtes-wor
 Receipts do not require receiver data, these use an "anonymous consumer", but it is recommended when amounts are large in case of SII audits (e.g., CLP$ 200.000 or more).
 
 ```php
-use Laragear\Dte\Facades\Dte;
+use Laragear\Dte\Facades\SiiReceipt;
 
 // The library will automatically group and pack receipts into an <EnvioBOLETA> envelope
-$receipt = Dte::receipt()
-    ->addItem('Bebida energética', 3_490)
+$receipt = SiiReceipt::addItem('Bebida energética', 3_490)
     ->create();
 ```
 
@@ -1210,7 +1203,7 @@ By default, this package works in a single-business mode using static configurat
 If you are not using the dynamic configuration closures or need to override the globally resolved issuer for a specific document, you can use the `issuedBy()` method from any [document builder](#sii-documents-dte) to explicitly set _which_ business is issuing the document. 
 
 ```php
-use Laragear\Dte\Facades\Dte;
+use Laragear\Dte\Facades\SiiReceipt;
 use Laragear\Dte\Data\IssuerData;
 
 $business = IssuerData::make(
@@ -1221,8 +1214,7 @@ $business = IssuerData::make(
     // ...
 );
 
-$invoice = Dte::invoice()
-    ->issuedBy($business)
+$invoice = SiiReceipt::issuedBy($business)
     ->receivedBy('18685226-5', 'Adrián Roberto Pérez González')
     ->addItem('Vitrina', 140_000)
     ->create();
@@ -1349,32 +1341,54 @@ In `testing` and `local` environments, the library incorporates safety mechanism
 - **Envelope Uploads** instantly return a generated fake string (e.g., `fake-track-id-123`).
 - **SOAP Gateways** intentionally throw a `RuntimeException` to prevent hanging scripts and external requests.
 
-### Faking Success and Failure Scenarios
+### Quick Setup with `InteractsWithSiiDte`
 
-Because the library relies heavily on Queues and Events for asynchronous operations, there are two ways to test this library:
+The fastest way to start testing is using the `InteractsWithSiiDte` trait. It automatically configures a fake issuer, CAFs, certificates, and fakes all builder facades:
 
-- Directly mock the `Laragear\Dte\Builder` class (recommended).
-- Use Laravel's built-in fakes.
+```php
+use Illuminate\Foundation\Testing\TestCase;
+use Laragear\Dte\Enums\DteType;
+use Laragear\Dte\Testing\InteractsWithSiiDte;
+
+class InvoiceServiceTest extends TestCase
+{
+    use InteractsWithSiiDte;
+
+    public function test_creates_invoice(): void
+    {
+        $dte = $this->newInvoice(
+            receiver: '12.345.678-9',
+            items: [['Consulting', 50000, 2]],
+        )->create();
+
+        $this->assertDteCreated(DteType::Invoice);
+        $this->assertSame(100000, $dte->amount_net);
+    }
+}
+```
+
+Orchestra Testbench auto-invokes `setUpInteractsWithSiiDte()` and `tearDownInteractsWithSiiDte()`. Plain PHPUnit users must call them manually in `setUp()` / `tearDown()`.
+
+### Faking Document Creation
+
+Use `SiiInvoice::fake()` (and other `Sii*::fake()`) to intercept document creation. The fake builders return in-memory `SiiDte` models without hitting the database or compilation pipeline.
 
 #### Scenario 1: Asserting a DTE was created
 
-Instead of executing the whole pipelines for signing documents, you can mock one of the document builders by setting specific expectations, ensuring your application creates _exactly_ what you require.
-
 ```php
-use Laragear\Dte\Builders\InvoiceBuilder;
+use Laragear\Dte\Facades\SiiInvoice;
 use Laragear\Dte\Models\SiiDte;
 
 public function test_document_is_queued_for_upload()
 {
-    // 1. Set expectations of the invoice to create.
-    $this->mock(InvoiceBuilder::class, function ($mock) {
-        $mock->expects('receivedBy')->with('76.123.456-0', 'Tienda Agrícola S.A.')->andReturnSelf();
-        $mock->expects('addItem')->with('Leche fresca', 12_600)->andReturnSelf();
-        $mock->expects('create')->andReturn(SiiDte::factory()->invoice()->create());
-    })
+    SiiInvoice::fake();
 
-    // 2. Hit the controller to create the DTE and assert there are no errors.
     $this->post('checkout/return')->assertOk();
+
+    SiiInvoice::assertCreated(1);
+
+    $dte = SiiInvoice::lastCreated();
+    $this->assertSame(50000, $dte->amount_net);
 }
 ```
 
@@ -1397,10 +1411,8 @@ public function test_user_is_notified_when_document_is_rejected()
 
     $dte = SiiDte::factory()->invoice()->create();
 
-    // Dispatch the event manually as if the Polling command received an RSC from SII
     DteRejected::dispatch($dte);
 
-    // Assert your application's listeners ran (e.g., Notification sent)
     Notification::assertSentTo($user, DocumentRejectedNotification::class);
 }
 ```
@@ -1417,7 +1429,6 @@ use Laragear\Dte\Enums\EnvelopeStatus;
 
 public function test_polling_updates_envelope_status()
 {
-    // Mock the SOAP gateway to return a forced 'Accepted' (EPR) response
     $mockGateway = $this->mock(SoapGateway::class, function ($mock) {
         $mock->shouldReceive('query')
              ->withArgs(fn($rut, $service, $action, $args) => $args['TrackId'] === '12345')
@@ -1426,11 +1437,43 @@ public function test_polling_updates_envelope_status()
 
     $envelope = SiiDteEnvelope::factory()->create(['track_id' => '12345']);
 
-    // Run the job with the mocked gateway
     (new PollEnvelopeTrackIdJob($envelope))->handle($mockGateway);
 
     $this->assertEquals(EnvelopeStatus::Accepted, $envelope->fresh()->status);
 }
+```
+
+### Available Fakes
+
+| Facade | Fake Method | Creates |
+|---|---|---|
+| `SiiInvoice::fake()` | Returns `FakeInvoiceBuilder` | In-memory `SiiDte` |
+| `SiiReceipt::fake()` | Returns `FakeReceiptBuilder` | In-memory `SiiDte` |
+| `SiiCreditNote::fake()` | Returns `FakeCreditNoteBuilder` | In-memory `SiiDte` |
+| `SiiDebitNote::fake()` | Returns `FakeDebitNoteBuilder` | In-memory `SiiDte` |
+| `SiiDispatchGuide::fake()` | Returns `FakeDispatchGuideBuilder` | In-memory `SiiDte` |
+| `SiiPurchaseInvoice::fake()` | Returns `FakePurchaseInvoiceBuilder` | In-memory `SiiDte` |
+| `SiiInvoiceLiquidation::fake()` | Returns `FakeInvoiceLiquidationBuilder` | In-memory `SiiDte` |
+
+Each facade also provides `assertCreated()`, `assertNotCreated()`, `created()`, and `lastCreated()` methods.
+
+### Cross-Facade Assertions with `DteFake`
+
+Use `DteFake` to aggregate creation records across all faked facades:
+
+```php
+use Laragear\Dte\Facades\SiiInvoice;
+use Laragear\Dte\Facades\SiiCreditNote;
+use Laragear\Dte\Testing\DteFake;
+
+$fake = new DteFake;
+
+SiiInvoice::fake()->issuedBy(...)->addItem('A', 1000)->create();
+SiiCreditNote::fake()->issuedBy(...)->addItem('B', 500)->create();
+
+$fake->assertCreated(times: 2);
+$fake->assertCreated(DteType::Invoice, times: 1);
+$fake->lastCreated(); // Returns the credit note
 ```
 
 ## [Certification & Production](CERTIFICATION.md)

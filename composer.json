@@ -52,6 +52,7 @@
         "laravel/prompts": "^0.3.22",
         "leongrdic/pdf417": "^1.0.0",
         "spatie/laravel-pdf": "^2.13",
+        "spatie/temporary-directory": "^2.4",
         "zbateson/mail-mime-parser": "^4.0.3"
     },
     "require-dev": {
@@ -59,16 +60,17 @@
         "aws/aws-sdk-php": "^3.392",
         "dompdf/dompdf": "^3.1",
         "google/apiclient": "^2.19.4",
-        "laragear/meta-testing": "^4.2",
+        "laragear/meta-testing": "^4.3",
         "laravel/pao": "^1.1",
+        "laravel/boost": "^2.8.1",
         "laravel/pint": "^1.30",
         "microsoft/microsoft-graph": "^3.5.0",
-        "orchestra/testbench": "^11.0",
-        "spatie/temporary-directory": "^2.4"
+        "orchestra/testbench": "^11.0"
     },
     "suggest": {
         "dompdf/dompdf": "Default driver for DTE PDF Generation.",
-        "spatie/browsershot": "Headless Chrome driver for DTE PDF Generation."
+        "spatie/browsershot": "Headless Chrome driver for DTE PDF Generation.",
+        "laravel/boost": "AI companion for using this library skills"
     },
     "autoload": {
         "psr-4": {

@@ -38,15 +38,15 @@ class FetchInboundMailboxCommandTest extends TestCase
         $this->mock(
             ProcessInboundDte::class,
             static function (MockInterface $mock) use ($email1, $email2): void {
-                $mock->expects('handle')->with($email1);
-                $mock->expects('handle')->with($email2);
+                $mock->expects('forEmail')->with($email1);
+                $mock->expects('forEmail')->with($email2);
             },
         );
 
         $this
             ->artisan('dte:fetch-mailbox')
-            ->expectsOutput('Mailbox fetch complete. Processed: 2. Failed: 0.')
-            ->assertSuccessful();
+            ->assertSuccessful()
+            ->expectsOutput('Mailbox fetch complete. Processed: 2. Failed: 0.');
     }
 
     public function test_skips_and_marks_as_read_emails_from_disallowed_prefixes_and_domains(): void
@@ -73,7 +73,7 @@ class FetchInboundMailboxCommandTest extends TestCase
         $this->mock(
             ProcessInboundDte::class,
             static function (MockInterface $mock) use ($allowed): void {
-                $mock->expects('handle')->with($allowed)->once();
+                $mock->expects('forEmail')->with($allowed);
             },
         );
 
@@ -111,7 +111,7 @@ class FetchInboundMailboxCommandTest extends TestCase
             static function (MockInterface $mock) use ($email1, $email2): void {
                 $mock->expects('unread')->andReturn([$email1, $email2]);
                 $mock->expects('markAsRead')->with($email1)->never();
-                $mock->expects('markAsRead')->with($email2)->once();
+                $mock->expects('markAsRead')->with($email2);
             },
         );
 
@@ -120,8 +120,8 @@ class FetchInboundMailboxCommandTest extends TestCase
         $this->mock(
             ProcessInboundDte::class,
             static function (MockInterface $mock) use ($email1, $email2): void {
-                $mock->expects('handle')->with($email1)->andThrow(new Exception('Parse Error'));
-                $mock->expects('handle')->with($email2)->once();
+                $mock->expects('forEmail')->with($email1)->andThrow(new Exception('Parse Error'));
+                $mock->expects('forEmail')->with($email2);
             },
         );
 

@@ -34,7 +34,7 @@ class SiiCertificateTest extends DatabaseTestCase
      |--------------------------------------------------------------------------
      */
 
-    public function test_it_passes_with_valid_certificate_and_string_password(): void
+    public function test_passes_with_valid_certificate_and_string_password(): void
     {
         $rule = new SiiCertificate($this->fixture->password);
 
@@ -46,9 +46,9 @@ class SiiCertificateTest extends DatabaseTestCase
         static::assertNull($fail, 'The rule has failed validation.');
     }
 
-    public function test_it_passes_with_valid_certificate_and_closure_password(): void
+    public function test_passes_with_valid_certificate_and_closure_password(): void
     {
-        $rule = new SiiCertificate(fn () => $this->fixture->password);
+        $rule = new SiiCertificate(fn() => $this->fixture->password);
 
         $fail = null;
         $rule->validate('certificate', file_get_contents($this->fixture->path), function ($message) use (&$fail): void {
@@ -64,7 +64,7 @@ class SiiCertificateTest extends DatabaseTestCase
      |--------------------------------------------------------------------------
      */
 
-    public function test_it_fails_with_wrong_password(): void
+    public function test_fails_with_wrong_password(): void
     {
         $rule = new SiiCertificate('wrong-password');
 
@@ -76,7 +76,7 @@ class SiiCertificateTest extends DatabaseTestCase
         static::assertNotNull($fail, 'The rule has not failed validation.');
     }
 
-    public function test_it_fails_with_empty_password(): void
+    public function test_fails_with_empty_password(): void
     {
         $rule = new SiiCertificate('');
 
@@ -88,9 +88,9 @@ class SiiCertificateTest extends DatabaseTestCase
         static::assertNotNull($fail, 'The rule has not failed validation.');
     }
 
-    public function test_it_fails_with_null_password_from_closure(): void
+    public function test_fails_with_null_password_from_closure(): void
     {
-        $rule = new SiiCertificate(fn () => null);
+        $rule = new SiiCertificate(fn() => null);
 
         $fail = null;
         $rule->validate('certificate', file_get_contents($this->fixture->path), function ($message) use (&$fail): void {
@@ -100,7 +100,7 @@ class SiiCertificateTest extends DatabaseTestCase
         static::assertNotNull($fail, 'The rule has not failed validation.');
     }
 
-    public function test_it_fails_when_certificate_is_expired(): void
+    public function test_fails_when_certificate_is_expired(): void
     {
         $now = $this->freezeSecond();
 
@@ -122,7 +122,7 @@ class SiiCertificateTest extends DatabaseTestCase
         static::assertNotNull($fail, 'The rule has not failed validation.');
     }
 
-    public function test_it_fails_when_certificate_missing_from_pem(): void
+    public function test_fails_when_certificate_missing_from_pem(): void
     {
         $this->mock(OpenSslProxy::class, static function (MockInterface $mock): void {
             $mock->expects('readPkcs12String')->andReturn(['pkey' => 'fake-key']);

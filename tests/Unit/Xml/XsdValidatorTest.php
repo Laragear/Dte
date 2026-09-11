@@ -2,7 +2,11 @@
 
 namespace Tests\Unit\Xml;
 
+use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Filesystem\Filesystem;
+use Laragear\Dte\DteServiceProvider;
 use Laragear\Dte\Xml\XsdValidator;
+use Mockery;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -26,5 +30,23 @@ class XsdValidatorTest extends TestCase
         $this->expectExceptionMessageIs('XSD schema not found: NonExistent.xsd');
 
         $validator->validate('<Any/>', 'NonExistent.xsd');
+    }
+
+    public function test_uses_app_resource_path_when_xsd_exists_there(): void
+    {
+        // Use a real XSD file path that exists in the package assets
+        $realXsdPath = DteServiceProvider::XSD_ASSETS . '/DTE_v10.xsd';
+
+        $fileSystem = Mockery::mock(Filesystem::class);
+        $fileSystem->expects('exists')->once()->andReturn(true);
+
+        $app = Mockery::mock(Application::class);
+        $app->expects('resourcePath')->with('xsd/DTE_v10.xsd')->andReturn($realXsdPath);
+
+        $validator = new XsdValidator($app, $fileSystem, $this->app->make(\Laragear\Dte\Support\XmlDomFactory::class), $this->app->make(\Laragear\Dte\Support\LibxmlProxy::class));
+
+        $this->expectException(RuntimeException::class);
+
+        $validator->validate('<Invalid/>', 'DTE_v10.xsd');
     }
 }

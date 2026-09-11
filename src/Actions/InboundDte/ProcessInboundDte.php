@@ -29,14 +29,10 @@ class ProcessInboundDte extends Pipeline
      *
      * @context Transaction
      */
-    public function handle(InboundEmailData $email): void
+    public function forEmail(InboundEmailData $email): InboundDteData
     {
-        $data = new InboundDteData($email);
-
-        SiiInterchangeLog::query()
+        return SiiInterchangeLog::query()
             ->getConnection()
-            ->transaction(function () use ($data): void {
-                $this->send($data)->through($this->pipes)->thenReturn();
-            });
+            ->transaction(fn () => $this->send(new InboundDteData($email))->through($this->pipes)->thenReturn());
     }
 }

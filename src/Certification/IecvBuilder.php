@@ -6,12 +6,15 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\DateFactory;
 use Laragear\Dte\Enums\IecvType;
+use Laragear\Dte\Enums\SiiTaxes;
 use Laragear\Dte\Models\SiiDte;
 use Laragear\Dte\Support\XmlDomFactory;
 use Laragear\Rut\Rut;
 use XMLWriter;
+use function is_int;
 use function round;
 use function str_replace;
+use function substr;
 
 class IecvBuilder
 {
@@ -45,7 +48,7 @@ class IecvBuilder
         $writer->openMemory();
         $this->startDocument($writer, $period, $type);
 
-        $this->appendCaratula($writer, $dtes->first(), $senderRut, $period, $resolutionDate, $resolutionNumber, $type);
+        $this->appendCaratula($writer, $dtes->first()->issuer_rut, $senderRut, $period, $resolutionDate, $resolutionNumber, $type);
         $this->appendResumenPeriodo($writer, $dtes, $this->parseOptions($properties));
         $this->appendDetalle($writer, $dtes, $type);
 
@@ -106,7 +109,7 @@ class IecvBuilder
      */
     protected function appendCaratula(
         XMLWriter $writer,
-        SiiDte $firstDte,
+        Rut $emisorRut,
         Rut $senderRut,
         string $period,
         string $resolutionDate,
@@ -114,7 +117,7 @@ class IecvBuilder
         IecvType $type,
     ): void {
         $writer->startElement('Caratula');
-        $writer->writeElement('RutEmisorLibro', $firstDte->issuer_rut->formatBasic());
+        $writer->writeElement('RutEmisorLibro', $emisorRut->formatBasic());
         $writer->writeElement('RutEnvia', $senderRut->formatBasic());
         $writer->writeElement('PeriodoTributario', $period);
         $writer->writeElement('FchResol', $resolutionDate);
@@ -199,7 +202,7 @@ class IecvBuilder
         $otherTaxes = [];
 
         foreach ($dtesOfType as $dte) {
-            if (!empty($dte->taxes) && is_array($dte->taxes)) {
+            if (is_array($dte->taxes) && $dte->taxes !== []) {
                 foreach ($dte->taxes as $code => $taxAmount) {
                     $otherTaxes[$code] = ($otherTaxes[$code] ?? 0) + $taxAmount;
                 }
@@ -233,6 +236,8 @@ class IecvBuilder
             $this->appendDetalleRut($writer, $dte, $type);
             $this->appendDetalleMontos($writer, $dte);
             $this->appendDetalleImpuestos($writer, $dte);
+
+            $writer->writeElement('MntTotal', (string) $dte->amount_total);
 
             $writer->endElement();
         }
@@ -270,8 +275,6 @@ class IecvBuilder
         if (! $dte->iva_common_use) {
             $writer->writeElement('MntIVA', (string) $dte->amount_taxes);
         }
-
-        $writer->writeElement('MntTotal', (string) $dte->amount_total);
     }
 
     /**
@@ -283,6 +286,187 @@ class IecvBuilder
             $writer->startElement('OtrosImp');
             $writer->writeElement('CodImp', (string) $code);
             $writer->writeElement('MntImp', (string) $taxAmount);
+            $writer->endElement();
+        }
+    }
+
+    /*
+     |--------------------------------------------------------------------------
+     | Purchases Book (IECV)
+     |--------------------------------------------------------------------------
+     */
+
+    /**
+     * Build the EnvioLibro XML for a Purchases Book from test set entries.
+     *
+     * @param  array<int, IecvPurchaseData>  $entries
+     * @param  array<int, IecvPropertyData>  $properties
+     */
+    public function buildPurchases(
+        array $entries,
+        string $period,
+        string $resolutionDate,
+        int $resolutionNumber,
+        Rut $companyRut,
+        Rut $senderRut,
+        array $properties = [],
+    ): string {
+        $writer = $this->xml->writer();
+        $writer->openMemory();
+        $this->startDocument($writer, $period, IecvType::Purchases);
+
+        $this->appendCaratula($writer, $companyRut, $senderRut, $period, $resolutionDate, $resolutionNumber, IecvType::Purchases);
+        $this->appendResumenPeriodoForEntries($writer, $entries, $this->parseOptions($properties));
+        $this->appendDetalleForEntries($writer, $entries);
+
+        $writer->writeElement('TmstFirma', $this->date->now('America/Santiago')->format('Y-m-d\TH:i:s'));
+
+        $this->endDocument($writer);
+
+        return $writer->outputMemory();
+    }
+
+    /**
+     * Compute taxes and total for a purchase entry.
+     *
+     * @return array{taxes: int, total: int}
+     */
+    protected function computeEntryAmounts(IecvPurchaseData $entry): array
+    {
+        $taxes = (int) round($entry->amountNet * SiiTaxes::ivaDecimal(), 0, PHP_ROUND_HALF_UP);
+        $total = $entry->amountNet + $entry->amountExempt + $taxes;
+
+        if ($entry->ivaRetainedTotal) {
+            $total -= $taxes;
+        }
+
+        return ['taxes' => $taxes, 'total' => $total];
+    }
+
+    /**
+     * Append ResumenPeriodo from purchase entries grouped by document type.
+     *
+     * @param  array<int, IecvPurchaseData>  $entries
+     * @param  array<string, mixed>  $options
+     */
+    protected function appendResumenPeriodoForEntries(XMLWriter $writer, array $entries, array $options): void
+    {
+        $writer->startElement('ResumenPeriodo');
+
+        $grouped = [];
+        foreach ($entries as $entry) {
+            $typeKey = $entry->documentType instanceof \BackedEnum
+                ? $entry->documentType->value
+                : $entry->documentType;
+
+            if (!isset($grouped[$typeKey])) {
+                $grouped[$typeKey] = [
+                    'type' => $typeKey,
+                    'count' => 0,
+                    'exempt' => 0,
+                    'net' => 0,
+                    'taxes' => 0,
+                    'iva_common_use' => false,
+                    'total' => 0,
+                ];
+            }
+
+            $amounts = $this->computeEntryAmounts($entry);
+            $grouped[$typeKey]['count']++;
+            $grouped[$typeKey]['exempt'] += $entry->amountExempt;
+            $grouped[$typeKey]['net'] += $entry->amountNet;
+            $grouped[$typeKey]['taxes'] += $amounts['taxes'];
+            $grouped[$typeKey]['total'] += $amounts['total'];
+            $grouped[$typeKey]['iva_common_use'] = $grouped[$typeKey]['iva_common_use'] || $entry->ivaCommonUse;
+        }
+
+        foreach ($grouped as $group) {
+            $writer->startElement('TotalesPeriodo');
+            $writer->writeElement('TpoDoc', (string) $group['type']);
+            $writer->writeElement('TotDoc', (string) $group['count']);
+            $writer->writeElement('TotMntExe', (string) $group['exempt']);
+            $writer->writeElement('TotMntNeto', (string) $group['net']);
+            $writer->writeElement('TotMntIVA', (string) $group['taxes']);
+
+            if ($group['iva_common_use']) {
+                $writer->writeElement('TotOpIVAUsoComun', (string) $group['count']);
+                $writer->writeElement('TotIVAUsoComun', (string) $group['taxes']);
+
+                if (isset($options['FctProp'])) {
+                    $factor = (float) $options['FctProp'];
+                    $writer->writeElement('FctProp', (string) round($factor, 3));
+                    $writer->writeElement('TotCredIVAUsoComun', (string) round($group['taxes'] * $factor));
+                }
+            }
+
+            $writer->writeElement('TotMntTotal', (string) $group['total']);
+            $writer->endElement();
+        }
+
+        $writer->endElement();
+    }
+
+    /**
+     * Append Detalle from purchase entries in XSD element order.
+     *
+     * @param  array<int, IecvPurchaseData>  $entries
+     */
+    protected function appendDetalleForEntries(XMLWriter $writer, array $entries): void
+    {
+        foreach ($entries as $entry) {
+            $amounts = $this->computeEntryAmounts($entry);
+            $rate = SiiTaxes::ivaRate();
+            $rateStr = number_format((float) $rate, 2);
+
+            $writer->startElement('Detalle');
+
+            $docType = $entry->documentType instanceof \BackedEnum
+                ? $entry->documentType->value
+                : $entry->documentType;
+            $writer->writeElement('TpoDoc', (string) $docType);
+            $writer->writeElement('NroDoc', (string) $entry->folio);
+            $writer->writeElement('TasaImp', $entry->amountNet > 0 ? $rateStr : '0.00');
+
+            if ($entry->noCost) {
+                $writer->writeElement('IndSinCosto', '1');
+            }
+
+            $writer->writeElement('FchDoc', $entry->issuedOn);
+
+            $issuerRut = $entry->issuerRut instanceof Rut
+                ? $entry->issuerRut->formatBasic()
+                : Rut::parse($entry->issuerRut)->formatBasic();
+            $writer->writeElement('RUTDoc', $issuerRut);
+
+            if ($entry->referenceType !== null) {
+                $refType = $entry->referenceType instanceof \BackedEnum
+                    ? $entry->referenceType->value
+                    : $entry->referenceType;
+                $writer->writeElement('TpoDocRef', (string) $refType);
+            }
+            if ($entry->referenceFolio !== null) {
+                $writer->writeElement('FolioRef', (string) $entry->referenceFolio);
+            }
+
+            if ($entry->amountExempt > 0) {
+                $writer->writeElement('MntExe', (string) $entry->amountExempt);
+            }
+            if ($entry->amountNet > 0) {
+                $writer->writeElement('MntNeto', (string) $entry->amountNet);
+            }
+
+            if ($entry->ivaCommonUse && $amounts['taxes'] > 0) {
+                $writer->writeElement('IVAUsoComun', (string) $amounts['taxes']);
+            } else {
+                $writer->writeElement('MntIVA', (string) $amounts['taxes']);
+            }
+
+            if ($entry->ivaRetainedTotal) {
+                $writer->writeElement('IVARetTotal', (string) $amounts['taxes']);
+            }
+
+            $writer->writeElement('MntTotal', (string) $amounts['total']);
+
             $writer->endElement();
         }
     }

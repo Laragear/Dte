@@ -26,6 +26,7 @@ class EnsureDtesCompiled
         $data->dtes->each(function ($dte): void {
             if ($dte->payload?->xml === null) {
                 $this->compile->forDte($dte);
+
                 $dte->load('payload');
             }
         });

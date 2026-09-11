@@ -86,7 +86,7 @@ class DocumentBuilderTest extends DatabaseTestCase
         static::assertSame(DteStatus::Pending, $dte->status);
         static::assertNull($dte->folio);
         static::assertSame(
-            ['net' => 1800, 'exempt' => 0, 'tax' => 342, 'total' => 2142],
+            ['net' => 1800, 'exempt' => 0, 'tax' => 342, 'total' => 2142, 'non_billable' => 0],
             $dte->payload->data['totals'],
         );
         $issuer = Rut::parse($issuer);
@@ -422,7 +422,7 @@ class DocumentBuilderTest extends DatabaseTestCase
         static::assertSame(33, $compiledRef['document_type']);
         static::assertSame('123', $compiledRef['folio']);
 
-        $ref2 = new ReferenceData('33', '123', new DateTimeImmutable, 'test', 1);
+        $ref2 = ReferenceData::make('33', '123', new DateTimeImmutable, 'test', 1);
         $compiledRef2 = $builder->callReferenceData($ref2);
         static::assertEquals('33', $compiledRef2['document_type']);
 

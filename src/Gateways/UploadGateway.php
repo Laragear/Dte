@@ -9,6 +9,7 @@ use Laragear\Dte\Gateways\Exceptions\TokenInvalidException;
 use Laragear\Dte\Models\SiiDteEnvelope;
 use Laragear\Dte\SiiEndpoints;
 use Laragear\Dte\Support\TokenAuthenticator;
+use Psr\Log\LoggerInterface;
 use RuntimeException;
 use function sprintf;
 
@@ -23,6 +24,7 @@ class UploadGateway
      * Create a new Upload Gateway instance.
      */
     public function __construct(
+        protected LoggerInterface $logger,
         protected Http $http,
         protected TokenAuthenticator $authenticator,
         protected EnvironmentResolver $environment,
@@ -44,40 +46,49 @@ class UploadGateway
         $issuer = $envelope->issuer_rut;
         $sender = $envelope->sender_rut;
 
-        return $this->authenticator->retryWithFreshToken(function () use (
-            $issuer,
-            $sender,
-            $signedXml,
-            $baseUrl
-        ): string {
-            $token = $this->authenticator->token($issuer, $baseUrl);
+        return $this->authenticator->retryWithFreshToken(
+            function () use ($issuer, $sender, $signedXml, $baseUrl ): string {
+                $token = $this->authenticator->token($issuer, $baseUrl);
 
-            $response = $this->client($token->value, $baseUrl)
-                ->attach(
-                    'archivo',
-                    $signedXml,
-                    'envio.xml',
-                )
-                ->post(self::UPLOAD_PATH, [
-                    'rutSender' => $sender->num,
-                    'dvSender' => $sender->vd,
-                    'rutCompany' => $issuer->num,
-                    'dvCompany' => $issuer->vd,
+                $this->logger->debug('Sending XML as attachment', [
+                    'base_url' => $baseUrl,
+                    'path' => self::UPLOAD_PATH,
+                    'token' => $token->value,
+                    'envio.xml' => $signedXml,
+                    'sender' => $sender->toString(),
+                    'issuer' => $issuer->toString(),
                 ]);
 
-            if ($response->unauthorized()) {
-                throw new TokenInvalidException('SII Upload rejected the authentication token (401).');
-            }
+                $response = $this->client($token->value, $baseUrl)
+                    ->attach(
+                        'archivo',
+                        $signedXml,
+                        'envio.xml',
+                    )
+                    ->post(self::UPLOAD_PATH, [
+                        'rutSender' => $sender->num,
+                        'dvSender' => $sender->vd,
+                        'rutCompany' => $issuer->num,
+                        'dvCompany' => $issuer->vd,
+                    ]);
 
-            if ($response->failed()) {
-                throw new RuntimeException(sprintf(
-                    'SII Upload request failed with status %d.',
-                    $response->status(),
-                ));
-            }
+                if ($response->unauthorized()) {
+                    throw new TokenInvalidException('SII Upload rejected the authentication token (401).');
+                }
 
-            return $this->parseTrackId($response->body());
-        }, $issuer);
+                if ($response->failed()) {
+                    $this->logger->debug($response->body());
+
+                    throw new RuntimeException(sprintf(
+                        'SII Upload request failed with status %d.',
+                        $response->status(),
+                    ));
+                }
+
+                return $this->parseTrackId($response->body());
+            },
+            $issuer
+        );
     }
 
     /**
@@ -90,8 +101,12 @@ class UploadGateway
         }
 
         if (preg_match('/<STATUS>([^<]+)<\/STATUS>/i', $responseBody, $matches) && $matches[1] !== '0') {
+            $this->logger->debug($responseBody);
+
             throw new RuntimeException('SII Upload rejected the envelope: '.$matches[1]);
         }
+
+        $this->logger->debug($responseBody);
 
         throw new RuntimeException('SII Upload response did not contain a valid TrackID.');
     }

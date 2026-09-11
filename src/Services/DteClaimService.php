@@ -66,7 +66,7 @@ class DteClaimService
     }
 
     /**
-     * Reject a vendor invoice due to missing goods (Reclamo Falta de Mercaderías).
+     * Reject a vendor invoice due to missing goods (Reclamo Falta Total de Mercaderías).
      */
     public function rejectGoods(SiiInboundDocument $document, string $reason = ''): void
     {
@@ -74,7 +74,33 @@ class DteClaimService
             $document,
             fn(SiiInboundDocument $d) => $this->gateway->rejectGoods($d, $reason),
             InboundDteStatus::CommercialRejected,
-            'RFT'
+            'ERM'
+        );
+    }
+
+    /**
+     * Reject a vendor invoice due to partially missing goods (Reclamo por Falta Parcial).
+     */
+    public function rejectPartial(SiiInboundDocument $document, string $reason = ''): void
+    {
+        $this->transitionClaim(
+            $document,
+            fn(SiiInboundDocument $d) => $this->gateway->rejectPartial($d, $reason),
+            InboundDteStatus::CommercialRejected,
+            'RFP'
+        );
+    }
+
+    /**
+     * Confirm receipt of goods or services (Acuse de Recibo de Mercaderías / RMA).
+     */
+    public function confirmGoodsReceipt(SiiInboundDocument $document, string $reason = ''): void
+    {
+        $this->transitionClaim(
+            $document,
+            fn(SiiInboundDocument $d) => $this->gateway->confirmGoodsReceipt($d, $reason),
+            InboundDteStatus::GoodsReceipt,
+            'RMA'
         );
     }
 

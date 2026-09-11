@@ -2,6 +2,8 @@
 
 namespace Laragear\Dte\Data;
 
+use function json_decode;
+
 readonly class Item
 {
     /**
@@ -53,5 +55,32 @@ readonly class Item
             $exempt,
             $taxes,
         );
+    }
+
+    /**
+     * Create a new instance from an array.
+     */
+    public static function fromArray(array $array): static
+    {
+        return static::make(
+            $array['name'],
+            $array['unit_price'],
+            $array['quantity'],
+            $array['description'] ?? null,
+            $array['unit'] ?? null,
+            $array['code'] ?? null,
+            $array['code_type'] ?? null,
+            $array['discount_percentage'] ?? 0,
+            $array['exempt'] ?? false,
+            $array['taxes'] ?? [],
+        );
+    }
+
+    /**
+     * Create a new instance from a JSON string.
+     */
+    public static function fromJson(string $json): static
+    {
+        return static::fromArray(json_decode($json, true, 5));
     }
 }

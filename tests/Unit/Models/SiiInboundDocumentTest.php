@@ -27,20 +27,30 @@ class SiiInboundDocumentTest extends TestCase
         $cert = new DigitalCertificate('fake', 'fake');
 
         Claim::expects('accept')
-            ->once()
+
             ->with($doc, $rut, 'Santiago', $cert, null)
             ->andReturn('accepted_xml');
 
         Claim::expects('reject')
-            ->once()
+
             ->with($doc, 'Bad amount');
 
         Claim::expects('rejectGoods')
-            ->once()
+
             ->with($doc, 'Missing items');
+
+        Claim::expects('rejectPartial')
+
+            ->with($doc, 'Partial delivery');
+
+        Claim::expects('confirmGoodsReceipt')
+
+            ->with($doc, 'Received');
 
         static::assertSame('accepted_xml', $doc->accept($rut, 'Santiago', $cert));
         $doc->reject('Bad amount');
         $doc->rejectGoods('Missing items');
+        $doc->rejectPartial('Partial delivery');
+        $doc->confirmGoodsReceipt('Received');
     }
 }
